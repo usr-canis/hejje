@@ -1,0 +1,98 @@
+name: Release
+
+# Builds a signed APK and publishes it as a GitHub Release.
+# Start it either with the "Run workflow" button (type the version, e.g. 1.2.0)
+# or by pushing a tag such as v1.2.0.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number, for example 1.2.0"
+        required: true
+        type: string
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then RAW="${GITHUB_REF_NAME}"; else RAW="${INPUT_VERSION}"; fi
+          VERSION="${RAW#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version must look like 1.2.0 (three numbers), got '$RAW'"; exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" != "tag" ] && git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::Version $VERSION was already released. Choose a higher number."; exit 1
+          fi
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check the signing secrets exist
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Signing is not set up yet. Follow 'One-time setup: signing key' in the README."; exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests and lint
+        run: ./gradlew testDebugUnitTest lintDebug
+
+      - name: Build the signed release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          HEJJE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          HEJJE_KEY_ALIAS: hejje
+        run: |
+          export HEJJE_KEYSTORE_FILE="$RUNNER_TEMP/hejje.keystore"
+          echo "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$HEJJE_KEYSTORE_FILE"
+          ./gradlew assembleRelease -PversionName="${{ steps.version.outputs.name }}"
+          rm -f "$HEJJE_KEYSTORE_FILE"
+          cp app/build/outputs/apk/release/app-release.apk "hejje-${{ steps.version.outputs.name }}.apk"
+
+      - name: Verify the APK is signed
+        run: |
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --print-certs "hejje-${{ steps.version.outputs.name }}.apk" | grep -E "Signer #1 certificate (DN|SHA-256)"
+
+      - name: Write release notes from the commits
+        run: |
+          PREVIOUS="$(git tag --list 'v*' --sort=-v:refname | grep -vx "${{ steps.version.outputs.tag }}" | head -1 || true)"
+          if [ -n "$PREVIOUS" ]; then RANGE="$PREVIOUS..HEAD"; else RANGE="HEAD"; fi
+          git log "$RANGE" --no-merges --pretty='- %s' | grep -viE '^- (merge|bump|chore|ci|wip)' | head -30 > notes.md || true
+          if [ ! -s notes.md ]; then echo "- Improvements and fixes" > notes.md; fi
+          cat notes.md
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" "hejje-${{ steps.version.outputs.name }}.apk" \
+            --title "Hejje ${{ steps.version.outputs.name }}" \
+            --notes-file notes.md \
+            --target "${{ github.sha }}"

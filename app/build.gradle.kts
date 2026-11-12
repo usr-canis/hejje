@@ -25,7 +25,6 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         buildConfigField("String", "UPDATE_REPO", "\"usr-canis/hejje\"")
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     signingConfigs {
@@ -45,6 +44,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
+            // Real phones only; leaving out emulator code keeps the download small.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -123,4 +124,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.work.testing)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
