@@ -7,6 +7,11 @@
         <item name="android:colorAccent">@color/accent</item>
     </style>
 
+    <!-- For the invisible screen that only shows Android's "Turn on location?" dialog. -->
+    <style name="Theme.Hejje.Transparent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="Theme.Hejje.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>

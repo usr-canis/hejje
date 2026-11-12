@@ -52,6 +52,7 @@ class RecordingController(
     /** Replaceable in tests. */
     private val clock: () -> Long = System::currentTimeMillis,
     graceMs: Long = RecordingStateMachine.DEFAULT_GRACE_MS,
+    private val locationPrompt: LocationPrompt = LocationPrompt(app, com.canis.hejje.notify.Notifier(app)),
 ) {
     private val prefs = app.getSharedPreferences("recording", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
@@ -130,6 +131,7 @@ class RecordingController(
         lastPoint = null
         autoStartPending = !e.manual
         _live.value = LiveState(e.at, e.manual)
+        locationPrompt.onDriveStart(settings.current.locationPrompts)
         launchService()
     }
 
@@ -150,6 +152,7 @@ class RecordingController(
         session = null
         _live.value = null
         persist()
+        locationPrompt.onDriveEnd(enabled = false)
         reportProblem(reason)
         if (id != null) scope.launch { finalizer.finalizeOrphan(id) }
     }
@@ -173,6 +176,7 @@ class RecordingController(
                 reportProblem(app.getString(R.string.problem_save_failed, ex.message ?: ex.javaClass.simpleName))
             } finally {
                 onMain {
+                    locationPrompt.onDriveEnd(settings.current.locationPrompts)
                     _finishing.value = finishingCount.decrementAndGet() > 0
                     _active.value = machine.state.recording || finishingCount.get() > 0
                 }
@@ -184,6 +188,7 @@ class RecordingController(
     fun onLocation(p: RawPoint) {
         val live = _live.value ?: return
         val id = session ?: return
+        locationPrompt.onFix()
         buffer.append(id, p)
         var distance = live.distanceM
         if (p.acc.isNaN() || p.acc <= TripProcessor.MAX_ACCURACY_M) {

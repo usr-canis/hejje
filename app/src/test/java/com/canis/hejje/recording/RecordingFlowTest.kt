@@ -77,6 +77,12 @@ class RecordingFlowTest {
         }
     }
 
+    /** Lets background database writes of the "old" process finish. */
+    private fun settle() = repeat(30) {
+        shadowOf(Looper.getMainLooper()).idle()
+        Thread.sleep(10)
+    }
+
     private fun passTime(ms: Long) {
         now += ms
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
@@ -158,6 +164,7 @@ class RecordingFlowTest {
         c.manualStart()
         val sim = DriveSim(t = now).drive(100, 15f)
         c.feed(sim)
+        settle()
         val startedAt = c.startedAt
         // Process death: the controller is gone; a new one starts from what was saved.
         c = controller()
@@ -182,6 +189,7 @@ class RecordingFlowTest {
         c.carConnected()
         val sim = DriveSim(t = now).drive(120, 15f)
         c.feed(sim)
+        settle() // a really killed process has no saving still running in the background
         val lastFix = now
         // Killed; the car disconnects while the app is dead; the phone restarts an hour later.
         now += 3_600_000L
@@ -206,6 +214,48 @@ class RecordingFlowTest {
         c.carDisconnected()
         passTime(grace)
         eventually("trip saved") { tripCount() == 1 }
+    }
+
+    private val notifications get() = shadowOf(app.getSystemService(android.app.NotificationManager::class.java))
+    private fun locationNotice(): String? = notifications.getNotification(com.canis.hejje.notify.Notifier.ID_LOCATION)
+        ?.extras?.getString(android.app.Notification.EXTRA_TITLE)
+    private fun setLocation(on: Boolean) = shadowOf(app.getSystemService(android.location.LocationManager::class.java)).setLocationEnabled(on)
+
+    @Test fun locationOff_offersToTurnItOn_thenOffAgainAfterTheDrive() {
+        shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        setLocation(false)
+        val c = controller()
+        c.carConnected()
+        assertEquals("Location is off", locationNotice())
+        // The user taps it and allows Location: the first fix clears the reminder.
+        setLocation(true)
+        val sim = DriveSim(t = now).drive(120, 15f).drive(8, 0f, accel = 2f)
+        c.feed(sim)
+        assertNull(locationNotice())
+        c.carDisconnected()
+        passTime(grace)
+        eventually("trip saved") { tripCount() == 1 }
+        eventually("turn-off shortcut offered") { locationNotice() == "Drive saved" }
+    }
+
+    @Test fun locationAlreadyOn_noReminders() {
+        shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        setLocation(true)
+        val c = controller()
+        c.carConnected()
+        assertNull(locationNotice())
+        c.feed(DriveSim(t = now).drive(120, 15f))
+        c.manualStop()
+        eventually("trip saved") { tripCount() == 1 }
+        assertNull(locationNotice())
+    }
+
+    @Test fun remindersSwitchedOff_inSettings_noReminders() {
+        shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        runBlocking { app.container.settings.update { it.copy(locationPrompts = false) } }
+        setLocation(false)
+        controller().carConnected()
+        assertNull(locationNotice())
     }
 
     @Test fun autoRecordOff_ignoresTheCar() {

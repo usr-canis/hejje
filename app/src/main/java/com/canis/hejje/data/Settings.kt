@@ -34,6 +34,8 @@ data class SettingsData(
     /** 0 = right away, 1 = after 5 minutes, 2 = when the trip can no longer continue, 3 = off. */
     val summaryTiming: Int = 0,
     val widgetLastTrip: Boolean = true,
+    /** Offer to turn Location on when a drive starts with it off, and off again afterwards. */
+    val locationPrompts: Boolean = true,
     /** 0 = follow system, 1 = light, 2 = dark. */
     val theme: Int = 0,
     val backupUri: String? = null,
@@ -79,6 +81,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val tileCacheMb = intPreferencesKey("tileCacheMb")
         val summaryTiming = intPreferencesKey("summaryTiming")
         val widgetLastTrip = booleanPreferencesKey("widgetLastTrip")
+        val locationPrompts = booleanPreferencesKey("locationPrompts")
         val theme = intPreferencesKey("theme")
         val backupUri = stringPreferencesKey("backupUri")
         val lastBackup = longPreferencesKey("lastBackup")
@@ -114,6 +117,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             tileCacheMb = p[K.tileCacheMb] ?: d.tileCacheMb,
             summaryTiming = p[K.summaryTiming] ?: d.summaryTiming,
             widgetLastTrip = p[K.widgetLastTrip] ?: d.widgetLastTrip,
+            locationPrompts = p[K.locationPrompts] ?: d.locationPrompts,
             theme = p[K.theme] ?: d.theme,
             backupUri = p[K.backupUri], lastBackup = p[K.lastBackup] ?: 0,
             backupKeep = p[K.backupKeep] ?: d.backupKeep,
@@ -137,6 +141,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         set(K.mergeGapMin, s.mergeGapMin); set(K.minTripM, s.minTripM); set(K.miles, s.miles)
         set(K.gpsMode, s.gpsMode); set(K.brakeSensitivity, s.brakeSensitivity); set(K.placeLookup, s.placeLookup)
         set(K.tileCacheMb, s.tileCacheMb); set(K.summaryTiming, s.summaryTiming); set(K.widgetLastTrip, s.widgetLastTrip)
+        set(K.locationPrompts, s.locationPrompts)
         set(K.theme, s.theme); set(K.backupUri, s.backupUri); set(K.lastBackup, s.lastBackup); set(K.backupKeep, s.backupKeep)
         set(K.updateAutoCheck, s.updateAutoCheck); set(K.updateWifiOnly, s.updateWifiOnly); set(K.updateNotify, s.updateNotify)
         set(K.skippedVersion, s.skippedVersion); set(K.lastUpdateCheck, s.lastUpdateCheck); set(K.pendingUpdate, s.pendingUpdate)
@@ -163,6 +168,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         "brakeSensitivity" to s.brakeSensitivity.toString(), "placeLookup" to s.placeLookup.toString(),
         "tileCacheMb" to s.tileCacheMb.toString(), "summaryTiming" to s.summaryTiming.toString(),
         "widgetLastTrip" to s.widgetLastTrip.toString(), "theme" to s.theme.toString(),
+        "locationPrompts" to s.locationPrompts.toString(),
         "updateAutoCheck" to s.updateAutoCheck.toString(), "updateWifiOnly" to s.updateWifiOnly.toString(),
         "updateNotify" to s.updateNotify.toString(), "zonesInApp" to s.zonesInApp.toString(),
         "routeBySpeed" to s.routeBySpeed.toString(), "backupKeep" to s.backupKeep.toString(),
@@ -177,6 +183,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             brakeSensitivity = i("brakeSensitivity", s.brakeSensitivity), placeLookup = b("placeLookup", s.placeLookup),
             tileCacheMb = i("tileCacheMb", s.tileCacheMb), summaryTiming = i("summaryTiming", s.summaryTiming),
             widgetLastTrip = b("widgetLastTrip", s.widgetLastTrip), theme = i("theme", s.theme),
+            locationPrompts = b("locationPrompts", s.locationPrompts),
             updateAutoCheck = b("updateAutoCheck", s.updateAutoCheck), updateWifiOnly = b("updateWifiOnly", s.updateWifiOnly),
             updateNotify = b("updateNotify", s.updateNotify), zonesInApp = b("zonesInApp", s.zonesInApp),
             routeBySpeed = b("routeBySpeed", s.routeBySpeed), backupKeep = i("backupKeep", s.backupKeep),

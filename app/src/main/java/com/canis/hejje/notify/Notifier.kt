@@ -34,6 +34,9 @@ class Notifier(private val context: Context) {
         nm.createNotificationChannel(
             NotificationChannel(CH_UPDATES, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_LOW),
         )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_LOCATION, context.getString(R.string.channel_location), NotificationManager.IMPORTANCE_HIGH),
+        )
     }
 
     fun canPost(): Boolean = manager.areNotificationsEnabled() && (
@@ -102,6 +105,48 @@ class Notifier(private val context: Context) {
         notify(ID_UPDATE, n)
     }
 
+    /** Location is off as a drive starts: one tap shows Android's "Turn on location?" dialog. */
+    fun locationTurnOn() {
+        val intent = Intent(context, com.canis.hejje.recording.LocationPromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val tap = PendingIntent.getActivity(context, 5, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        notify(
+            ID_LOCATION,
+            NotificationCompat.Builder(context, CH_LOCATION)
+                .setSmallIcon(R.drawable.ic_stat_hejje)
+                .setColor(ContextCompat.getColor(context, R.color.accent))
+                .setContentTitle(context.getString(R.string.notif_location_on_title))
+                .setContentText(context.getString(R.string.notif_location_on_text))
+                .setContentIntent(tap)
+                .addAction(0, context.getString(R.string.notif_location_on_action), tap)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setAutoCancel(true)
+                .build(),
+        )
+    }
+
+    /** The drive is saved and Location was off before it: offer a shortcut to switch it off again. */
+    fun locationTurnOff() {
+        val intent = Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val tap = PendingIntent.getActivity(context, 6, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        notify(
+            ID_LOCATION,
+            NotificationCompat.Builder(context, CH_LOCATION)
+                .setSmallIcon(R.drawable.ic_stat_hejje)
+                .setColor(ContextCompat.getColor(context, R.color.accent))
+                .setContentTitle(context.getString(R.string.notif_location_off_title))
+                .setContentText(context.getString(R.string.notif_location_off_text))
+                .setContentIntent(tap)
+                .addAction(0, context.getString(R.string.notif_location_off_action), tap)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setTimeoutAfter(30 * 60_000L)
+                .build(),
+        )
+    }
+
+    fun cancel(id: Int) = manager.cancel(id)
+
     fun updateRecording(n: Notification) = notify(ID_RECORDING, n)
 
     private fun notify(id: Int, n: Notification) {
@@ -116,9 +161,11 @@ class Notifier(private val context: Context) {
         const val CH_RECORDING = "recording"
         const val CH_SUMMARY = "summary"
         const val CH_UPDATES = "updates"
+        const val CH_LOCATION = "location"
         const val ID_RECORDING = 1
         const val ID_SUMMARY = 2
         const val ID_UPDATE = 3
+        const val ID_LOCATION = 4
         const val EXTRA_TRIP_ID = "trip_id"
         const val EXTRA_SHOW_UPDATE = "show_update"
     }
