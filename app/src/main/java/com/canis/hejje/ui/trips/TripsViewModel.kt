@@ -30,7 +30,6 @@ data class TripsState(
     val query: String = "",
     val week: Totals = Totals(),
     val settings: SettingsData = SettingsData(),
-    val live: LiveState? = null,
 )
 
 class TripsViewModel(private val container: AppContainer) : ViewModel() {
@@ -38,9 +37,9 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val filter = MutableStateFlow(Filter())
 
-    val state: StateFlow<TripsState> = combine(
-        container.trips.trips, container.settings.data, container.controller.live, filter,
-    ) { trips, settings, live, f ->
+    val live: StateFlow<LiveState?> = container.controller.live
+
+    val state: StateFlow<TripsState> = combine(container.trips.trips, container.settings.data, filter) { trips, settings, f ->
         val zone = ZoneId.systemDefault()
         val monday = Insights.weekStart(LocalDate.now(zone))
         val week = trips.filter { Insights.dayOf(it.trip.startTime, zone) >= monday }
@@ -61,7 +60,6 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
             query = f.query,
             week = Totals(week.size, week.sumOf { it.trip.distanceM }, week.sumOf { it.trip.movingMs }, week.sumOf { it.trip.totalMs }),
             settings = settings,
-            live = live,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TripsState())
 

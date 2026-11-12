@@ -51,6 +51,15 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        // Optimised like a release (smooth scrolling) but signed with a debug key, for test installs.
+        // Debug builds are unoptimised and visibly janky, so they are not handed out any more.
+        create("preview") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-preview"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     buildFeatures {

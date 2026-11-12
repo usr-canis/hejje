@@ -2,7 +2,6 @@ package com.canis.hejje.ui.detail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -75,8 +76,6 @@ import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.PrivacyZones
 import com.canis.hejje.domain.TripStats
-import com.canis.hejje.ui.LocalNavScope
-import com.canis.hejje.ui.LocalSharedScope
 import com.canis.hejje.ui.components.BandBars
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalUndo
@@ -104,7 +103,7 @@ import kotlin.math.roundToInt
 
 private enum class EditMode { TRIM, SPLIT }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
     val vm = hejjeViewModel(key = "trip-$tripId") { TripDetailViewModel(it, tripId) }
@@ -164,11 +163,6 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
         }
     }
 
-    val shared = LocalSharedScope.current
-    val navScope = LocalNavScope.current
-    val bounds = if (shared != null && navScope != null) {
-        with(shared) { Modifier.sharedBounds(rememberSharedContentState("trip-$tripId"), navScope) }
-    } else Modifier
 
     val item = state.item
     val trip = item?.trip
@@ -176,12 +170,21 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
     val highlightIndex = if (edit != null) editPoint else selected
     val highlight = state.chart.takeIf { highlightIndex in 0 until it.size }?.let { it.lat[highlightIndex] to it.lon[highlightIndex] }
 
-    Box(bounds.fillMaxSize().background(colors.background)) {
+    Box(Modifier.fillMaxSize().background(colors.background)) {
         Column(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().height(with(density) { mapHeight.toDp() }).clipToBounds().background(palette.mapBackground)) {
+            Box(
+                Modifier.fillMaxWidth()
+                    // Height is read during layout only, so scrolling never recomposes the screen.
+                    .layout { measurable, constraints ->
+                        val h = mapHeight.roundToInt()
+                        val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                        layout(placeable.width, h) { placeable.place(0, 0) }
+                    }
+                    .clipToBounds().background(palette.mapBackground),
+            ) {
                 if (state.routes.isNotEmpty()) {
                     TripMap(
-                        routes = state.routes, modifier = Modifier.fillMaxWidth().requiredHeight(360.dp),
+                        routes = state.routes, modifier = Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(360.dp),
                         bySpeed = state.settings.routeBySpeed, markers = state.markers, highlight = highlight,
                         animate = true, description = stringResource(R.string.detail_map_description, title),
                     )

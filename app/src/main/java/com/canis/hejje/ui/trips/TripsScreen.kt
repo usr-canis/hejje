@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -51,6 +50,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.canis.hejje.R
@@ -60,12 +61,9 @@ import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Totals
 import com.canis.hejje.recording.LiveState
-import com.canis.hejje.ui.LocalNavScope
-import com.canis.hejje.ui.LocalSharedScope
 import com.canis.hejje.ui.components.EmptyState
 import com.canis.hejje.ui.components.HejjeCard
 import com.canis.hejje.ui.components.HejjeIcons
-import com.canis.hejje.ui.components.HejjeTopBar
 import com.canis.hejje.ui.components.LocalContainer
 import com.canis.hejje.ui.components.LocalUndo
 import com.canis.hejje.ui.components.PulsingDot
@@ -86,6 +84,8 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     val container = LocalContainer.current
     val vm = hejjeViewModel { TripsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    // Collected separately: it changes with every GPS fix and must not redraw the whole list.
+    val live by vm.live.collectAsStateWithLifecycle()
     val update by container.updater.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
     val haptics = rememberHaptics()
@@ -106,19 +106,28 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        HejjeTopBar(
-            title = stringResource(R.string.brand_name),
-            titleStyle = MaterialTheme.typography.headlineLarge,
-            actions = {
-                if (state.live != null) PulsingDot(Modifier.padding(end = 4.dp))
+        // Home screen: the wordmark is the headline, large, with the actions beside it.
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(start = ScreenPadding, end = 8.dp, top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.brand_name),
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, lineHeight = 54.sp),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            run {
+                if (live != null) PulsingDot(Modifier.padding(end = 4.dp))
                 IconButton(onClick = { searching = !searching; if (!searching) vm.search("") }) {
                     Icon(if (searching) HejjeIcons.Close else HejjeIcons.Search, stringResource(if (searching) R.string.action_close_search else R.string.action_search))
                 }
-                if (state.live == null) {
+                if (live == null) {
                     IconButton(onClick = start) { Icon(HejjeIcons.Record, stringResource(R.string.action_start_recording)) }
                 }
-            },
-        )
+            }
+        }
         AnimatedVisibility(searching) {
             OutlinedTextField(
                 value = state.query, onValueChange = vm::search, singleLine = true,
@@ -137,7 +146,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
             }
             item(key = "summary") {
                 SummaryCard(
-                    state.week, state.settings, state.live, f, Modifier.padding(horizontal = ScreenPadding),
+                    state.week, state.settings, live, f, Modifier.padding(horizontal = ScreenPadding),
                     onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
                 )
             }
@@ -192,19 +201,13 @@ fun tripTitle(trip: TripEntity, f: Formatter): String {
     return if (from == to) from else "$from → $to"
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val trip = item.trip
-    val shared = LocalSharedScope.current
-    val navScope = LocalNavScope.current
     val title = tripTitle(trip, f)
     val time = "${f.time(trip.startTime)} – ${f.time(trip.endTime)}"
     val stats = listOf(f.distance(trip.distanceM), f.duration(trip.totalMs), f.speed(trip.avgMovingSpeed)).joinToString("  ·  ")
-    val bounds = if (shared != null && navScope != null) {
-        with(shared) { Modifier.sharedBounds(rememberSharedContentState("trip-${trip.id}"), navScope) }
-    } else Modifier
-    HejjeCard(modifier.then(bounds), onClick = onClick, padding = PaddingValues(14.dp)) {
+    HejjeCard(modifier, onClick = onClick, padding = PaddingValues(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RouteThumb(trip.thumb, Modifier.size(60.dp))
             Spacer(Modifier.width(14.dp))

@@ -1,10 +1,6 @@
 package com.canis.hejje.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -36,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,11 +75,17 @@ import com.canis.hejje.ui.theme.HejjeTheme
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
 import com.canis.hejje.ui.trips.TripsScreen
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.navigation.NavBackStackEntry
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
-@OptIn(ExperimentalSharedTransitionApi::class)
-val LocalSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
-val LocalNavScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
 /** Creates a ViewModel with access to the app's dependencies. */
 @Composable
@@ -92,6 +93,28 @@ inline fun <reified VM : ViewModel> hejjeViewModel(key: String? = null, crossinl
     val container = LocalContainer.current
     return viewModel(key = key, factory = viewModelFactory { initializer { create(container) } })
 }
+
+/**
+ * Android's standard Material motion. Opening a screen slides it in a short way from the right
+ * while fading; going back reverses that, and follows the finger during the predictive back
+ * gesture. Switching bottom tabs uses a plain fade-through, with no sideways movement.
+ */
+private object NavMotion {
+    private const val DURATION = 300
+    private val easing = CubicBezierEasing(0.2f, 0f, 0f, 1f) // Material "emphasized"
+    private fun <T> slide() = tween<T>(DURATION, easing = easing)
+    private fun shift(full: Int) = full / 10
+
+    val forwardEnter: EnterTransition = slideInHorizontally(slide()) { shift(it) } + fadeIn(tween(210, delayMillis = 90))
+    val forwardExit: ExitTransition = slideOutHorizontally(slide()) { -shift(it) } + fadeOut(tween(90))
+    val backEnter: EnterTransition = slideInHorizontally(slide()) { -shift(it) } + fadeIn(tween(210, delayMillis = 90))
+    val backExit: ExitTransition = slideOutHorizontally(slide()) { shift(it) } + fadeOut(tween(90))
+    val tabEnter: EnterTransition = fadeIn(tween(210, delayMillis = 90))
+    val tabExit: ExitTransition = fadeOut(tween(90))
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(): Boolean =
+    initialState.destination.route in Routes.TOP && targetState.destination.route in Routes.TOP
 
 object Routes {
     const val TRIPS = "trips"
@@ -154,7 +177,6 @@ private fun ScreenBackground(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpened: () -> Unit) {
     val nav = rememberNavController()
@@ -164,7 +186,9 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
     val undoHost = remember(undoLabel) { UndoHost(snackbar, scope, container.trips, undoLabel) }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val live by container.controller.live.collectAsStateWithLifecycle()
+    // Only "recording or not" matters here; the live distance would otherwise recompose the whole app every second.
+    val recordingFlow = remember { container.controller.live.map { it != null }.distinctUntilChanged() }
+    val recording by recordingFlow.collectAsStateWithLifecycle(initialValue = false)
 
     LaunchedEffect(openTripId) {
         if (openTripId != null) {
@@ -187,37 +211,29 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
             },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                SharedTransitionLayout {
-                    CompositionLocalProvider(LocalSharedScope provides this) {
-                        NavHost(
-                            nav, startDestination = Routes.TRIPS,
-                            enterTransition = { fadeIn(tween(160, delayMillis = 160)) }, exitTransition = { fadeOut(tween(160)) },
-                            popEnterTransition = { fadeIn(tween(160, delayMillis = 160)) }, popExitTransition = { fadeOut(tween(160)) },
-                        ) {
-                            composable(Routes.TRIPS) {
-                                CompositionLocalProvider(LocalNavScope provides this) {
-                                    ScreenBackground { TripsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onParked = { nav.navigate(Routes.PARKED) }) }
-                                }
-                            }
-                            composable(Routes.INSIGHTS) {
-                                CompositionLocalProvider(LocalNavScope provides this) { ScreenBackground { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }) } }
-                            }
-                            composable(Routes.SETTINGS) { ScreenBackground { SettingsScreen(onOpen = { nav.navigate(it) }) } }
-                            composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
-                                CompositionLocalProvider(LocalNavScope provides this) {
-                                    ScreenBackground { TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
-                                }
-                            }
-                            composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
-                            composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }) } }
-                            composable(Routes.ZONES) { ScreenBackground { ZonesScreen(onBack = { nav.popBackStack() }) } }
-                            composable(Routes.CAR) { ScreenBackground { CarScreen(onBack = { nav.popBackStack() }) } }
-                            composable(Routes.ABOUT) { ScreenBackground { AboutScreen(onBack = { nav.popBackStack() }) } }
-                        }
+                NavHost(
+                    nav, startDestination = Routes.TRIPS,
+                    enterTransition = { if (isTabSwitch()) NavMotion.tabEnter else NavMotion.forwardEnter },
+                    exitTransition = { if (isTabSwitch()) NavMotion.tabExit else NavMotion.forwardExit },
+                    popEnterTransition = { if (isTabSwitch()) NavMotion.tabEnter else NavMotion.backEnter },
+                    popExitTransition = { if (isTabSwitch()) NavMotion.tabExit else NavMotion.backExit },
+                ) {
+                    composable(Routes.TRIPS) {
+                        ScreenBackground { TripsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onParked = { nav.navigate(Routes.PARKED) }) }
                     }
+                    composable(Routes.INSIGHTS) { ScreenBackground { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }) } }
+                    composable(Routes.SETTINGS) { ScreenBackground { SettingsScreen(onOpen = { nav.navigate(it) }) } }
+                    composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
+                        ScreenBackground { TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
+                    }
+                    composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
+                    composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }) } }
+                    composable(Routes.ZONES) { ScreenBackground { ZonesScreen(onBack = { nav.popBackStack() }) } }
+                    composable(Routes.CAR) { ScreenBackground { CarScreen(onBack = { nav.popBackStack() }) } }
+                    composable(Routes.ABOUT) { ScreenBackground { AboutScreen(onBack = { nav.popBackStack() }) } }
                 }
                 // Thin accent bar across the top while a drive is being recorded.
-                AnimatedVisibility(live != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.statusBarsPadding()) {
+                AnimatedVisibility(recording, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.statusBarsPadding()) {
                     Box(Modifier.fillMaxWidth().height(3.dp).background(LocalPalette.current.accent))
                 }
             }
