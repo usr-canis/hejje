@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -172,7 +173,8 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
     CompositionLocalProvider(LocalUndo provides undoHost) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbar) },
+            // Without the bottom bar the snackbar would sit under the gesture area.
+            snackbarHost = { SnackbarHost(snackbar, if (route == null || route in Routes.TOP) Modifier else Modifier.navigationBarsPadding()) },
             bottomBar = {
                 AnimatedVisibility(route == null || route in Routes.TOP, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     BottomBar(nav, route)

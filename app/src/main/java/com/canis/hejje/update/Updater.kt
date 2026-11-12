@@ -48,7 +48,8 @@ data class GhRelease(
     val assets: List<GhAsset> = emptyList(),
 )
 
-data class UpdateInfo(val version: String, val notes: String, val url: String, val size: Long, val sha256: String?)
+@Serializable
+data class UpdateInfo(val version: String, val notes: String, val url: String, val size: Long, val sha256: String? = null)
 
 enum class UpdateError { NETWORK, WIFI_ONLY, VERIFY, INSTALL }
 
@@ -83,7 +84,16 @@ class Updater(
         if (busy) return null
         if (!manual) {
             if (!s.updateAutoCheck) return null
-            if (System.currentTimeMillis() - s.lastUpdateCheck < DAY_MS) return (_state.value as? UpdateState.Available)?.info
+            if (System.currentTimeMillis() - s.lastUpdateCheck < DAY_MS) {
+                // Already checked today: show what that check found, without asking GitHub again.
+                (_state.value as? UpdateState.Available)?.let { return it.info }
+                val known = s.pendingUpdate?.let { runCatching { HejjeJson.decodeFromString(UpdateInfo.serializer(), it) }.getOrNull() }
+                if (known != null && _state.value == UpdateState.Idle && offer(known, s.skippedVersion, manual = false)) {
+                    _state.value = UpdateState.Available(known)
+                    return known
+                }
+                return null
+            }
         } else {
             _state.value = UpdateState.Checking
         }
@@ -92,9 +102,11 @@ class Updater(
             if (manual) _state.value = UpdateState.Failed(null, UpdateError.NETWORK)
             return null
         }
-        settings.update { it.copy(lastUpdateCheck = System.currentTimeMillis()) }
         val info = toInfo(release)
-        return if (info != null && Version.isNewer(info.version, BuildConfig.VERSION_NAME) && (manual || info.version != s.skippedVersion)) {
+        settings.update {
+            it.copy(lastUpdateCheck = System.currentTimeMillis(), pendingUpdate = info?.let { i -> HejjeJson.encodeToString(UpdateInfo.serializer(), i) })
+        }
+        return if (info != null && offer(info, s.skippedVersion, manual)) {
             _state.value = UpdateState.Available(info)
             info
         } else {
@@ -102,6 +114,9 @@ class Updater(
             null
         }
     }
+
+    private fun offer(info: UpdateInfo, skipped: String?, manual: Boolean) =
+        Version.isNewer(info.version, BuildConfig.VERSION_NAME) && (manual || info.version != skipped)
 
     private suspend fun fetchLatest(): GhRelease? = withContext(Dispatchers.IO) {
         runCatching {

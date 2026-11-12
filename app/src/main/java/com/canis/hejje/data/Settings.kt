@@ -44,6 +44,8 @@ data class SettingsData(
     val updateNotify: Boolean = true,
     val skippedVersion: String? = null,
     val lastUpdateCheck: Long = 0,
+    /** The newest release found by the last check, as JSON, so it can be shown again without asking GitHub. */
+    val pendingUpdate: String? = null,
     val zonesInApp: Boolean = false,
     val routeBySpeed: Boolean = true,
     val onboardingDone: Boolean = false,
@@ -86,6 +88,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val updateNotify = booleanPreferencesKey("updateNotify")
         val skippedVersion = stringPreferencesKey("skippedVersion")
         val lastUpdateCheck = longPreferencesKey("lastUpdateCheck")
+        val pendingUpdate = stringPreferencesKey("pendingUpdate")
         val zonesInApp = booleanPreferencesKey("zonesInApp")
         val routeBySpeed = booleanPreferencesKey("routeBySpeed")
         val onboardingDone = booleanPreferencesKey("onboardingDone")
@@ -118,6 +121,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             updateWifiOnly = p[K.updateWifiOnly] ?: d.updateWifiOnly,
             updateNotify = p[K.updateNotify] ?: d.updateNotify,
             skippedVersion = p[K.skippedVersion], lastUpdateCheck = p[K.lastUpdateCheck] ?: 0,
+            pendingUpdate = p[K.pendingUpdate],
             zonesInApp = p[K.zonesInApp] ?: d.zonesInApp,
             routeBySpeed = p[K.routeBySpeed] ?: d.routeBySpeed,
             onboardingDone = p[K.onboardingDone] ?: d.onboardingDone,
@@ -135,7 +139,8 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         set(K.tileCacheMb, s.tileCacheMb); set(K.summaryTiming, s.summaryTiming); set(K.widgetLastTrip, s.widgetLastTrip)
         set(K.theme, s.theme); set(K.backupUri, s.backupUri); set(K.lastBackup, s.lastBackup); set(K.backupKeep, s.backupKeep)
         set(K.updateAutoCheck, s.updateAutoCheck); set(K.updateWifiOnly, s.updateWifiOnly); set(K.updateNotify, s.updateNotify)
-        set(K.skippedVersion, s.skippedVersion); set(K.lastUpdateCheck, s.lastUpdateCheck); set(K.zonesInApp, s.zonesInApp)
+        set(K.skippedVersion, s.skippedVersion); set(K.lastUpdateCheck, s.lastUpdateCheck); set(K.pendingUpdate, s.pendingUpdate)
+        set(K.zonesInApp, s.zonesInApp)
         set(K.routeBySpeed, s.routeBySpeed); set(K.onboardingDone, s.onboardingDone); set(K.lastAutoStart, s.lastAutoStart)
         set(K.lastProblem, s.lastProblem); set(K.lastProblemAt, s.lastProblemAt)
         set(K.parkedLat, s.parkedLat); set(K.parkedLon, s.parkedLon); set(K.parkedAt, s.parkedAt)

@@ -195,7 +195,11 @@ private fun TotalsCard(t: Totals, previous: Totals?, f: Formatter) {
         if (previous != null && previous.distanceM > 0) {
             val diff = t.distanceM - previous.distanceM
             Text(
-                stringResource(if (diff >= 0) R.string.insights_more_than_last_week else R.string.insights_less_than_last_week, f.distance(kotlin.math.abs(diff))),
+                when {
+                    kotlin.math.abs(diff) < 500 -> stringResource(R.string.insights_same_as_last_week)
+                    diff > 0 -> stringResource(R.string.insights_more_than_last_week, f.distance(diff))
+                    else -> stringResource(R.string.insights_less_than_last_week, f.distance(-diff))
+                },
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

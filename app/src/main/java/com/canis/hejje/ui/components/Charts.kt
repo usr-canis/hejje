@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -185,7 +186,8 @@ fun Heatmap(
                         Text(
                             (monthStart ?: monday).month.getDisplayName(TextStyle.SHORT, locale),
                             style = MaterialTheme.typography.labelMedium, color = labelColor, maxLines = 1, softWrap = false,
-                            modifier = Modifier.width(40.dp),
+                            // The name is wider than one column, so let it run over the next ones.
+                            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                         )
                     }
                 }

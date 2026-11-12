@@ -181,6 +181,7 @@
     <string name="insights_per_trip">Per trip</string>
     <string name="insights_more_than_last_week">%1$s more than last week</string>
     <string name="insights_less_than_last_week">%1$s less than last week</string>
+    <string name="insights_same_as_last_week">About the same as last week</string>
     <string name="insights_calendar">Driving calendar</string>
     <string name="insights_day_none">no driving</string>
     <string name="insights_records">Highlights</string>
