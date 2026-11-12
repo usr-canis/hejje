@@ -85,7 +85,7 @@ class ScreensTest {
     /** Waits until [text] is on screen (also lets the splash fade and transitions finish). */
     private fun await(text: String) {
         rule.mainClock.advanceTimeBy(1_500)
-        rule.waitUntil(10_000) { rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
         rule.mainClock.advanceTimeBy(1_500)
     }
 
@@ -103,9 +103,9 @@ class ScreensTest {
 
     @Test fun tripsList_showsSummaryAndGroupedTrips() {
         await("This week")
-        rule.onNodeWithText("This week").assertIsDisplayed()
+        rule.onNodeWithText("This week", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Today").assertIsDisplayed()
-        rule.onNodeWithText("Parked car").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Parked car location", substring = true).assertIsDisplayed()
         assertEquals(6, runBlocking { app.container.trips.all().size })
         shot("trips-light")
     }
@@ -117,7 +117,7 @@ class ScreensTest {
 
     @Test fun tripDetail_showsStats_andEditsCanBeUndone() {
         await("This week")
-        rule.onAllNodesWithText("Koramangala, Bengaluru → Indiranagar, Bengaluru").onFirst().performClick()
+        rule.onAllNodesWithText("Koramangala → Indiranagar").onFirst().performClick()
         await("Distance")
         shot("detail-light-1")
         scrollTo("Time by speed")
@@ -140,7 +140,7 @@ class ScreensTest {
 
     @Test @Config(qualifiers = "+night") fun tripDetail_dark() {
         await("This week")
-        rule.onAllNodesWithText("Indiranagar, Bengaluru → MG Road, Bengaluru").onFirst().performClick()
+        rule.onAllNodesWithText("Indiranagar → MG Road").onFirst().performClick()
         await("Distance")
         shot("detail-dark-1")
         scrollTo("Elevation")
@@ -178,7 +178,7 @@ class ScreensTest {
 
     @Test fun parkedCar_offersNavigation() {
         await("This week")
-        rule.onNodeWithText("Parked car").performClick()
+        rule.onNodeWithContentDescription("Parked car location", substring = true).performClick()
         await("Navigate back")
         shot("parked-light")
     }
@@ -206,7 +206,7 @@ class OnboardingTest {
         val dir = File("build/screens").apply { mkdirs() }
         fun await(text: String) {
             rule.mainClock.advanceTimeBy(1_500)
-            rule.waitUntil(10_000) { rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
             rule.mainClock.advanceTimeBy(1_500)
             rule.waitForIdle()
         }

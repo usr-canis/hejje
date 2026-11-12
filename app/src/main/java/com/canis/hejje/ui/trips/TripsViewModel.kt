@@ -29,6 +29,10 @@ data class TripsState(
     val selectedTag: String? = null,
     val query: String = "",
     val week: Totals = Totals(),
+    /** Distance driven on each day of this week, Monday first (metres). */
+    val weekDays: List<Double> = List(7) { 0.0 },
+    /** Today's position in [weekDays], 0 = Monday. */
+    val todayIndex: Int = 0,
     val settings: SettingsData = SettingsData(),
 )
 
@@ -59,6 +63,8 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
             selectedTag = f.tag,
             query = f.query,
             week = Totals(week.size, week.sumOf { it.trip.distanceM }, week.sumOf { it.trip.movingMs }, week.sumOf { it.trip.totalMs }),
+            weekDays = List(7) { d -> week.filter { Insights.dayOf(it.trip.startTime, zone).dayOfWeek.value - 1 == d }.sumOf { it.trip.distanceM } },
+            todayIndex = LocalDate.now(zone).dayOfWeek.value - 1,
             settings = settings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TripsState())

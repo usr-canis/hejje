@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -52,6 +53,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import java.time.DayOfWeek
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.BasicText
@@ -154,15 +169,20 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Shrinks to fit with very large font sizes instead of being cut off.
-                    BasicText(
-                        stringResource(R.string.brand_name),
-                        style = MaterialTheme.typography.displaySmall.copy(color = MaterialTheme.colorScheme.onBackground),
-                        maxLines = 1,
-                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 96.sp, stepSize = 2.sp),
-                        modifier = Modifier.weight(1f).padding(end = 8.dp).semantics { heading() },
-                    )
+                    // A lighter weight at about 80% of its half keeps the brand from outshouting the numbers.
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        BasicText(
+                            stringResource(R.string.brand_name),
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground,
+                            ),
+                            maxLines = 1,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 80.sp, stepSize = 2.sp),
+                            modifier = Modifier.fillMaxWidth(0.8f).semantics { heading() },
+                        )
+                    }
                     SummaryCard(
-                        state.week, state.settings, live, f, Modifier.weight(1f).atLeastSquare(),
+                        state.week, state.weekDays, state.todayIndex, state.settings, live, f, Modifier.weight(1f).atLeastSquare(),
                         onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
                     )
                 }
@@ -212,10 +232,22 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     }
 }
 
+/**
+ * "Indiranagar → MG Road": when both ends are in the same city the city is left out, so most
+ * titles fit on one line. Coordinates stand in until a place name is known.
+ */
 fun tripTitle(trip: TripEntity, f: Formatter): String {
     val from = trip.startPlace ?: f.coordinates(trip.startLat, trip.startLon)
     val to = trip.endPlace ?: f.coordinates(trip.endLat, trip.endLon)
-    return if (from == to) from else "$from → $to"
+    if (from == to) return from
+    val a = trip.startPlace?.split(", ")
+    val b = trip.endPlace?.split(", ")
+    if (a != null && b != null && a.size > 1 && b.size > 1 && a.last() == b.last()) {
+        val x = a.dropLast(1).joinToString(", ")
+        val y = b.dropLast(1).joinToString(", ")
+        if (x != y) return "$x → $y"
+    }
+    return "$from → $to"
 }
 
 @Composable
@@ -253,79 +285,139 @@ private fun Modifier.atLeastSquare(): Modifier = layout { measurable, constraint
     layout(placeable.width, placeable.height) { placeable.place(0, 0) }
 }
 
-/** Square card: this week's totals on top, and what is happening now (recording or parked car) below. */
+/**
+ * Square card: this week's distance and trips, a bar per day, and at the bottom what is happening
+ * now (recording, parked car, or a hint when there is neither). Every state uses the same bottom
+ * row height, so the card never changes size when a drive starts or ends.
+ */
 @Composable
 private fun SummaryCard(
-    week: Totals, settings: SettingsData, live: LiveState?, f: Formatter, modifier: Modifier,
-    onParked: () -> Unit, onStop: () -> Unit,
+    week: Totals, weekDays: List<Double>, todayIndex: Int, settings: SettingsData, live: LiveState?, f: Formatter,
+    modifier: Modifier, onParked: () -> Unit, onStop: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    Surface(
-        modifier = modifier, shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
+    val colors = MaterialTheme.colorScheme
+    Surface(modifier = modifier, shape = CardShape, color = colors.surfaceContainerLow, border = BorderStroke(1.dp, colors.outlineVariant)) {
         Column(verticalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
-                Text(stringResource(R.string.this_week), style = MaterialTheme.typography.labelMedium, color = palette.accentText)
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                val trips = pluralStringResource(R.plurals.trip_count, week.trips, week.trips)
+                val label = stringResource(R.string.this_week)
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = palette.accentText)) { append(label) }
+                        withStyle(SpanStyle(color = colors.onSurfaceVariant)) { append("  \u00b7  $trips") }
+                    },
+                    style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
                 BasicText(
                     f.distance(week.distanceM),
-                    style = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    style = MaterialTheme.typography.headlineMedium.copy(color = colors.onSurface),
                     maxLines = 1,
                     autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 30.sp),
                     modifier = Modifier.padding(top = 2.dp),
                 )
-                Text(
-                    pluralStringResource(R.plurals.trip_count, week.trips, week.trips) +
-                        if (week.trips > 0) "  \u00b7  " + f.duration(week.movingMs) else "",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                )
+                WeekBars(weekDays, todayIndex, f, Modifier.fillMaxWidth().padding(top = 10.dp))
             }
-            if (live != null) {
-                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        now = System.currentTimeMillis()
-                        delay(1_000)
+            Column(Modifier.padding(bottom = 8.dp)) {
+                HorizontalDivider(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp), color = colors.outlineVariant)
+                val row = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+                when {
+                    live != null -> {
+                        var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                        LaunchedEffect(Unit) {
+                            while (true) {
+                                now = System.currentTimeMillis()
+                                delay(1_000)
+                            }
+                        }
+                        Row(row.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PulsingDot(size = 7.dp)
+                            Text(
+                                if (live.hasFix) "${f.duration(now - live.startedAt)}  \u00b7  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
+                                style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = onStop, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                                Text(stringResource(R.string.action_stop), color = palette.accentText)
+                            }
+                        }
+                    }
+                    settings.parkedLat != null && settings.parkedLon != null -> {
+                        val description = stringResource(R.string.parked_open)
+                        Row(
+                            row.clickable(onClick = onParked).semantics(mergeDescendants = true) { contentDescription = description }
+                                .padding(start = 16.dp, end = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(HejjeIcons.Pin, null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                stringResource(R.string.summary_parked, f.relative(settings.parkedAt, System.currentTimeMillis())),
+                                style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                            )
+                            Icon(HejjeIcons.ChevronRight, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    else -> Row(row.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(HejjeIcons.Car, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            stringResource(if (settings.carAddress != null && settings.autoRecord) R.string.summary_idle_auto else R.string.summary_idle_setup),
+                            style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 2,
+                        )
                     }
                 }
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
-                    HorizontalDivider(Modifier.padding(bottom = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PulsingDot(size = 7.dp, modifier = Modifier.offset(x = (-4).dp))
-                        Text(stringResource(R.string.recording_now), style = MaterialTheme.typography.titleSmall, modifier = Modifier.offset(x = (-4).dp))
-                    }
-                    Text(
-                        if (live.hasFix) "${f.duration(now - live.startedAt)}  \u00b7  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                    )
-                    TextButton(onClick = onStop, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                        Text(stringResource(R.string.action_stop), color = palette.accentText)
-                    }
-                }
-            } else if (settings.parkedLat != null && settings.parkedLon != null) {
-                val description = stringResource(R.string.parked_open)
-                Column(
-                    Modifier.fillMaxWidth().clickable(onClick = onParked).semantics(mergeDescendants = true) { contentDescription = description }
-                        .padding(start = 16.dp, end = 12.dp, bottom = 16.dp),
-                ) {
-                    HorizontalDivider(Modifier.padding(end = 4.dp, bottom = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(HejjeIcons.Pin, null, tint = palette.accent, modifier = Modifier.size(18.dp).offset(x = (-2).dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.parked_title), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1)
-                        Icon(HejjeIcons.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    }
-                    Text(
-                        f.relative(settings.parkedAt, System.currentTimeMillis()), style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 2.dp), maxLines = 2,
-                    )
-                }
-            } else {
-                Spacer(Modifier.height(16.dp))
             }
         }
     }
 }
+
+/** Seven small rounded bars, Monday first, in accent shades; today is the strongest. */
+@Composable
+private fun WeekBars(days: List<Double>, todayIndex: Int, f: Formatter, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val locale = LocalConfiguration.current.locales[0]
+    val peak = (days.maxOrNull() ?: 0.0).coerceAtLeast(1.0)
+    val title = stringResource(R.string.summary_week_chart)
+    val description = remember(days, locale) {
+        title + ": " + days.indices.joinToString(", ") {
+            DayOfWeek.of(it + 1).getDisplayName(java.time.format.TextStyle.SHORT, locale) + " " + f.distance(days[it])
+        }
+    }
+    Column(modifier.clearAndSetSemantics { contentDescription = description }) {
+        Row(Modifier.fillMaxWidth().height(24.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            days.forEachIndexed { i, metres ->
+                val color = when {
+                    metres <= 0.0 || i > todayIndex -> track
+                    i == todayIndex -> palette.accent
+                    else -> palette.accentShade(0.55f)
+                }
+                val share = if (metres > 0 && i <= todayIndex) (metres / peak).toFloat() else 0f
+                Spacer(
+                    Modifier.width(BAR_WIDTH).fillMaxHeight().drawBehind {
+                        // Days without driving show as a small dot on the baseline.
+                        val h = maxOf(size.width, size.height * share)
+                        drawRoundRect(color, Offset(0f, size.height - h), Size(size.width, h), CornerRadius(size.width / 2))
+                    },
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            DayOfWeek.entries.forEachIndexed { i, day ->
+                Box(Modifier.width(BAR_WIDTH), contentAlignment = Alignment.Center) {
+                    Text(
+                        day.getDisplayName(java.time.format.TextStyle.NARROW, locale),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (i == todayIndex) palette.accentText else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, softWrap = false, modifier = Modifier.wrapContentWidth(unbounded = true),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val BAR_WIDTH = 10.dp
 
 /** Clean, dismissable card that appears when a newer release exists. */
 @Composable
