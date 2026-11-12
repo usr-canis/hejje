@@ -11,11 +11,12 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.runBlocking
 
 data class SettingsData(
@@ -152,13 +153,20 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
     }
 
     /** Always holds the latest settings; loaded once up front so background receivers can read it at once. */
-    val data: StateFlow<SettingsData> = store.data.map(::read)
-        .stateIn(scope, SharingStarted.Eagerly, runBlocking { read(store.data.first()) })
+    private val state = MutableStateFlow(runBlocking { read(store.data.first()) })
+
+    init {
+        scope.launch { store.data.map(::read).collect { state.value = it } }
+    }
+
+    /** Always holds the latest settings, including a change made a moment ago by [update]. */
+    val data: StateFlow<SettingsData> = state.asStateFlow()
 
     val current: SettingsData get() = data.value
 
     suspend fun update(change: (SettingsData) -> SettingsData) {
-        store.edit { p -> write(p, change(read(p))) }
+        // Publish the saved result right away, so code that reads settings next sees the change.
+        state.value = read(store.edit { p -> write(p, change(read(p))) })
     }
 
     /** Portable settings for the backup file (nothing tied to this phone's folders or state). */
@@ -190,5 +198,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         )
     }
 
-    suspend fun reset() = store.edit { it.clear() }
+    suspend fun reset() {
+        state.value = read(store.edit { it.clear() })
+    }
 }
