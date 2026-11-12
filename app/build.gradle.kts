@@ -130,6 +130,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.maplibre)
     implementation(libs.play.location)
+    implementation(libs.media3.session)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

@@ -4,4 +4,6 @@
     <issue id="ObsoleteSdkInt">
         <ignore path="src/main/res/mipmap-anydpi-v26" />
     </issue>
+    <!-- The Android Auto card plays nothing, so there is no voice "play ..." search to handle. -->
+    <issue id="MissingIntentFilterForMediaSearch" severity="ignore" />
 </lint>

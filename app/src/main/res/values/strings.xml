@@ -104,6 +104,15 @@
     <string name="summary_idle_auto">Records when your car connects</string>
     <string name="summary_idle_setup">Set up your car</string>
     <string name="summary_week_chart">Distance per day this week</string>
+
+    <!-- Android Auto card -->
+    <string name="auto_current_drive">Current drive</string>
+    <string name="auto_card_live">%1$s · %2$s</string>
+    <string name="auto_card_recording">Recording · %1$s</string>
+    <string name="auto_card_idle">Not recording</string>
+    <string name="auto_card_idle_auto">Starts when your car connects</string>
+    <string name="auto_card_idle_manual">Start a drive on your phone</string>
+    <string name="auto_card_details">%1$s · ±%2$s · %3$s</string>
     <string name="parked_open">Parked car location. Opens the map.</string>
     <string name="parked_since">Parked %1$s</string>
     <string name="parked_navigate">Navigate back</string>

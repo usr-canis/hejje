@@ -194,6 +194,20 @@ class RecordingFlowTest {
         assertFalse(restarted.isRecording)
     }
 
+    @Test fun carConnectsWhileStartupRecoveryRuns_newRecordingIsKept() {
+        // Cold start by the Bluetooth broadcast: recovery and the connect event race each other.
+        val c = controller()
+        c.recover()
+        c.carConnected()
+        val sim = DriveSim(t = now).drive(120, 15f).drive(8, 0f, accel = 2f)
+        c.feed(sim)
+        repeat(20) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(10) }
+        assertTrue("recording survived recovery", c.isRecording)
+        c.carDisconnected()
+        passTime(grace)
+        eventually("trip saved") { tripCount() == 1 }
+    }
+
     @Test fun autoRecordOff_ignoresTheCar() {
         runBlocking { app.container.settings.update { it.copy(autoRecord = false) } }
         val c = controller()

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tells Android Auto that Hejje provides a media-style card (see HejjeAutoService). -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>
