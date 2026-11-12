@@ -4,6 +4,7 @@ kotlin = "2.4.21"
 ksp = "2.3.13"
 composeBom = "2026.09.00"
 activity = "1.13.0"
+fragment = "1.8.9"
 lifecycle = "2.11.0"
 navigation = "2.10.2"
 room = "2.8.5"
@@ -32,6 +33,7 @@ compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-animation = { module = "androidx.compose.animation:animation" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
