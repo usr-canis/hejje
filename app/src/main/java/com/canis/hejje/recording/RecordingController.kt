@@ -33,6 +33,8 @@ data class LiveState(
     val distanceM: Double = 0.0,
     val hasFix: Boolean = false,
     val lastFixAt: Long = 0,
+    /** The latest GPS fix, for the car display. */
+    val last: RawPoint? = null,
 )
 
 /**
@@ -194,7 +196,7 @@ class RecordingController(
             }
             lastPoint = p
         }
-        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t)
+        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p)
         if (autoStartPending) {
             autoStartPending = false
             scope.launch { settings.update { it.copy(lastAutoStart = now()) } }
@@ -216,13 +218,16 @@ class RecordingController(
      * was in progress, carries on recording it (or closes it when the car is no longer connected).
      */
     fun recover() {
+        // What was saved before this process started. The car may connect (or the user tap Start)
+        // while recovery runs; such a new recording must be left alone.
+        val saved = machine.state
+        val activeId = session
         scope.launch {
             buffer.recover()
-            val activeId = session
-            for (orphan in rawDao.sessions()) if (orphan != activeId) finalizer.finalizeOrphan(orphan)
+            for (orphan in rawDao.sessions()) if (orphan != activeId && orphan != session) finalizer.finalizeOrphan(orphan)
             val lastTime = activeId?.let { rawDao.lastTime(it) }
             val distance = activeId?.let { id -> liveDistance(rawDao.points(id).map(RawBuffer::toRaw)) } ?: 0.0
-            onMain { resume(activeId, lastTime, distance) }
+            onMain { if (machine.state == saved && session == activeId) resume(activeId, lastTime, distance) }
         }
     }
 
