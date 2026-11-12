@@ -71,7 +71,8 @@ android {
     lint {
         abortOnError = true
         checkDependencies = false
-        disable += listOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
+        // Version nags are handled deliberately; the app targets phones, not ChromeOS.
+        disable += listOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "ChromeOsAbiSupport")
     }
 
     packaging {

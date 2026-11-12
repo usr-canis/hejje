@@ -47,10 +47,13 @@ class RecordingController(
     private val rawDao: RawDao,
     private val finalizer: TripFinalizer,
     private val scope: CoroutineScope,
+    /** Replaceable in tests. */
+    private val clock: () -> Long = System::currentTimeMillis,
+    graceMs: Long = RecordingStateMachine.DEFAULT_GRACE_MS,
 ) {
     private val prefs = app.getSharedPreferences("recording", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
-    private val machine = RecordingStateMachine(load())
+    private val machine = RecordingStateMachine(load(), graceMs)
     private val flushLock = Mutex()
     private val finishingCount = AtomicInteger(0)
     private var lastPoint: RawPoint? = null
@@ -73,7 +76,7 @@ class RecordingController(
         get() = prefs.getString(KEY_SESSION, null)
         set(value) = prefs.edit(commit = true) { putString(KEY_SESSION, value) }
 
-    private fun now() = System.currentTimeMillis()
+    private fun now() = clock()
 
     private fun load() = RecordingStateMachine.State(
         recording = prefs.getBoolean("recording", false),
@@ -231,6 +234,16 @@ class RecordingController(
             persist()
             return
         }
+        // Interrupted long ago (app killed, phone off): that drive is over. Close it at its last fix
+        // instead of carrying on with a huge hole in the middle.
+        val lastSeen = lastTime ?: s.startedAt
+        if (now() - lastSeen > STALE_MS) {
+            machine.state = RecordingStateMachine.State()
+            main.removeCallbacks(timer)
+            persist()
+            stop(s.startedAt, lastSeen)
+            return
+        }
         if (_live.value == null) _live.value = LiveState(s.startedAt, s.manual, distance, lastFixAt = lastTime ?: 0)
         if (!launchService()) return
         if (s.disconnectAt != 0L) {
@@ -262,5 +275,6 @@ class RecordingController(
         private const val BATCH_SIZE = 30
         private const val BATCH_MS = 30_000L
         private const val FIX_LOST_MS = 15_000L
+        private const val STALE_MS = 30 * 60_000L
     }
 }

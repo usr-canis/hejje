@@ -26,11 +26,14 @@ class PlaceWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     }
 
     companion object {
+        /** Never throws: a failed lookup request must not disturb saving or editing a trip. */
         fun enqueue(context: Context) {
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "places", ExistingWorkPolicy.REPLACE,
-                OneTimeWorkRequestBuilder<PlaceWorker>().setConstraints(online).setInitialDelay(5, TimeUnit.SECONDS).build(),
-            )
+            runCatching {
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    "places", ExistingWorkPolicy.REPLACE,
+                    OneTimeWorkRequestBuilder<PlaceWorker>().setConstraints(online).setInitialDelay(5, TimeUnit.SECONDS).build(),
+                )
+            }
         }
     }
 }
@@ -52,6 +55,10 @@ class SummaryWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         private const val KEY_DELAYED = "delayed"
 
         fun schedule(context: Context, tripId: Long, s: SettingsData) {
+            runCatching { scheduleOrThrow(context, tripId, s) }
+        }
+
+        private fun scheduleOrThrow(context: Context, tripId: Long, s: SettingsData) {
             val wm = WorkManager.getInstance(context)
             val delayMin = when (s.summaryTiming) {
                 0 -> 0L

@@ -42,5 +42,7 @@ class AppContainer(val app: Application) {
     private val finalizer = TripFinalizer(app, db.raw(), trips, settings)
     val controller = RecordingController(app, settings, buffer, db.raw(), finalizer, scope)
 
-    fun scheduleWork() = Work.schedule(app)
+    fun scheduleWork() {
+        runCatching { Work.schedule(app) }
+    }
 }
