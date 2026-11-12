@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version number, for example 1.2.0"
+        description: "Version number, for example 1.2.0 (add a label such as 1.3.0-auto for a test release)"
         required: true
         type: string
   push:
@@ -36,9 +36,12 @@ jobs:
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then RAW="${GITHUB_REF_NAME}"; else RAW="${INPUT_VERSION}"; fi
           VERSION="${RAW#v}"
-          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Version must look like 1.2.0 (three numbers), got '$RAW'"; exit 1
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9]+)?$'; then
+            echo "::error::Version must look like 1.2.0 or 1.2.0-auto, got '$RAW'"; exit 1
           fi
+          # A label after the numbers (1.2.0-auto) makes a test release: downloadable from the
+          # Releases page, but never offered as an in-app update.
+          if echo "$VERSION" | grep -q -- '-'; then echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT"; else echo "prerelease=" >> "$GITHUB_OUTPUT"; fi
           if [ "${GITHUB_REF_TYPE}" != "tag" ] && git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
             echo "::error::Version $VERSION was already released. Choose a higher number."; exit 1
           fi
@@ -96,7 +99,7 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" "hejje-${{ steps.version.outputs.name }}.apk" \
             --title "Hejje ${{ steps.version.outputs.name }}" \
             --notes-file notes.md \
-            --target "${{ github.sha }}"
+            --target "${{ github.sha }}" ${{ steps.version.outputs.prerelease }}
 
       - name: Show the direct APK download
         env:
