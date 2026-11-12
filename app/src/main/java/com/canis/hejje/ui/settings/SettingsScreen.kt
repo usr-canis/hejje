@@ -101,6 +101,7 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
                 Header(R.string.settings_recording, first = true)
                 SettingRow(stringResource(R.string.settings_car), s.carName ?: stringResource(R.string.settings_car_none), chevron = true) { onOpen(Routes.CAR) }
                 SwitchRow(stringResource(R.string.settings_auto_record), stringResource(R.string.settings_auto_record_summary), s.autoRecord) { v -> set { it.copy(autoRecord = v) } }
+                SwitchRow(stringResource(R.string.settings_location_prompts), stringResource(R.string.settings_location_prompts_summary), s.locationPrompts) { v -> set { it.copy(locationPrompts = v) } }
                 SettingRow(stringResource(R.string.settings_health), stringResource(R.string.settings_health_summary), chevron = true) { onOpen(Routes.HEALTH) }
                 SettingRow(stringResource(R.string.settings_merge_gap), mergeGapLabel(s.mergeGapMin)) { picker = Picker.MERGE_GAP }
                 SettingRow(

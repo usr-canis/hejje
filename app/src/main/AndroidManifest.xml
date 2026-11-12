@@ -102,6 +102,13 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
+        <activity
+            android:name=".recording.LocationPromptActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Hejje.Transparent" />
+
         <receiver android:name=".recording.ControlReceiver" android:exported="false" />
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
 

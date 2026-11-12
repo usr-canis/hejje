@@ -79,6 +79,13 @@
     <string name="channel_recording">Recording</string>
     <string name="channel_summary">Trip summaries</string>
     <string name="channel_updates">App updates</string>
+    <string name="channel_location">Location reminders</string>
+    <string name="notif_location_on_title">Location is off</string>
+    <string name="notif_location_on_text">Turn it on to record this drive.</string>
+    <string name="notif_location_on_action">Turn on</string>
+    <string name="notif_location_off_title">Drive saved</string>
+    <string name="notif_location_off_text">Location was off before this drive. Turn it off again?</string>
+    <string name="notif_location_off_action">Location settings</string>
     <string name="notif_recording">Recording drive</string>
     <string name="notif_saving">Saving trip…</string>
     <string name="notif_waiting_gps">Waiting for GPS…</string>
@@ -209,6 +216,8 @@
     <string name="settings_car">Car Bluetooth device</string>
     <string name="settings_car_none">Not chosen yet</string>
     <string name="settings_auto_record">Record automatically</string>
+    <string name="settings_location_prompts">Location reminders</string>
+    <string name="settings_location_prompts_summary">If Location is off when a drive starts, offer to turn it on, and off again afterwards</string>
     <string name="settings_auto_record_summary">Start when the phone connects to the car, stop when it disconnects</string>
     <string name="settings_health">Recording health</string>
     <string name="settings_health_summary">Check permissions, battery and Bluetooth</string>
