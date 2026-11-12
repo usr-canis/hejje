@@ -103,6 +103,9 @@ import kotlin.math.roundToInt
 
 private enum class EditMode { TRIM, SPLIT }
 
+/** Slightly longer than the 300 ms screen transition. */
+private const val MAP_AFTER_TRANSITION_MS = 320L
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
@@ -182,7 +185,20 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
                     }
                     .clipToBounds().background(palette.mapBackground),
             ) {
-                if (state.routes.isNotEmpty()) {
+                // The map is heavy to create, so it waits until the screen has finished sliding in
+                // (no stutter during the transition), then fades in and draws the route.
+                var mapReady by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    if (!mapReady) {
+                        delay(MAP_AFTER_TRANSITION_MS)
+                        mapReady = true
+                    }
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = mapReady && state.routes.isNotEmpty(),
+                    enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)),
+                    exit = androidx.compose.animation.ExitTransition.None,
+                ) {
                     TripMap(
                         routes = state.routes, modifier = Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(360.dp),
                         bySpeed = state.settings.routeBySpeed, markers = state.markers, highlight = highlight,
