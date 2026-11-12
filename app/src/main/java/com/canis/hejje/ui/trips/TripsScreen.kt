@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -116,7 +117,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         // Actions only; the wordmark sits next to the summary card below.
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(start = ScreenPadding, end = 8.dp, top = 4.dp),
+            Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = ScreenPadding, end = ScreenPadding - 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
@@ -141,7 +142,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             item(key = "update") {
                 UpdateCard(
-                    update, Modifier.padding(horizontal = ScreenPadding).padding(bottom = 12.dp),
+                    update, Modifier.padding(horizontal = ScreenPadding).padding(bottom = 16.dp),
                     onUpdate = { haptics.confirm(); container.updater.download(it) },
                     onSkip = container.updater::skip, onDismiss = container.updater::dismiss,
                 )
@@ -149,7 +150,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
             item(key = "summary") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = ScreenPadding),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Shrinks to fit with very large font sizes instead of being cut off.
@@ -157,8 +158,8 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                         stringResource(R.string.brand_name),
                         style = MaterialTheme.typography.displaySmall.copy(color = MaterialTheme.colorScheme.onBackground),
                         maxLines = 1,
-                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 64.sp),
-                        modifier = Modifier.weight(1f).semantics { heading() },
+                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 96.sp, stepSize = 2.sp),
+                        modifier = Modifier.weight(1f).padding(end = 8.dp).semantics { heading() },
                     )
                     SummaryCard(
                         state.week, state.settings, live, f, Modifier.weight(1f).atLeastSquare(),
@@ -169,7 +170,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
             if (state.tags.isNotEmpty()) {
                 item(key = "tags") {
                     Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = ScreenPadding).padding(top = 12.dp),
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = ScreenPadding).padding(top = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         state.tags.forEach { tag ->
@@ -193,7 +194,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                 stickyHeader(key = "day-${group.day}") {
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = ScreenPadding).padding(top = 20.dp, bottom = 8.dp),
+                            .padding(horizontal = ScreenPadding).padding(top = 24.dp, bottom = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
@@ -204,7 +205,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                     }
                 }
                 items(group.trips, key = { it.trip.id }) { item ->
-                    TripCard(item, f, Modifier.padding(horizontal = ScreenPadding, vertical = 5.dp).animateItem()) { onTrip(item.trip.id) }
+                    TripCard(item, f, Modifier.padding(horizontal = ScreenPadding, vertical = 6.dp).animateItem()) { onTrip(item.trip.id) }
                 }
             }
         }
@@ -223,10 +224,10 @@ fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, on
     val title = tripTitle(trip, f)
     val time = "${f.time(trip.startTime)} – ${f.time(trip.endTime)}"
     val stats = listOf(f.distance(trip.distanceM), f.duration(trip.totalMs), f.speed(trip.avgMovingSpeed)).joinToString("  ·  ")
-    HejjeCard(modifier, onClick = onClick, padding = PaddingValues(14.dp)) {
+    HejjeCard(modifier, onClick = onClick, padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RouteThumb(trip.thumb, Modifier.size(60.dp))
-            Spacer(Modifier.width(14.dp))
+            RouteThumb(trip.thumb, Modifier.size(64.dp))
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(time, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -264,7 +265,7 @@ private fun SummaryCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(verticalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
                 Text(stringResource(R.string.this_week), style = MaterialTheme.typography.labelMedium, color = palette.accentText)
                 BasicText(
                     f.distance(week.distanceM),
@@ -287,11 +288,11 @@ private fun SummaryCard(
                         delay(1_000)
                     }
                 }
-                Column(Modifier.padding(start = 16.dp, end = 8.dp, bottom = 6.dp)) {
-                    HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 8.dp, end = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
+                    HorizontalDivider(Modifier.padding(bottom = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PulsingDot(size = 8.dp)
-                        Text(stringResource(R.string.recording_now), style = MaterialTheme.typography.titleSmall)
+                        PulsingDot(size = 7.dp, modifier = Modifier.offset(x = (-4).dp))
+                        Text(stringResource(R.string.recording_now), style = MaterialTheme.typography.titleSmall, modifier = Modifier.offset(x = (-4).dp))
                     }
                     Text(
                         if (live.hasFix) "${f.duration(now - live.startedAt)}  \u00b7  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
@@ -305,18 +306,18 @@ private fun SummaryCard(
                 val description = stringResource(R.string.parked_open)
                 Column(
                     Modifier.fillMaxWidth().clickable(onClick = onParked).semantics(mergeDescendants = true) { contentDescription = description }
-                        .padding(start = 16.dp, end = 12.dp, bottom = 14.dp),
+                        .padding(start = 16.dp, end = 12.dp, bottom = 16.dp),
                 ) {
-                    HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 10.dp, end = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(Modifier.padding(end = 4.dp, bottom = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(HejjeIcons.Pin, null, tint = palette.accent, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Icon(HejjeIcons.Pin, null, tint = palette.accent, modifier = Modifier.size(18.dp).offset(x = (-2).dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.parked_title), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1)
                         Icon(HejjeIcons.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                     Text(
                         f.relative(settings.parkedAt, System.currentTimeMillis()), style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 24.dp), maxLines = 2,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 2.dp), maxLines = 2,
                     )
                 }
             } else {
