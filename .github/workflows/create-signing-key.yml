@@ -10,6 +10,10 @@ name: Create signing key (run once)
 # It refuses to run if a key already exists, because replacing the key would stop
 # installed copies of the app from updating.
 on:
+  # Register the workflow in Actions when this file is pushed. Never create keys on push.
+  push:
+    paths:
+      - '.github/workflows/create-signing-key.yml'
   workflow_dispatch:
     inputs:
       confirm:
@@ -22,6 +26,7 @@ permissions:
 
 jobs:
   create:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -59,9 +64,21 @@ jobs:
         run: base64 -w 0 hejje-release.keystore | gh secret set KEYSTORE_BASE64 --repo "$GITHUB_REPOSITORY"
 
       - name: Offer the backup copy (available for 1 day)
+        id: backup
         uses: actions/upload-artifact@v4
         with:
           name: hejje-signing-key-backup
           path: hejje-release.keystore
           retention-days: 1
           if-no-files-found: error
+
+      - name: Show the backup and next step
+        env:
+          BACKUP_URL: ${{ steps.backup.outputs.artifact-url }}
+        run: |
+          {
+            echo 'Signing is set up. Download your encrypted backup within one day:'
+            printf '\n[Download signing-key backup](%s)\n' "$BACKUP_URL"
+            echo 'Keep the backup and password safe, then delete SETUP_TOKEN and revoke its temporary token.'
+            printf '\n[Run Release](https://github.com/%s/actions/workflows/release.yml) to publish an installable APK.\n' "$GITHUB_REPOSITORY"
+          } >> "$GITHUB_STEP_SUMMARY"

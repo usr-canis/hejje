@@ -59,6 +59,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
 
       - name: Unit tests and lint
         run: ./gradlew testDebugUnitTest lintDebug
@@ -70,6 +71,7 @@ jobs:
           HEJJE_KEY_ALIAS: hejje
         run: |
           export HEJJE_KEYSTORE_FILE="$RUNNER_TEMP/hejje.keystore"
+          trap 'rm -f "$HEJJE_KEYSTORE_FILE"' EXIT
           echo "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$HEJJE_KEYSTORE_FILE"
           ./gradlew assembleRelease -PversionName="${{ steps.version.outputs.name }}"
           rm -f "$HEJJE_KEYSTORE_FILE"
@@ -96,3 +98,11 @@ jobs:
             --title "Hejje ${{ steps.version.outputs.name }}" \
             --notes-file notes.md \
             --target "${{ github.sha }}"
+
+      - name: Show the direct APK download
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          printf '[Download Hejje %s APK](https://github.com/%s/releases/download/%s/hejje-%s.apk)\n' \
+            "$VERSION" "$GITHUB_REPOSITORY" "$TAG" "$VERSION" >> "$GITHUB_STEP_SUMMARY"

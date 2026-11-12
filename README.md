@@ -10,11 +10,56 @@ phone connects to your car's Bluetooth and stops when it disconnects. *Hejje* is
 
 This guide is written for someone who does not code. Everything can be done from a phone.
 
+### GitHub Actions quick links
+
+Open these links in your browser while signed in to GitHub with repository write access:
+
+| Action | What it does |
+|---|---|
+| [Create signing key (run once)](https://github.com/usr-canis/hejje/actions/workflows/create-signing-key.yml) | Creates your signing key and saves its secret; requires the secrets in step 3 |
+| [Release](https://github.com/usr-canis/hejje/actions/workflows/release.yml) | Builds and publishes a signed APK; requires signing setup first |
+| [Download APK](https://github.com/usr-canis/hejje/actions/workflows/download-apk.yml) | Publishes a development APK without signing setup |
+| [CI](https://github.com/usr-canis/hejje/actions/workflows/ci.yml) | Builds a downloadable debug APK and runs tests and lint |
+
+If a workflow or **Run workflow** button is missing:
+
+1. Check **Settings → Actions → General** and enable GitHub Actions if it is disabled.
+   The repository policy must permit the actions used by these workflows.
+2. Confirm the corresponding file under `.github/workflows/` has been committed and pushed
+   to the repository's **default branch**. Local edits or a pull request alone do not register
+   a new manual workflow. You can then select another branch from **Run workflow**.
+3. Open the direct link above while signed in with write access. If GitHub says the workflow
+   is disabled, choose **Enable workflow**. In a fork, use your fork's Actions tab instead.
+
+After **Release** succeeds, its run summary includes a direct APK download link. After signing
+setup succeeds, its summary links to the backup and the Release workflow.
+
 ---
 
 ## 1. Install the app
 
-1. On your phone, open this repository's **Releases** page and tap the newest release.
+### Download a development APK without signing setup
+
+1. Open **Actions → Download APK → Run workflow**, select your branch, and run it.
+2. When it finishes, open **Releases** and choose the new **Hejje debug build** prerelease.
+3. Under **Assets**, tap **hejje-debug.apk**. This downloads the APK directly; open it on
+   your Android phone to install it. The workflow summary also contains a direct download link.
+
+This build does not require repository secrets. It installs alongside the regular app and
+does not wait for tests or lint. Each run uses a temporary debug signing key, so a later
+debug build may require uninstalling the old debug app. Export your trips before uninstalling.
+Use the signed release workflow below for regular updates that preserve your trips.
+
+Every CI run also offers a **hejje-debug-…** download under **Artifacts** after the APK
+build succeeds, even if later tests or lint fail. Sign in to GitHub, download that ZIP,
+and extract **app-debug.apk** to install it.
+
+The manual workflow button appears after the workflow is on the repository's default branch.
+
+### Install a signed release
+
+1. On your phone, open this repository's **Releases** page and tap the newest signed release
+   (not a **Hejje debug build** prerelease).
 2. Tap the file ending in `.apk` to download it.
 3. Open the downloaded file. Android asks whether your browser may install apps: tap
    **Settings**, switch on **Allow from this source**, go back and tap **Install**.
