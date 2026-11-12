@@ -178,7 +178,7 @@ class ScreensTest {
 
     @Test fun parkedCar_offersNavigation() {
         await("This week")
-        rule.onNodeWithText("Show").performClick()
+        rule.onNodeWithText("Parked car").performClick()
         await("Navigate back")
         shot("parked-light")
     }

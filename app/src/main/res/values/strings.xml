@@ -100,7 +100,6 @@
     <string name="trips_search_hint">Search places, notes and tags</string>
     <string name="trips_need_location">Location permission is needed to record a drive.</string>
     <string name="parked_title">Parked car</string>
-    <string name="parked_show">Show</string>
     <string name="parked_open">Parked car location. Tap Show to open the map.</string>
     <string name="parked_since">Parked %1$s</string>
     <string name="parked_navigate">Navigate back</string>

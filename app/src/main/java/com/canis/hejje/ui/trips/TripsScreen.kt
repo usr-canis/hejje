@@ -51,6 +51,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.Surface
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import com.canis.hejje.ui.components.CardShape
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -106,18 +114,12 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        // Home screen: the wordmark is the headline, large, with the actions beside it.
+        // Actions only; the wordmark sits next to the summary card below.
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(start = ScreenPadding, end = 8.dp, top = 12.dp, bottom = 8.dp),
+            Modifier.fillMaxWidth().statusBarsPadding().padding(start = ScreenPadding, end = 8.dp, top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
         ) {
-            Text(
-                stringResource(R.string.brand_name),
-                style = MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, lineHeight = 54.sp),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
             run {
                 if (live != null) PulsingDot(Modifier.padding(end = 4.dp))
                 IconButton(onClick = { searching = !searching; if (!searching) vm.search("") }) {
@@ -145,10 +147,24 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                 )
             }
             item(key = "summary") {
-                SummaryCard(
-                    state.week, state.settings, live, f, Modifier.padding(horizontal = ScreenPadding),
-                    onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
-                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = ScreenPadding),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Shrinks to fit with very large font sizes instead of being cut off.
+                    BasicText(
+                        stringResource(R.string.brand_name),
+                        style = MaterialTheme.typography.displaySmall.copy(color = MaterialTheme.colorScheme.onBackground),
+                        maxLines = 1,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 64.sp),
+                        modifier = Modifier.weight(1f).semantics { heading() },
+                    )
+                    SummaryCard(
+                        state.week, state.settings, live, f, Modifier.weight(1f).atLeastSquare(),
+                        onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
+                    )
+                }
             }
             if (state.tags.isNotEmpty()) {
                 item(key = "tags") {
@@ -227,59 +243,84 @@ fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, on
     }
 }
 
-/** Top card: what is happening now (recording or parked car) plus this week's totals. */
+/** Square by default; grows taller only if the text needs more room (large font sizes). */
+private fun Modifier.atLeastSquare(): Modifier = layout { measurable, constraints ->
+    val side = constraints.maxWidth
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = side, minHeight = side.coerceAtMost(constraints.maxHeight), maxHeight = Constraints.Infinity),
+    )
+    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+}
+
+/** Square card: this week's totals on top, and what is happening now (recording or parked car) below. */
 @Composable
 private fun SummaryCard(
     week: Totals, settings: SettingsData, live: LiveState?, f: Formatter, modifier: Modifier,
     onParked: () -> Unit, onStop: () -> Unit,
 ) {
-    HejjeCard(modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.this_week), style = MaterialTheme.typography.labelMedium, color = LocalPalette.current.accentText)
-        Spacer(Modifier.height(2.dp))
-        Text(f.distance(week.distanceM), style = MaterialTheme.typography.displaySmall)
-        Text(
-            pluralStringResource(R.plurals.trip_count, week.trips, week.trips) +
-                if (week.trips > 0) "  ·  " + f.duration(week.movingMs) else "",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (live != null) {
-            HorizontalDivider(Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    now = System.currentTimeMillis()
-                    delay(1_000)
-                }
+    val palette = LocalPalette.current
+    Surface(
+        modifier = modifier, shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(verticalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                Text(stringResource(R.string.this_week), style = MaterialTheme.typography.labelMedium, color = palette.accentText)
+                BasicText(
+                    f.distance(week.distanceM),
+                    style = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    maxLines = 1,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 30.sp),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                Text(
+                    pluralStringResource(R.plurals.trip_count, week.trips, week.trips) +
+                        if (week.trips > 0) "  \u00b7  " + f.duration(week.movingMs) else "",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PulsingDot()
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.recording_now), style = MaterialTheme.typography.titleSmall)
+            if (live != null) {
+                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        now = System.currentTimeMillis()
+                        delay(1_000)
+                    }
+                }
+                Column(Modifier.padding(start = 16.dp, end = 8.dp, bottom = 6.dp)) {
+                    HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 8.dp, end = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PulsingDot(size = 8.dp)
+                        Text(stringResource(R.string.recording_now), style = MaterialTheme.typography.titleSmall)
+                    }
                     Text(
-                        if (live.hasFix) "${f.duration(now - live.startedAt)}  ·  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        if (live.hasFix) "${f.duration(now - live.startedAt)}  \u00b7  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                     )
+                    TextButton(onClick = onStop, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                        Text(stringResource(R.string.action_stop), color = palette.accentText)
+                    }
                 }
-                TextButton(onClick = onStop) { Text(stringResource(R.string.action_stop), color = LocalPalette.current.accentText) }
-            }
-        } else if (settings.parkedLat != null && settings.parkedLon != null) {
-            HorizontalDivider(Modifier.padding(top = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            val description = stringResource(R.string.parked_open)
-            Row(
-                Modifier.fillMaxWidth().padding(top = 4.dp).semantics { contentDescription = description },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(HejjeIcons.Pin, null, tint = LocalPalette.current.accent, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                    Text(stringResource(R.string.parked_title), style = MaterialTheme.typography.titleSmall)
+            } else if (settings.parkedLat != null && settings.parkedLon != null) {
+                val description = stringResource(R.string.parked_open)
+                Column(
+                    Modifier.fillMaxWidth().clickable(onClick = onParked).semantics(mergeDescendants = true) { contentDescription = description }
+                        .padding(start = 16.dp, end = 12.dp, bottom = 14.dp),
+                ) {
+                    HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 10.dp, end = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(HejjeIcons.Pin, null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.parked_title), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1)
+                        Icon(HejjeIcons.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
                     Text(
                         f.relative(settings.parkedAt, System.currentTimeMillis()), style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 24.dp), maxLines = 2,
                     )
                 }
-                TextButton(onClick = onParked) { Text(stringResource(R.string.parked_show), color = LocalPalette.current.accentText) }
+            } else {
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
