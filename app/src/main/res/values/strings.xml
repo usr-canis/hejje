@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- All interface text is English. The app name itself lives in brand.xml. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Tabs -->
+    <string name="tab_trips">Trips</string>
+    <string name="tab_insights">Insights</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Common actions -->
+    <string name="action_add">Add</string>
+    <string name="action_allow">Allow</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_close_search">Close search</string>
+    <string name="action_continue">Continue</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_fix">Fix</string>
+    <string name="action_more">More options</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_save">Save</string>
+    <string name="action_search">Search trips</string>
+    <string name="action_share">Share trip</string>
+    <string name="action_start_recording">Start recording</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_undo">Undo</string>
+
+    <!-- Units and times -->
+    <string name="unit_km">km</string>
+    <string name="unit_mi">mi</string>
+    <string name="unit_kmh">km/h</string>
+    <string name="unit_mph">mph</string>
+    <string name="unit_m">m</string>
+    <string name="unit_ft">ft</string>
+    <string name="unit_h">h</string>
+    <string name="unit_min">m</string>
+    <string name="unit_s">s</string>
+    <string name="time_just_now">Just now</string>
+    <string name="time_minutes_ago">%d min ago</string>
+    <string name="time_hours_ago">%d h ago</string>
+    <string name="time_today">Today</string>
+    <string name="time_yesterday">Yesterday</string>
+    <string name="this_week">This week</string>
+    <string name="this_month">This month</string>
+    <string name="all_time">All time</string>
+    <plurals name="trip_count">
+        <item quantity="one">%d trip</item>
+        <item quantity="other">%d trips</item>
+    </plurals>
+    <plurals name="day_count">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <plurals name="hour_count">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="minute_count">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="stop_count">
+        <item quantity="one">%d stop</item>
+        <item quantity="other">%d stops</item>
+    </plurals>
+    <plurals name="zone_count">
+        <item quantity="one">%d zone</item>
+        <item quantity="other">%d zones</item>
+    </plurals>
+    <plurals name="backup_count">
+        <item quantity="one">%d backup</item>
+        <item quantity="other">%d backups</item>
+    </plurals>
+
+    <!-- Notifications -->
+    <string name="channel_recording">Recording</string>
+    <string name="channel_summary">Trip summaries</string>
+    <string name="channel_updates">App updates</string>
+    <string name="notif_recording">Recording drive</string>
+    <string name="notif_saving">Saving trip…</string>
+    <string name="notif_waiting_gps">Waiting for GPS…</string>
+    <string name="notif_summary_title">Trip finished: %1$s in %2$s</string>
+    <string name="notif_summary_text">Average %1$s · %2$s · smoothness %3$d</string>
+    <string name="notif_update_title">Version %1$s is available</string>
+    <string name="notif_update_text">Tap to see what is new and update.</string>
+    <string name="recording_now">Recording</string>
+
+    <!-- Problems shown in Recording health -->
+    <string name="problem_background_start">Android did not allow recording to start in the background. Check location (“Allow all the time”) and battery settings.</string>
+    <string name="problem_no_location_permission">Location permission is missing, so the drive could not be recorded.</string>
+    <string name="problem_no_gps">No GPS position arrived during the last drive, so there was nothing to save.</string>
+    <string name="problem_save_failed">The last drive could not be saved (%1$s).</string>
+
+    <!-- Trips -->
+    <string name="trips_empty">No trips yet. Connect to your car’s Bluetooth and drive, and your first trip will appear here.</string>
+    <string name="trips_no_match">No trips match this filter.</string>
+    <string name="trips_search_hint">Search places, notes and tags</string>
+    <string name="trips_need_location">Location permission is needed to record a drive.</string>
+    <string name="parked_title">Parked car</string>
+    <string name="parked_show">Show</string>
+    <string name="parked_open">Parked car location. Tap Show to open the map.</string>
+    <string name="parked_since">Parked %1$s</string>
+    <string name="parked_navigate">Navigate back</string>
+    <string name="parked_forget">Forget this location</string>
+    <string name="parked_empty">The parked location appears here after your next drive ends.</string>
+    <string name="parked_no_maps">No maps app is installed.</string>
+    <string name="parked_map_description">Map showing where the car is parked</string>
+
+    <!-- Updates -->
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_now">Update</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_confirm_hint">Android will now ask you to confirm the install.</string>
+    <string name="update_error_network">Could not reach GitHub. Check your connection and try again.</string>
+    <string name="update_error_wifi">Downloads are set to Wi-Fi only. Connect to Wi-Fi or change this in Settings.</string>
+    <string name="update_error_verify">The download did not pass the safety check and was discarded.</string>
+    <string name="update_error_install">Android could not install the update.</string>
+
+    <!-- Trip detail -->
+    <string name="stat_distance">Distance</string>
+    <string name="stat_duration">Duration</string>
+    <string name="stat_avg_speed">Average speed</string>
+    <string name="stat_max_speed">Top speed</string>
+    <string name="stat_moving">Moving</string>
+    <string name="stat_idle">Idle, engine on</string>
+    <string name="stat_stopped">Parked</string>
+    <string name="stat_day_night">Day / night</string>
+    <string name="stat_day_night_value">%1$d%% / %2$d%%</string>
+    <string name="stat_stops">Stops</string>
+    <string name="stat_stop_count">Number of stops</string>
+    <string name="stat_stop_time">Time stopped</string>
+    <string name="stop_parked">Parked</string>
+    <string name="stop_idle">Idle</string>
+    <string name="stat_smoothness">Smoothness</string>
+    <string name="stat_smoothness_value">%1$d / 100</string>
+    <string name="stat_hard_braking">Hard braking</string>
+    <string name="stat_hard_accel">Hard acceleration</string>
+    <string name="stat_gain">Climbed</string>
+    <string name="stat_loss">Descended</string>
+    <string name="stat_alt_min">Lowest point</string>
+    <string name="stat_alt_max">Highest point</string>
+    <string name="detail_tags">Tags</string>
+    <string name="detail_new_tag">New tag</string>
+    <string name="detail_tag_name">Tag name</string>
+    <string name="detail_note_hint">Add a note</string>
+    <string name="detail_speed_over_time">Speed over time</string>
+    <string name="detail_chart_hint">Tap the chart to see that moment on the map.</string>
+    <string name="detail_chart_description">Speed chart. Average %1$s, top %2$s.</string>
+    <string name="detail_map_description">Route map: %1$s</string>
+    <string name="detail_colour_speed">Colour: speed</string>
+    <string name="detail_colour_plain">Colour: plain</string>
+    <string name="detail_time">Time</string>
+    <string name="detail_speed_bands">Time by speed</string>
+    <string name="detail_style">Driving style</string>
+    <string name="detail_elevation">Elevation</string>
+    <string name="detail_no_elevation">No altitude was recorded for this trip.</string>
+    <string name="detail_elevation_baro">Measured with the phone’s barometer.</string>
+    <string name="detail_elevation_gps">Estimated from GPS, so small hills may be missed.</string>
+    <string name="detail_segments">Segments</string>
+    <string name="detail_trim">Trim start or end</string>
+    <string name="detail_trim_hint">Drag the handles to keep only the part between them. The dot on the map follows.</string>
+    <string name="detail_split">Split in two</string>
+    <string name="detail_split_hint">Drag to the moment where the second trip should begin.</string>
+    <string name="detail_merge_previous">Merge with previous trip</string>
+    <string name="detail_merge_next">Merge with next trip</string>
+    <string name="detail_export_gpx">Export as GPX</string>
+    <string name="detail_deleted">Trip deleted</string>
+    <string name="detail_trimmed">Trip trimmed</string>
+    <string name="detail_split_done">Trip split in two</string>
+    <string name="detail_merged">Trips merged</string>
+    <string name="detail_edit_failed">That did not work. Nothing was changed.</string>
+    <string name="detail_gpx_saved">GPX file saved</string>
+
+    <!-- Insights -->
+    <string name="insights_empty">Your totals, streaks and driving calendar appear here after your first trip.</string>
+    <string name="insights_trips">Trips</string>
+    <string name="insights_per_trip">Per trip</string>
+    <string name="insights_more_than_last_week">%1$s more than last week</string>
+    <string name="insights_less_than_last_week">%1$s less than last week</string>
+    <string name="insights_calendar">Driving calendar</string>
+    <string name="insights_day_none">no driving</string>
+    <string name="insights_records">Highlights</string>
+    <string name="insights_longest_trip">Longest trip</string>
+    <string name="insights_top_speed">Top speed</string>
+    <string name="insights_current_streak">Current streak</string>
+    <string name="insights_longest_streak">Longest streak</string>
+    <string name="insights_places">Most frequent places</string>
+    <string name="insights_tags">By tag</string>
+
+    <!-- Settings -->
+    <string name="settings_recording">Recording</string>
+    <string name="settings_car">Car Bluetooth device</string>
+    <string name="settings_car_none">Not chosen yet</string>
+    <string name="settings_auto_record">Record automatically</string>
+    <string name="settings_auto_record_summary">Start when the phone connects to the car, stop when it disconnects</string>
+    <string name="settings_health">Recording health</string>
+    <string name="settings_health_summary">Check permissions, battery and Bluetooth</string>
+    <string name="settings_merge_gap">Continue the same trip within</string>
+    <string name="settings_merge_gap_off">Never (every drive is a new trip)</string>
+    <string name="settings_hours_minutes">%1$d h %2$d min</string>
+    <string name="settings_min_trip">Minimum trip length</string>
+    <string name="settings_min_trip_none">Keep every trip</string>
+    <string name="settings_gps">GPS</string>
+    <string name="settings_gps_best">Best accuracy</string>
+    <string name="settings_gps_saver">Battery saver</string>
+    <string name="settings_gps_best_long">Best accuracy: every second while charging, every 2 seconds on battery</string>
+    <string name="settings_gps_saver_long">Battery saver: every 2 seconds while charging, every 5 seconds on battery</string>
+    <string name="settings_sensitivity">Hard-braking sensitivity</string>
+    <string name="settings_sensitivity_low">Low: only very hard braking counts</string>
+    <string name="settings_sensitivity_normal">Normal</string>
+    <string name="settings_sensitivity_high">High: firm braking counts too</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_units_km">Kilometres</string>
+    <string name="settings_units_mi">Miles</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Same as phone</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_route_speed">Colour routes by speed</string>
+    <string name="settings_route_speed_summary">Off shows routes in a single colour</string>
+    <string name="settings_privacy">Privacy</string>
+    <string name="settings_zones">Privacy zones</string>
+    <string name="settings_zones_none">None</string>
+    <string name="settings_zones_in_app">Hide zones on the map in the app too</string>
+    <string name="settings_zones_in_app_summary">Share cards and GPX exports always hide them</string>
+    <string name="settings_place_lookup">Look up place names</string>
+    <string name="settings_place_lookup_summary">Sends trip start and end coordinates to OpenStreetMap when online</string>
+    <string name="settings_maps">Maps</string>
+    <string name="settings_cache">Map storage limit</string>
+    <string name="settings_cache_value">%1$d MB</string>
+    <string name="settings_cache_clear">Clear stored map tiles</string>
+    <string name="settings_cache_cleared">Stored map tiles cleared</string>
+    <string name="settings_notifications">Notifications and widget</string>
+    <string name="settings_summary">Trip summary notification</string>
+    <string name="settings_summary_now">As soon as the drive ends</string>
+    <string name="settings_summary_5">5 minutes after the drive ends</string>
+    <string name="settings_summary_final">When the trip can no longer continue</string>
+    <string name="settings_summary_off">Off</string>
+    <string name="settings_widget_last">Show last trip on the widget</string>
+    <string name="settings_widget_last_summary">The widget always shows this week’s distance</string>
+    <string name="settings_backup">Backup</string>
+    <string name="settings_export">Export everything</string>
+    <string name="settings_export_summary">One file with all trips and settings</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_import_summary">A Hejje backup or a GPX file; duplicates are skipped</string>
+    <string name="settings_exported">Backup saved</string>
+    <string name="settings_file_failed">The file could not be read or written.</string>
+    <string name="settings_import_result">Added: %1$d \u00b7 Duplicates skipped: %2$d \u00b7 Failed: %3$d</string>
+    <string name="settings_auto_backup">Automatic weekly backup</string>
+    <string name="settings_auto_backup_off">Off. Tap to choose a folder.</string>
+    <string name="settings_auto_backup_on">To %1$s</string>
+    <string name="settings_auto_backup_last">To %1$s · last backup %2$s</string>
+    <string name="settings_auto_backup_stop">Turn off automatic backup</string>
+    <string name="settings_backup_keep">Backups to keep</string>
+    <string name="settings_updates">Updates</string>
+    <string name="settings_update_auto">Check for updates automatically</string>
+    <string name="settings_update_auto_summary">At most once a day</string>
+    <string name="settings_update_notify">Notify me about new versions</string>
+    <string name="settings_update_wifi">Download on Wi-Fi only</string>
+    <string name="settings_update_check">Check for updates</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_current">Version %1$s installed</string>
+    <string name="settings_update_latest">Version %1$s is the latest</string>
+    <string name="settings_update_found">Version %1$s is available. Tap to update.</string>
+    <string name="settings_data">Data</string>
+    <string name="settings_delete_all">Delete all data</string>
+    <string name="settings_delete_all_summary">Trips, tags, privacy zones and cached place names</string>
+    <string name="settings_delete_all_confirm">This removes every trip from this phone and cannot be undone. Export a backup first if you might want them again.</string>
+    <string name="settings_all_deleted">All data deleted</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <!-- Car -->
+    <string name="car_intro">Choose your car from the Bluetooth devices paired with this phone. Recording starts when the phone connects to it and stops when it disconnects.</string>
+    <string name="car_need_permission">Allow access to nearby devices so the app can see when your car connects.</string>
+    <string name="car_none_paired">No paired devices found. Pair your phone with the car in Android’s Bluetooth settings first.</string>
+    <string name="car_link_title">Make auto-start more reliable</string>
+    <string name="car_link_text">Link the car as a companion device so Android wakes the app the moment it connects. Do this in the car with the engine on.</string>
+    <string name="car_link_action">Link now</string>
+    <string name="car_link_failed">The car was not found nearby. Try again in the car with the engine on. Auto-recording still works without the link.</string>
+    <string name="car_linked_title">Car linked</string>
+    <string name="car_linked_text">Android tells the app directly when this car connects.</string>
+    <string name="car_forget">Forget this car</string>
+
+    <!-- Recording health -->
+    <string name="health_all_good">Everything needed for automatic recording is in place.</string>
+    <string name="health_needs_attention">Some things need your attention before drives can be recorded automatically.</string>
+    <string name="health_intro">The app checks these each time you open this screen.</string>
+    <string name="health_location">Precise location</string>
+    <string name="health_location_ok">Allowed</string>
+    <string name="health_location_bad">Needed to record where you drive</string>
+    <string name="health_background">Location “Allow all the time”</string>
+    <string name="health_background_ok">Allowed</string>
+    <string name="health_background_bad">Needed to start recording while the app is closed</string>
+    <string name="health_location_on">Location switched on</string>
+    <string name="health_location_on_ok">On</string>
+    <string name="health_location_on_bad">Location is switched off on this phone</string>
+    <string name="health_notifications">Notifications</string>
+    <string name="health_notifications_ok">Allowed</string>
+    <string name="health_notifications_bad">Off: you will not see the recording or summary notifications</string>
+    <string name="health_bt_permission">Nearby devices (Bluetooth)</string>
+    <string name="health_bt_permission_ok">Allowed</string>
+    <string name="health_bt_permission_bad">Needed to notice when your car connects</string>
+    <string name="health_bt_on">Bluetooth switched on</string>
+    <string name="health_bt_on_ok">On</string>
+    <string name="health_bt_on_bad">Bluetooth is switched off</string>
+    <string name="health_car">Car chosen</string>
+    <string name="health_car_ok">Chosen</string>
+    <string name="health_car_bad">Choose your car’s Bluetooth device</string>
+    <string name="health_link">Car linked as companion</string>
+    <string name="health_link_ok">Linked</string>
+    <string name="health_link_bad">Optional, makes auto-start more reliable</string>
+    <string name="health_battery">Battery: unrestricted</string>
+    <string name="health_battery_ok">The app may run in the background</string>
+    <string name="health_battery_bad">Android may stop the app. Allow unrestricted battery use.</string>
+    <string name="health_auto">Automatic recording</string>
+    <string name="health_auto_ok">On</string>
+    <string name="health_auto_bad">Switched off in Settings</string>
+    <string name="health_history">History</string>
+    <string name="health_last_start">Last successful automatic start</string>
+    <string name="health_never">Not yet</string>
+    <string name="health_last_problem">Last problem</string>
+    <string name="health_open_settings">Open Android settings for this app</string>
+
+    <!-- Privacy zones -->
+    <string name="zones_intro">Routes inside a zone are cut out of share cards and GPX exports. Your full trips stay on this phone.</string>
+    <string name="zones_empty">Add a zone around places such as home or work.</string>
+    <string name="zones_add">Add zone</string>
+    <string name="zones_edit">Edit zone</string>
+    <string name="zones_default_name">Home</string>
+    <string name="zones_name">Name</string>
+    <string name="zones_radius_value">Radius %1$s</string>
+    <string name="zones_editor_hint">Move the map until the cross is on the place.</string>
+    <string name="zones_map_description">Map for choosing the centre of the zone</string>
+    <string name="zones_removed">Zone removed</string>
+
+    <!-- About -->
+    <string name="about_meaning">“Hejje” is Kannada for footprint.</string>
+    <string name="about_privacy_title">Your data</string>
+    <string name="about_privacy">Trips are stored only on this phone. There are no accounts, no cloud, no analytics and no ads. The app uses the internet for three things only: map tiles, place names (if switched on) and checking for updates.</string>
+    <string name="about_credits_title">Maps and place names</string>
+    <string name="about_credits">Map tiles by OpenFreeMap, using the OpenMapTiles schema. Map data and place names © OpenStreetMap contributors, available under the Open Database License. Place names come from the Nominatim service.</string>
+    <string name="about_link_osm">OpenStreetMap copyright</string>
+    <string name="about_link_ofm">OpenFreeMap</string>
+    <string name="about_link_source">Source code and releases</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Every drive, recorded for you</string>
+    <string name="onboarding_welcome_body">Recording starts when your phone connects to your car and stops when it disconnects. Everything stays on this phone.</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_location_title">Allow location</string>
+    <string name="onboarding_location_body">The app needs your precise location to draw the route and measure distance and speed. Choose “Precise” and “While using the app”.</string>
+    <string name="onboarding_background_title">Allow it all the time</string>
+    <string name="onboarding_background_body">Drives start while the phone is in your pocket and the app is closed. On the next screen choose “Allow all the time”. Location is only used while a drive is being recorded.</string>
+    <string name="onboarding_background_action">Open location setting</string>
+    <string name="onboarding_notifications_title">Allow notifications</string>
+    <string name="onboarding_notifications_body">You will see a small notification while a drive is recorded, and a short summary afterwards.</string>
+    <string name="onboarding_car_title">Choose your car</string>
+    <string name="onboarding_car_body">Allow access to nearby devices, then pick your car from your paired Bluetooth devices.</string>
+    <string name="onboarding_car_later">Choose later</string>
+    <string name="onboarding_battery_title">Let it run in the background</string>
+    <string name="onboarding_battery_body">Android puts unused apps to sleep, which would stop drives from being recorded. Tap the button and choose “Allow”.</string>
+    <string name="onboarding_battery_action">Allow background use</string>
+    <string name="onboarding_done_title">You are all set</string>
+    <string name="onboarding_done_body">Take a drive and your trip appears on its own. You can review everything under Settings › Recording health.</string>
+    <string name="onboarding_finish">Open the app</string>
+    <string name="onboarding_skip">Skip for now</string>
+
+    <!-- Widget -->
+    <string name="widget_label" tools:ignore="UnusedResources">Hejje: this week</string>
+    <string name="widget_description">This week’s distance and your last trip</string>
+    <string name="widget_last_trip">Last trip %1$s · %2$s · %3$s</string>
+</resources>

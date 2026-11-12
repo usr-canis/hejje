@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app name lives here and nowhere else. -->
+<resources>
+    <!-- Launcher / system name -->
+    <string name="app_name" translatable="false">Hejje</string>
+    <!-- Name shown inside the app (Kannada for "footprint"), rendered with the system font -->
+    <string name="brand_name" translatable="false">ಹೆಜ್ಜೆ</string>
+</resources>
