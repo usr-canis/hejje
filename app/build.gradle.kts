@@ -110,6 +110,8 @@ dependencies {
     implementation(libs.compose.foundation)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.activity.compose)
+    // Play services declares an old Fragment version; the activity-result screens need 1.3.0 or newer.
+    implementation(libs.fragment)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.service)
