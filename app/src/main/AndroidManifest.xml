@@ -70,11 +70,10 @@
             </intent-filter>
         </service>
 
+        <!-- Only the system can send these two (protected) broadcasts; the receiver checks the action. -->
         <receiver
             android:name=".recording.BluetoothReceiver"
-            android:exported="true"
-            android:permission="android.permission.BLUETOOTH_CONNECT"
-            tools:ignore="UnprotectedReceiver">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />

@@ -3,6 +3,7 @@ package com.canis.hejje.recording
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -77,7 +78,12 @@ class RecordingService : Service() {
 
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (updating) requestUpdates()
+            if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                // Bluetooth switched off: the car is gone even if no disconnect event arrives.
+                if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_OFF) controller.carDisconnected()
+            } else if (updating) {
+                requestUpdates()
+            }
         }
     }
 
@@ -98,7 +104,11 @@ class RecordingService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         ContextCompat.registerReceiver(
             this, powerReceiver,
-            IntentFilter().apply { addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED) },
+            IntentFilter().apply {
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+                addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         scope.launch {
