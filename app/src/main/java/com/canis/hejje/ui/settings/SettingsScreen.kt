@@ -170,6 +170,7 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
                     when (val u = update) {
                         UpdateState.Checking -> stringResource(R.string.settings_update_checking)
                         UpdateState.UpToDate -> stringResource(R.string.settings_update_latest, BuildConfig.VERSION_NAME)
+                        UpdateState.NoRelease -> stringResource(R.string.settings_update_no_release)
                         is UpdateState.Available -> stringResource(R.string.settings_update_found, u.info.version)
                         is UpdateState.Downloading -> stringResource(R.string.update_downloading, (u.progress * 100).toInt())
                         is UpdateState.Installing -> stringResource(R.string.update_confirm_hint)

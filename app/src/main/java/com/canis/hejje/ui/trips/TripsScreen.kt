@@ -108,6 +108,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         HejjeTopBar(
             title = stringResource(R.string.brand_name),
+            titleStyle = MaterialTheme.typography.headlineLarge,
             actions = {
                 if (state.live != null) PulsingDot(Modifier.padding(end = 4.dp))
                 IconButton(onClick = { searching = !searching; if (!searching) vm.search("") }) {

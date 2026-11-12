@@ -149,6 +149,11 @@ private fun BrandSplash() {
     }
 }
 
+@Composable
+private fun ScreenBackground(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpened: () -> Unit) {
@@ -186,28 +191,28 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                     CompositionLocalProvider(LocalSharedScope provides this) {
                         NavHost(
                             nav, startDestination = Routes.TRIPS,
-                            enterTransition = { fadeIn(tween(220)) }, exitTransition = { fadeOut(tween(160)) },
-                            popEnterTransition = { fadeIn(tween(220)) }, popExitTransition = { fadeOut(tween(160)) },
+                            enterTransition = { fadeIn(tween(160, delayMillis = 160)) }, exitTransition = { fadeOut(tween(160)) },
+                            popEnterTransition = { fadeIn(tween(160, delayMillis = 160)) }, popExitTransition = { fadeOut(tween(160)) },
                         ) {
                             composable(Routes.TRIPS) {
                                 CompositionLocalProvider(LocalNavScope provides this) {
-                                    TripsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onParked = { nav.navigate(Routes.PARKED) })
+                                    ScreenBackground { TripsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onParked = { nav.navigate(Routes.PARKED) }) }
                                 }
                             }
                             composable(Routes.INSIGHTS) {
-                                CompositionLocalProvider(LocalNavScope provides this) { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }) }
+                                CompositionLocalProvider(LocalNavScope provides this) { ScreenBackground { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }) } }
                             }
-                            composable(Routes.SETTINGS) { SettingsScreen(onOpen = { nav.navigate(it) }) }
+                            composable(Routes.SETTINGS) { ScreenBackground { SettingsScreen(onOpen = { nav.navigate(it) }) } }
                             composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                                 CompositionLocalProvider(LocalNavScope provides this) {
-                                    TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() })
+                                    ScreenBackground { TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
                                 }
                             }
-                            composable(Routes.PARKED) { ParkedScreen(onBack = { nav.popBackStack() }) }
-                            composable(Routes.HEALTH) { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }) }
-                            composable(Routes.ZONES) { ZonesScreen(onBack = { nav.popBackStack() }) }
-                            composable(Routes.CAR) { CarScreen(onBack = { nav.popBackStack() }) }
-                            composable(Routes.ABOUT) { AboutScreen(onBack = { nav.popBackStack() }) }
+                            composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
+                            composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }) } }
+                            composable(Routes.ZONES) { ScreenBackground { ZonesScreen(onBack = { nav.popBackStack() }) } }
+                            composable(Routes.CAR) { ScreenBackground { CarScreen(onBack = { nav.popBackStack() }) } }
+                            composable(Routes.ABOUT) { ScreenBackground { AboutScreen(onBack = { nav.popBackStack() }) } }
                         }
                     }
                 }

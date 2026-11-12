@@ -118,9 +118,9 @@ fun rememberHaptics(): Haptics {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HejjeTopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
+fun HejjeTopBar(title: String, onBack: (() -> Unit)? = null, titleStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge, actions: @Composable RowScope.() -> Unit = {}) {
     TopAppBar(
-        title = { Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         navigationIcon = {
             if (onBack != null) IconButton(onClick = onBack) { Icon(HejjeIcons.Back, stringResource(R.string.action_back)) }
         },

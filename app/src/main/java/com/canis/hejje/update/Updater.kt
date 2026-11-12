@@ -57,10 +57,34 @@ sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
     data object UpToDate : UpdateState
+    data object NoRelease : UpdateState
     data class Available(val info: UpdateInfo) : UpdateState
     data class Downloading(val info: UpdateInfo, val progress: Float) : UpdateState
     data class Installing(val info: UpdateInfo) : UpdateState
     data class Failed(val info: UpdateInfo?, val error: UpdateError) : UpdateState
+}
+
+internal sealed interface ReleaseLookup {
+    data class Found(val release: GhRelease) : ReleaseLookup
+    data object NotFound : ReleaseLookup
+    data object Failed : ReleaseLookup
+}
+
+internal fun fetchRelease(http: OkHttpClient, url: String): ReleaseLookup = try {
+    val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json").build()
+    http.newCall(request).execute().use { response ->
+        when {
+            response.code == 404 -> ReleaseLookup.NotFound
+            !response.isSuccessful -> ReleaseLookup.Failed
+            else -> response.body?.string()?.let {
+                ReleaseLookup.Found(HejjeJson.decodeFromString(GhRelease.serializer(), it))
+            } ?: ReleaseLookup.Failed
+        }
+    }
+} catch (_: java.io.IOException) {
+    ReleaseLookup.Failed
+} catch (_: IllegalArgumentException) {
+    ReleaseLookup.Failed
 }
 
 /** Checks GitHub Releases for a newer version, downloads the APK, verifies it and hands it to Android's installer. */
@@ -97,10 +121,16 @@ class Updater(
         } else {
             _state.value = UpdateState.Checking
         }
-        val release = fetchLatest()
-        if (release == null) {
-            if (manual) _state.value = UpdateState.Failed(null, UpdateError.NETWORK)
-            return null
+        val release = when (val result = fetchLatest()) {
+            is ReleaseLookup.Found -> result.release
+            ReleaseLookup.NotFound -> {
+                if (manual) _state.value = UpdateState.NoRelease
+                return null
+            }
+            ReleaseLookup.Failed -> {
+                if (manual) _state.value = UpdateState.Failed(null, UpdateError.NETWORK)
+                return null
+            }
         }
         val info = toInfo(release)
         settings.update {
@@ -118,16 +148,8 @@ class Updater(
     private fun offer(info: UpdateInfo, skipped: String?, manual: Boolean) =
         Version.isNewer(info.version, BuildConfig.VERSION_NAME) && (manual || info.version != skipped)
 
-    private suspend fun fetchLatest(): GhRelease? = withContext(Dispatchers.IO) {
-        runCatching {
-            val request = Request.Builder()
-                .url("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")
-                .header("Accept", "application/vnd.github+json")
-                .build()
-            http.newCall(request).execute().use { r ->
-                r.body?.string()?.takeIf { r.isSuccessful }?.let { HejjeJson.decodeFromString(GhRelease.serializer(), it) }
-            }
-        }.getOrNull()
+    private suspend fun fetchLatest(): ReleaseLookup = withContext(Dispatchers.IO) {
+        fetchRelease(http, "https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")
     }
 
     fun dismiss() {
