@@ -77,6 +77,13 @@ class RecordingFlowTest {
         }
     }
 
+    /** Changes settings and waits until the app sees the change (it is applied in the background). */
+    private fun setSettings(change: (com.canis.hejje.data.SettingsData) -> com.canis.hejje.data.SettingsData) {
+        val target = change(app.container.settings.current)
+        runBlocking { app.container.settings.update(change) }
+        eventually("settings applied") { app.container.settings.current == target }
+    }
+
     /** Lets background database writes of the "old" process finish. */
     private fun settle() = repeat(30) {
         shadowOf(Looper.getMainLooper()).idle()
@@ -252,14 +259,14 @@ class RecordingFlowTest {
 
     @Test fun remindersSwitchedOff_inSettings_noReminders() {
         shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
-        runBlocking { app.container.settings.update { it.copy(locationPrompts = false) } }
+        setSettings { it.copy(locationPrompts = false) }
         setLocation(false)
         controller().carConnected()
         assertNull(locationNotice())
     }
 
     @Test fun autoRecordOff_ignoresTheCar() {
-        runBlocking { app.container.settings.update { it.copy(autoRecord = false) } }
+        setSettings { it.copy(autoRecord = false) }
         val c = controller()
         c.carConnected()
         assertFalse(c.isRecording)
