@@ -43,6 +43,10 @@ data class TripEntity(
     @ColumnInfo(typeAffinity = ColumnInfo.BLOB) val thumb: ByteArray,
     val segmentCount: Int,
     val baro: Boolean,
+    /** Distance driven ÷ straight line; null for a round trip. */
+    val circuity: Double? = null,
+    /** How much the road turned, degrees per km; null when too short to tell. */
+    val twistiness: Double? = null,
 ) {
     val totalMs: Long get() = endTime - startTime
     val avgMovingSpeed: Float get() = if (movingMs > 0) (distanceM / (movingMs / 1000.0)).toFloat() else 0f

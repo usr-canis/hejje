@@ -15,6 +15,8 @@ data class TripSummary(
     val maxSpeed: Float,
     val endPlace: String? = null,
     val tags: List<String> = emptyList(),
+    val circuity: Double? = null,
+    val twistiness: Double? = null,
 )
 
 data class Totals(val trips: Int = 0, val distanceM: Double = 0.0, val movingMs: Long = 0, val durationMs: Long = 0)
@@ -33,6 +35,10 @@ data class InsightsData(
     val places: List<Pair<String, Int>>,
     val tags: List<TagStat>,
     val daily: Map<LocalDate, Double>,
+    /** Typical (median) circuity of this month's trips of 1 km or more; null if none. */
+    val monthCircuity: Double? = null,
+    /** This month's most winding trip of 2 km or more; null when none of them were more than straight. */
+    val mostWinding: TripSummary? = null,
 )
 
 object Insights {
@@ -67,6 +73,9 @@ object Insights {
             cursor = cursor.minusDays(1)
         }
 
+        val thisMonth = inRange(today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth()))
+        val circuities = thisMonth.filter { it.distanceM >= 1_000 }.mapNotNull { it.circuity }.sorted()
+
         return InsightsData(
             week = totals(inRange(monday, monday.plusDays(6))),
             lastWeek = totals(inRange(monday.minusDays(7), monday.minusDays(1))),
@@ -82,6 +91,8 @@ object Insights {
                 .map { (name, list) -> TagStat(name, list.size, list.sumOf { it.distanceM }) }
                 .sortedByDescending { it.distanceM },
             daily = byDay.mapValues { (_, list) -> list.sumOf { it.distanceM } },
+            monthCircuity = if (circuities.isEmpty()) null else circuities[circuities.size / 2],
+            mostWinding = thisMonth.filter { it.distanceM >= 2_000 && (it.twistiness ?: 0.0) >= RouteShape.STRAIGHT_MAX }.maxByOrNull { it.twistiness!! },
         )
     }
 }

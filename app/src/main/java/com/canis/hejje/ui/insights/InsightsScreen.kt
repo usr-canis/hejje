@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,7 @@ import com.canis.hejje.ui.components.StatRow
 import com.canis.hejje.ui.components.StatTile
 import com.canis.hejje.ui.components.countUp
 import com.canis.hejje.ui.components.rememberHaptics
+import com.canis.hejje.ui.detail.twistLabel
 import com.canis.hejje.ui.hejjeViewModel
 import com.canis.hejje.ui.rememberFormatter
 import com.canis.hejje.ui.theme.LocalPalette
@@ -81,7 +83,8 @@ class InsightsViewModel(container: AppContainer) : ViewModel() {
         val today = LocalDate.now(zone)
         val summaries = trips.map { t ->
             TripSummary(t.trip.id, t.trip.startTime, t.trip.endTime, t.trip.distanceM, t.trip.movingMs, t.trip.maxSpeed,
-                Places.placeAt(t.trip.endLat, t.trip.endLon, places)?.name ?: t.trip.endPlace, t.tags.map { it.name })
+                Places.placeAt(t.trip.endLat, t.trip.endLon, places)?.name ?: t.trip.endPlace, t.tags.map { it.name },
+                t.trip.circuity, t.trip.twistiness)
         }
         InsightsState(false, if (trips.isEmpty()) null else Insights.compute(summaries, today, zone), trips, settings, today)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsState())
@@ -175,6 +178,26 @@ fun InsightsScreen(onTrip: (Long) -> Unit, onStretch: () -> Unit = {}) {
                             stringResource(R.string.insights_longest_streak),
                             pluralStringResource(R.plurals.day_count, data.longestStreak, data.longestStreak), Modifier.weight(1f),
                         )
+                    }
+                }
+            }
+            if (data.monthCircuity != null || data.mostWinding != null) {
+                item(key = "shape") {
+                    Column(Modifier.padding(horizontal = ScreenPadding)) {
+                        SectionTitle(stringResource(R.string.insights_route_shape))
+                        StatRow {
+                            StatTile(
+                                stringResource(R.string.insights_typical_circuity),
+                                data.monthCircuity?.let { String.format(LocalConfiguration.current.locales[0], "%.2f", it) } ?: "–", Modifier.weight(1f),
+                            )
+                            val windingLabel = data.mostWinding?.twistiness?.let { stringResource(twistLabel(it)) }
+                            if (windingLabel != null) StatTile(stringResource(R.string.insights_most_winding), windingLabel, Modifier.weight(1f))
+                            else Spacer(Modifier.weight(1f))
+                        }
+                        val winding = data.mostWinding?.let { w -> state.trips.firstOrNull { it.trip.id == w.id } }
+                        if (winding != null) {
+                            TripCard(winding, f, Modifier.padding(top = 4.dp)) { onTrip(winding.trip.id) }
+                        }
                     }
                 }
             }

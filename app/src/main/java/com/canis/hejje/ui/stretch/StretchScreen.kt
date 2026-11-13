@@ -51,6 +51,7 @@ import com.canis.hejje.ui.components.SectionTitle
 import com.canis.hejje.ui.components.StatRow
 import com.canis.hejje.ui.components.StatTile
 import com.canis.hejje.ui.components.rememberHaptics
+import com.canis.hejje.ui.detail.RouteShapeTiles
 import com.canis.hejje.ui.hejjeViewModel
 import com.canis.hejje.ui.map.MapRoute
 import com.canis.hejje.ui.rememberFormatter
@@ -62,7 +63,7 @@ import java.util.Locale
 
 /** Pick two points on roads you drove and compare every drive between them. */
 @Composable
-fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onTrip: (Long) -> Unit) {
+fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long, from: Long, to: Long) -> Unit) {
     val vm = hejjeViewModel(key = "stretch-$fromTrip") { StretchViewModel(it, fromTrip) }
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by LocalContainer.current.settings.data.collectAsStateWithLifecycle()
@@ -116,7 +117,7 @@ fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onTrip: (Long) -> Unit) {
                     }
                     item(key = "each") { SectionTitle(stringResource(R.string.stretch_each)) }
                     items(summary.passes, key = { "${it.tripId}-${it.start}" }) { p ->
-                        PassRow(p, f, thisTrip = p.tripId == state.fromTrip, summary) { onTrip(p.tripId) }
+                        PassRow(p, f, thisTrip = p.tripId == state.fromTrip, summary) { onSection(p.tripId, p.start, p.end) }
                     }
                 }
             }
@@ -159,6 +160,7 @@ private fun SummaryCard(s: StretchSummary, f: Formatter) {
             StatTile(stringResource(R.string.stretch_fastest), f.duration(s.fastest.durationMs), Modifier.weight(1f))
             StatTile(stringResource(R.string.stretch_slowest), f.duration(s.slowest.durationMs), Modifier.weight(1f))
         }
+        RouteShapeTiles(s.shape, f)
         if (s.bestHour != null && s.worstHour != null) {
             Text(
                 stringResource(R.string.stretch_hours, hour(s.bestHour.first), f.duration(s.bestHour.second), hour(s.worstHour.first), f.duration(s.worstHour.second)),

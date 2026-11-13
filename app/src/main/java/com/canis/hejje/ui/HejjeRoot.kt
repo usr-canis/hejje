@@ -99,6 +99,7 @@ import com.canis.hejje.ui.settings.HealthScreen
 import com.canis.hejje.ui.settings.ParkedScreen
 import com.canis.hejje.ui.settings.SettingsScreen
 import com.canis.hejje.ui.settings.ZonesScreen
+import com.canis.hejje.ui.stretch.SectionScreen
 import com.canis.hejje.ui.stretch.StretchScreen
 import com.canis.hejje.ui.theme.HejjeTheme
 import com.canis.hejje.ui.theme.LocalPalette
@@ -198,6 +199,7 @@ object Routes {
     const val ABOUT = "about"
     fun trip(id: Long) = "trip/$id"
     fun stretch(fromTrip: Long? = null) = if (fromTrip != null) "stretch?trip=$fromTrip" else "stretch"
+    fun section(tripId: Long, from: Long, to: Long) = "section/$tripId/$from/$to"
     val TOP = setOf(TRIPS, INSIGHTS, SETTINGS)
 }
 
@@ -350,7 +352,25 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                         arguments = listOf(navArgument("trip") { type = NavType.LongType; defaultValue = -1L }),
                     ) { back ->
                         val from = back.arguments?.getLong("trip")?.takeIf { it > 0 }
-                        ScreenBackground { StretchScreen(from, onBack = { nav.popBackStack() }, onTrip = { nav.navigate(Routes.trip(it)) }) }
+                        ScreenBackground {
+                            StretchScreen(from, onBack = { nav.popBackStack() }, onSection = { id, a, b -> nav.navigate(Routes.section(id, a, b)) })
+                        }
+                    }
+                    composable(
+                        "section/{trip}/{from}/{to}",
+                        arguments = listOf(
+                            navArgument("trip") { type = NavType.LongType },
+                            navArgument("from") { type = NavType.LongType },
+                            navArgument("to") { type = NavType.LongType },
+                        ),
+                    ) { back ->
+                        val args = back.arguments
+                        ScreenBackground {
+                            SectionScreen(
+                                args?.getLong("trip") ?: -1L, args?.getLong("from") ?: 0L, args?.getLong("to") ?: 0L,
+                                onBack = { nav.popBackStack() }, onTrip = { nav.navigate(Routes.trip(it)) },
+                            )
+                        }
                     }
                     composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
                     composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }, onTrip = { nav.navigate(Routes.trip(it)) }) } }

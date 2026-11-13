@@ -2,6 +2,7 @@ package com.canis.hejje.ui.detail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,9 +58,10 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -70,6 +72,7 @@ import com.canis.hejje.R
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.PrivacyZones
+import com.canis.hejje.domain.RouteShape
 import com.canis.hejje.domain.StatsCalculator
 import com.canis.hejje.domain.TripStats
 import com.canis.hejje.ui.components.BandBars
@@ -396,8 +399,9 @@ private fun OverlayButton(icon: ImageVector, description: String, onClick: () ->
     }
 }
 
+/** Everything below the headline numbers; shared by a trip and a section of one (a stretch). */
 @Composable
-private fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
+internal fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
     Column {
         SectionTitle(stringResource(R.string.detail_time))
         StatRow {
@@ -455,6 +459,9 @@ private fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
             modifier = Modifier.padding(top = 4.dp),
         )
 
+        SectionTitle(stringResource(R.string.detail_route_shape))
+        RouteShapeTiles(s.shape, f)
+
         SectionTitle(stringResource(R.string.detail_elevation))
         if (s.altMin.isNaN()) {
             Text(stringResource(R.string.detail_no_elevation), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -473,4 +480,37 @@ private fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
             )
         }
     }
+}
+
+/** Circuity and twistiness, with a line saying what the numbers mean. */
+@Composable
+internal fun RouteShapeTiles(shape: RouteShape, f: Formatter) {
+    StatRow {
+        StatTile(
+            stringResource(R.string.stat_circuity),
+            if (shape.circuity.isNaN()) stringResource(R.string.shape_round_trip) else String.format(LocalConfiguration.current.locales[0], "%.2f", shape.circuity),
+            Modifier.weight(1f),
+        )
+        StatTile(
+            stringResource(R.string.stat_twistiness),
+            if (shape.twistiness.isNaN()) "–" else stringResource(twistLabel(shape.twistiness)),
+            Modifier.weight(1f),
+        )
+    }
+    val turning = if (shape.twistiness.isNaN()) "" else " " + stringResource(R.string.shape_turning, shape.twistiness.roundToInt())
+    Text(
+        when {
+            shape.straightM < 0 -> stringResource(R.string.shape_unknown)
+            shape.circuity.isNaN() -> stringResource(R.string.shape_round_trip_note) + turning
+            else -> stringResource(R.string.shape_note, f.distance(shape.straightM)) + turning
+        },
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+@StringRes
+internal fun twistLabel(degPerKm: Double): Int = when {
+    degPerKm < RouteShape.STRAIGHT_MAX -> R.string.twist_straight
+    degPerKm < RouteShape.MODERATE_MAX -> R.string.twist_moderate
+    else -> R.string.twist_winding
 }

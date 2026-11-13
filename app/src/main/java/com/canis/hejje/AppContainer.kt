@@ -26,7 +26,7 @@ import java.io.File
 class AppContainer(val app: Application) {
     companion object {
         private const val KEY_STATS_VERSION = "statsVersion"
-        const val STATS_VERSION = 2
+        const val STATS_VERSION = 3
     }
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -54,7 +54,7 @@ class AppContainer(val app: Application) {
         locationPrompt = LocationPrompt(app, notifier, log), log = log,
     )
 
-    /** Recalculates every trip once when the way stats are computed has changed (Fluidity in 1.2.0). */
+    /** Recalculates every trip once when the way stats are computed has changed (Fluidity in 1.2.0, route shape in 1.4.0). */
     suspend fun upgradeStats() {
         val prefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
         if (prefs.getInt(KEY_STATS_VERSION, 1) >= STATS_VERSION) return

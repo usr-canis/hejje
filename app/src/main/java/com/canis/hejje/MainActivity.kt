@@ -32,5 +32,15 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         val id = intent?.getLongExtra(Notifier.EXTRA_TRIP_ID, -1L) ?: -1L
         if (id > 0) openTripId = id
+        // From the Quick Settings tile, when Android did not let it start the recording itself.
+        if (intent?.getBooleanExtra(EXTRA_START_RECORDING, false) == true) {
+            intent.removeExtra(EXTRA_START_RECORDING)
+            val controller = (application as HejjeApp).container.controller
+            if (controller.live.value == null) controller.manualStart()
+        }
+    }
+
+    companion object {
+        const val EXTRA_START_RECORDING = "start_recording"
     }
 }

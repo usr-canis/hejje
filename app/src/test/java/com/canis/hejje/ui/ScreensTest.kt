@@ -243,7 +243,15 @@ class ScreensTest {
         map.performTouchInput { click(at(r.lat[i2], r.lon[i2])) }
         await("6 drives")
         rule.onNodeWithText("Typical").assertExists()
+        rule.onNodeWithText("Circuity").assertExists()
         shot("stretch")
+        // Each drive opens that part of its trip, with the full set of stats.
+        scrollTo("Each drive")
+        rule.onAllNodesWithText("Today,", substring = true).onFirst().performClick()
+        await("Open the whole trip")
+        shot("section")
+        scrollTo("Route shape")
+        shot("section-2")
     }
 
     @Test fun backGesture_looksLikeAndroidsOwn() {

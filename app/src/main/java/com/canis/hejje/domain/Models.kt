@@ -127,6 +127,8 @@ data class TripStats(
     val cornering: Float = Float.NaN,
     /** Share of the driving time measured with the phone's sensors, 0-1. */
     val sensorShare: Float = 0f,
+    /** How directly and how twistily the route went. */
+    val shape: RouteShape = RouteShape.NONE,
 ) {
     val totalMs: Long get() = end - start
     val avgMovingSpeed: Float get() = if (movingMs > 0) (distanceM / (movingMs / 1000.0)).toFloat() else 0f

@@ -152,6 +152,10 @@ object StatsCalculator {
         turns.sort()
         val cornering = if (turns.size >= MIN_TURNS) turns[(turns.size * 3 / 4).coerceAtMost(turns.size - 1)] else Float.NaN
 
+        // Top speed comes from GPS speed, the average from distance between positions; at a steady
+        // speed the two can differ by about 1%. The top speed is never below the average.
+        if (moving > 0) maxSpeed = max(maxSpeed, (distance / (moving / 1000.0)).toFloat())
+
         val events = brakes + accels
         val per10km = events / max(1.0, distance / 1000.0) * 10
         val fluidity = (100 - 55 * roughness(segs) - min(45.0, 9 * per10km)).roundToInt().coerceIn(0, 100)
@@ -176,6 +180,7 @@ object StatsCalculator {
             nightShare = if (sampledMs > 0) nightMs.toFloat() / sampledMs else 0f,
             cornering = cornering,
             sensorShare = if (moving > 0) (sensedMs.toFloat() / moving).coerceAtMost(1f) else 0f,
+            shape = RouteShape.of(segs.map { it.data.route.lat to it.data.route.lon }, distance),
         )
     }
 }

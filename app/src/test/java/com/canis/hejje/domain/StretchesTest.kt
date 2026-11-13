@@ -23,6 +23,9 @@ class StretchesTest {
         assertEquals(1_000 / 15.0, p.durationMs / 1000.0, 2.5)
         assertEquals(15f, p.maxSpeed, 0.5f)
         assertTrue(p.lat.size >= 2)
+        // A straight road: the drive is as long as the straight line, and does not turn.
+        assertEquals(1.0, p.shape.circuity, 0.03)
+        assertTrue(p.shape.twistiness < RouteShape.STRAIGHT_MAX)
     }
 
     @Test fun direction_matters() {

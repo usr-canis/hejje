@@ -98,6 +98,8 @@ object Codec {
             thumb = thumbnail(sorted),
             segmentCount = sorted.size,
             baro = sorted.any { it.data.baro },
+            circuity = s.shape.circuity.takeUnless { it.isNaN() },
+            twistiness = s.shape.twistiness.takeUnless { it.isNaN() },
         )
     }
 }

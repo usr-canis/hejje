@@ -117,6 +117,23 @@ class RecordingController(
 
     fun manualStart() = onMain { apply(machine.onManualStart(now())) }
 
+    /** True while a start from outside the app is tried: a refusal is then not reported as a problem. */
+    private var quietStartFailure = false
+
+    /**
+     * Starts recording from outside the app (the Quick Settings tile), on the main thread.
+     * Returns false if Android did not allow it; the caller then opens the app to start there.
+     */
+    fun tryManualStart(): Boolean {
+        quietStartFailure = true
+        try {
+            apply(machine.onManualStart(now()))
+        } finally {
+            quietStartFailure = false
+        }
+        return _live.value != null
+    }
+
     fun manualStop() = onMain { apply(machine.onManualStop(now())) }
 
     private val timer = Runnable { apply(machine.onTimer(now())) }
@@ -164,7 +181,7 @@ class RecordingController(
         persist()
         locationPrompt.onDriveEnd(enabled = false)
         log?.add(LogKind.START_REFUSED, reason)
-        reportProblem(reason)
+        if (!quietStartFailure) reportProblem(reason)
         if (id != null) scope.launch { finalizer.finalizeOrphan(id) }
     }
 

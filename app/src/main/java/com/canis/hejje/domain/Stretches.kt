@@ -21,6 +21,12 @@ class StretchPass(
     val lat: DoubleArray,
     val lon: DoubleArray,
 ) {
+    /** Circuity and twistiness of this drive along the stretch. */
+    val shape: RouteShape by lazy { RouteShape.of(listOf(lat to lon), distanceM, roundTrips = false) }
+
+    /** When the car left A and reached B (epoch ms): the section of the trip this drive covers. */
+    val end: Long get() = start + durationMs
+
     val avgSpeed: Float get() = if (durationMs > 0) (distanceM / (durationMs / 1000.0)).toFloat() else 0f
 }
 
@@ -34,6 +40,8 @@ class StretchSummary(
     /** Hour of the day (0-23) with the shortest and the longest typical time, if that differs by a minute or more. */
     val bestHour: Pair<Int, Long>?,
     val worstHour: Pair<Int, Long>?,
+    /** The typical (median) circuity and twistiness of the drives. */
+    val shape: RouteShape = RouteShape.NONE,
 )
 
 /**
@@ -99,7 +107,14 @@ object Stretches {
             distanceM = passes.map { it.distanceM }.sorted()[passes.size / 2],
             bestHour = if (spread) best else null,
             worstHour = if (spread) worst else null,
+            shape = typicalShape(passes.map { it.shape }),
         )
+    }
+
+    private fun typicalShape(shapes: List<RouteShape>): RouteShape {
+        fun mid(v: List<Double>) = v.filter { !it.isNaN() }.sorted().let { if (it.isEmpty()) Double.NaN else it[it.size / 2] }
+        val straight = shapes.map { it.straightM }.filter { it >= 0 }
+        return RouteShape(if (straight.isEmpty()) -1.0 else mid(straight), mid(shapes.map { it.circuity }), mid(shapes.map { it.twistiness }))
     }
 
     private fun median(values: List<Long>): Long {

@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, SegmentEntity::class, TagEntity::class, TripTagEntity::class,
         ZoneEntity::class, PlaceEntity::class, RawPointEntity::class, LogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class HejjeDb : RoomDatabase() {
@@ -44,13 +44,21 @@ abstract class HejjeDb : RoomDatabase() {
             }
         }
 
+        /** 1.4.0: route shape (circuity and twistiness) per trip, filled in by the stats upgrade. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trips ADD COLUMN circuity REAL")
+                db.execSQL("ALTER TABLE trips ADD COLUMN twistiness REAL")
+            }
+        }
+
         fun create(context: Context, inMemory: Boolean = false): HejjeDb {
             val builder = if (inMemory) {
                 Room.inMemoryDatabaseBuilder(context, HejjeDb::class.java).allowMainThreadQueries()
             } else {
                 Room.databaseBuilder(context, HejjeDb::class.java, "hejje.db")
             }
-            return builder.addMigrations(MIGRATION_1_2).addCallback(object : Callback() {
+            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3).addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) = insertPresetTags(db)
             }).build()
         }
