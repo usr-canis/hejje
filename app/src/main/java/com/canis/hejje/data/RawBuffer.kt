@@ -37,6 +37,7 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
             out?.apply {
                 writeLong(p.t); writeDouble(p.lat); writeDouble(p.lon)
                 writeFloat(p.alt); writeFloat(p.speed); writeFloat(p.acc); writeFloat(p.pressure); writeFloat(p.speedAcc)
+                writeFloat(p.sLon); writeFloat(p.sMin); writeFloat(p.sMax); writeFloat(p.sLat)
                 flush()
             }
             if (++sinceSync >= SYNC_EVERY) {
@@ -84,26 +85,30 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
     /** After a restart: move fixes left in journal files into the database. */
     suspend fun recover() {
         synchronized(this) { close(); pending.clear(); session = null }
-        val files = dir.listFiles { f -> f.name.endsWith(JOURNAL) || f.name.endsWith(FLUSHING) } ?: return
+        val suffixes = listOf(JOURNAL, FLUSHING, OLD_JOURNAL, OLD_FLUSHING)
+        val files = dir.listFiles { f -> suffixes.any { f.name.endsWith(it) } } ?: return
         for (f in files.sortedBy { it.lastModified() }) {
-            val name = f.name.removeSuffix(JOURNAL).let { if (f.name.endsWith(FLUSHING)) f.name.substringBeforeLast('-') else it }
+            val flushing = f.name.endsWith(FLUSHING) || f.name.endsWith(OLD_FLUSHING)
+            val name = if (flushing) f.name.substringBeforeLast('-') else f.name.removeSuffix(JOURNAL).removeSuffix(OLD_JOURNAL)
             val last = dao.lastTime(name) ?: Long.MIN_VALUE
-            val points = read(f).filter { it.t > last }
+            // Files from before 1.2.0 have no sensor values in each record.
+            val points = read(f, extended = f.name.endsWith(JOURNAL) || f.name.endsWith(FLUSHING)).filter { it.t > last }
             if (points.isNotEmpty()) dao.insert(points.map { toEntity(name, it) })
             f.delete()
         }
     }
 
-    private fun read(f: File): List<RawPoint> {
+    private fun read(f: File, extended: Boolean): List<RawPoint> {
         val list = ArrayList<RawPoint>()
         runCatching {
             DataInputStream(f.inputStream().buffered()).use { input ->
                 while (true) {
                     val p = try {
-                        RawPoint(
+                        val base = RawPoint(
                             input.readLong(), input.readDouble(), input.readDouble(),
                             input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(),
                         )
+                        if (extended) base.copy(sLon = input.readFloat(), sMin = input.readFloat(), sMax = input.readFloat(), sLat = input.readFloat()) else base
                     } catch (_: EOFException) {
                         break // a half-written last record is simply dropped
                     }
@@ -115,19 +120,23 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
     }
 
     companion object {
-        private const val JOURNAL = ".journal"
-        private const val FLUSHING = ".flushing"
+        private const val JOURNAL = ".journal2"
+        private const val FLUSHING = ".flushing2"
+        private const val OLD_JOURNAL = ".journal"
+        private const val OLD_FLUSHING = ".flushing"
         private const val SYNC_EVERY = 10
 
         fun toEntity(session: String, p: RawPoint) = RawPointEntity(
             0, session, p.t, p.lat, p.lon,
             p.alt.takeUnless { it.isNaN() }, p.speed.takeUnless { it.isNaN() }, p.acc.takeUnless { it.isNaN() },
             p.pressure.takeUnless { it.isNaN() }, p.speedAcc.takeUnless { it.isNaN() },
+            p.sLon.takeUnless { it.isNaN() }, p.sMin.takeUnless { it.isNaN() }, p.sMax.takeUnless { it.isNaN() }, p.sLat.takeUnless { it.isNaN() },
         )
 
         fun toRaw(e: RawPointEntity) = RawPoint(
             e.t, e.lat, e.lon, e.alt ?: Float.NaN, e.speed ?: Float.NaN, e.acc ?: Float.NaN,
             e.pressure ?: Float.NaN, e.speedAcc ?: Float.NaN,
+            e.sLon ?: Float.NaN, e.sMin ?: Float.NaN, e.sMax ?: Float.NaN, e.sLat ?: Float.NaN,
         )
     }
 }

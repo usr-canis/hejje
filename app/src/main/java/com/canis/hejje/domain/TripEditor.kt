@@ -37,6 +37,9 @@ object TripEditor {
         fun profile(from: Int, to: Int) = Profile(
             p.stepMs, p.dist.copyOfRange(from, to), p.moving.copyOfRange(from, to),
             p.vmax.copyOfRange(from, to), p.alt.copyOfRange(from, to), p.a2.copyOfRange(from, to),
+            if (p.hasSensors) p.sensorMs.copyOfRange(from, to) else IntArray(0),
+            if (p.hasSensors) p.sacc.copyOfRange(from, to) else FloatArray(0),
+            if (p.hasSensors) p.lat.copyOfRange(from, to) else FloatArray(0),
         )
         val first = Segment(
             s.start, cut,

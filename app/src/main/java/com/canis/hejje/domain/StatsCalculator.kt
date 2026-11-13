@@ -16,10 +16,17 @@ object StatsCalculator {
     private const val CALM_RMS = 0.55
     private const val ROUGH_RMS = 1.35
 
+    /** Sideways acceleration (m/s²) from which a window counts as a turn, and the cornering labels. */
+    private const val TURN_LAT = 1.2f
+    private const val MIN_TURNS = 3
+    const val GENTLE_CORNERING = 2.0f
+    const val FIRM_CORNERING = 3.2f
+
     /**
      * How unevenly the speed changed, 0 (perfectly even) to 1 (very jerky). Measured from the speed
      * of each 5-second block of the trip, so GPS jitter averages out and every trip, old or new,
-     * is scored the same way.
+     * is scored the same way. Where the phone's sensors measured both blocks, their mean
+     * acceleration gives the same quantity without GPS noise.
      */
     fun roughness(segments: List<Segment>): Double {
         var sum = 0.0
@@ -29,7 +36,8 @@ object StatsCalculator {
             val step = p.stepMs / 1000.0
             for (i in 1 until p.size) {
                 if (p.moving[i] == 0 && p.moving[i - 1] == 0) continue
-                val a = (p.dist[i] - p.dist[i - 1]) / step / step
+                val a = if (p.sensed(i) && p.sensed(i - 1)) (p.sacc[i] + p.sacc[i - 1]) / 2.0
+                else (p.dist[i] - p.dist[i - 1]) / step / step
                 sum += a * a * step
                 seconds += step
             }
@@ -129,6 +137,21 @@ object StatsCalculator {
             }
         }
 
+        // Cornering: how hard the turns were taken, from windows the sensors measured.
+        var sensedMs = 0L
+        val turns = ArrayList<Float>()
+        for (seg in segs) {
+            val p = seg.data.profile
+            if (!p.hasSensors) continue
+            for (i in 0 until p.size) {
+                if (!p.sensed(i)) continue
+                sensedMs += min(p.moving[i], p.sensorMs[i])
+                if (p.lat[i] >= TURN_LAT) turns += p.lat[i]
+            }
+        }
+        turns.sort()
+        val cornering = if (turns.size >= MIN_TURNS) turns[(turns.size * 3 / 4).coerceAtMost(turns.size - 1)] else Float.NaN
+
         val events = brakes + accels
         val per10km = events / max(1.0, distance / 1000.0) * 10
         val fluidity = (100 - 55 * roughness(segs) - min(45.0, 9 * per10km)).roundToInt().coerceIn(0, 100)
@@ -151,6 +174,8 @@ object StatsCalculator {
             smoothness = fluidity,
             bandsMs = bands,
             nightShare = if (sampledMs > 0) nightMs.toFloat() / sampledMs else 0f,
+            cornering = cornering,
+            sensorShare = if (moving > 0) (sensedMs.toFloat() / moving).coerceAtMost(1f) else 0f,
         )
     }
 }

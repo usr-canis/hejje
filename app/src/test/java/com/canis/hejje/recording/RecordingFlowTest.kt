@@ -281,10 +281,10 @@ class RecordingFlowTest {
         c.carDisconnected(source = com.canis.hejje.data.DriveLog.SOURCE_BLUETOOTH)
         passTime(grace)
         eventually("trip saved") { tripCount() == 1 }
-        eventually("log complete") { runBlocking { db.log().recent(0) }.any { it.kind == "TRIP_SAVED" } }
+        eventually("log complete") { runBlocking { db.log().recent(0) }.any { it.kind == "SENSORS" } }
         val entries = runBlocking { db.log().recent(0) }.sortedWith(compareBy({ it.t }, { it.id }))
         assertEquals(
-            listOf("CAR_CONNECTED", "REC_STARTED", "FIRST_FIX", "GPS_LOST", "GPS_REGAINED", "CAR_DISCONNECTED", "TRIP_SAVED"),
+            listOf("CAR_CONNECTED", "REC_STARTED", "FIRST_FIX", "GPS_LOST", "GPS_REGAINED", "CAR_DISCONNECTED", "TRIP_SAVED", "SENSORS"),
             entries.map { it.kind },
         )
         assertEquals("companion", entries[0].detail)
@@ -292,7 +292,8 @@ class RecordingFlowTest {
         assertEquals("7", entries[2].detail) // first fix 7 s after the start
         assertTrue(entries[4].detail.toLong() >= 20)
         val trip = runBlocking { trips.all().single() }
-        assertEquals(trip.id, entries.last().tripId)
+        assertEquals(trip.id, entries[6].tripId)
+        assertEquals("0", entries.last().detail) // simulated fixes carry no sensor data
     }
 
     @Test fun homeToWork_isTaggedCommute_andAPlaceTagIsAdded() {

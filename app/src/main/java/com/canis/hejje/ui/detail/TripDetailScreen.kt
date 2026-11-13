@@ -70,6 +70,7 @@ import com.canis.hejje.R
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.PrivacyZones
+import com.canis.hejje.domain.StatsCalculator
 import com.canis.hejje.domain.TripStats
 import com.canis.hejje.ui.components.BandBars
 import com.canis.hejje.ui.components.HejjeIcons
@@ -435,8 +436,23 @@ private fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
         }
         StatRow {
             StatTile(stringResource(R.string.stat_hard_accel), s.hardAccels.toString(), Modifier.weight(1f))
-            Spacer(Modifier.weight(1f))
+            if (!s.cornering.isNaN() && s.sensorShare >= 0.2f) {
+                val label = when {
+                    s.cornering < StatsCalculator.GENTLE_CORNERING -> R.string.cornering_gentle
+                    s.cornering < StatsCalculator.FIRM_CORNERING -> R.string.cornering_moderate
+                    else -> R.string.cornering_firm
+                }
+                StatTile(stringResource(R.string.stat_cornering), stringResource(label), Modifier.weight(1f))
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
         }
+        Text(
+            if (s.sensorShare >= 0.05f) stringResource(R.string.detail_sensor_note, (s.sensorShare * 100).roundToInt())
+            else stringResource(R.string.detail_gps_note),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
 
         SectionTitle(stringResource(R.string.detail_elevation))
         if (s.altMin.isNaN()) {

@@ -12,6 +12,11 @@ data class RawPoint(
     val acc: Float = Float.NaN,
     val pressure: Float = Float.NaN,
     val speedAcc: Float = Float.NaN,
+    /** Phone-sensor summary since the previous fix (m/s²; NaN when the phone was not settled). */
+    val sLon: Float = Float.NaN,
+    val sMin: Float = Float.NaN,
+    val sMax: Float = Float.NaN,
+    val sLat: Float = Float.NaN,
 )
 
 /** Simplified route line. [t] is seconds from the segment start, [v] is speed in m/s. */
@@ -64,8 +69,18 @@ class Profile(
     val vmax: FloatArray,
     val alt: FloatArray,
     val a2: FloatArray,
+    /** Per window: ms measured by the phone's sensors (empty for trips without sensor data). */
+    val sensorMs: IntArray = IntArray(0),
+    /** Per window: mean forward acceleration from the sensors, m/s². */
+    val sacc: FloatArray = FloatArray(0),
+    /** Per window: peak sideways acceleration from the sensors, m/s². */
+    val lat: FloatArray = FloatArray(0),
 ) {
     val size: Int get() = dist.size
+    val hasSensors: Boolean get() = sensorMs.size == dist.size && dist.isNotEmpty()
+
+    /** Whether window [i] was measured by the sensors for most of the time the car moved. */
+    fun sensed(i: Int): Boolean = hasSensors && moving[i] > 0 && sensorMs[i] >= moving[i] * 0.8f
 
     /** Average moving speed in window [i], m/s. */
     fun speed(i: Int): Float = if (moving[i] > 0) dist[i] / (moving[i] / 1000f) else 0f
@@ -108,6 +123,10 @@ data class TripStats(
     val smoothness: Int,
     val bandsMs: LongArray,
     val nightShare: Float,
+    /** Typical peak sideways acceleration in turns, m/s²; NaN without enough sensor data. */
+    val cornering: Float = Float.NaN,
+    /** Share of the driving time measured with the phone's sensors, 0-1. */
+    val sensorShare: Float = 0f,
 ) {
     val totalMs: Long get() = end - start
     val avgMovingSpeed: Float get() = if (movingMs > 0) (distanceM / (movingMs / 1000.0)).toFloat() else 0f

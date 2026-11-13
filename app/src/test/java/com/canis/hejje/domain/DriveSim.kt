@@ -14,7 +14,15 @@ class DriveSim(
     private val speedNoise: Float = 0f,
     private val positionNoiseM: Double = 0.0,
     var pressureAtStart: Float = Float.NaN,
+    /** Adds what a settled phone's motion sensors would report with each fix. */
+    private val sensors: Boolean = false,
 ) {
+    /** Added to the reported GPS speed only (a GPS glitch the car does not feel). */
+    var gpsSpeedOffset = 0f
+    /** Reported GPS speed accuracy, m/s. */
+    var speedAccuracy = Float.NaN
+    private var lonAccel = 0f
+    private var latAccel = 0f
     val points = ArrayList<RawPoint>()
     var heading = 45.0
     var speed = 0f
@@ -27,7 +35,13 @@ class DriveSim(
         val nLon = lon + rnd.nextDouble(-1.0, 1.0) * positionNoiseM / (111_320.0 * cos(Math.toRadians(lat)))
         val v = (speed + (rnd.nextFloat() * 2 - 1) * speedNoise).coerceAtLeast(0f)
         val pressure = if (pressureAtStart.isNaN()) Float.NaN else pressureAtStart - (alt - 900f) * 0.111f
-        points += RawPoint(t, nLat, nLon, alt = alt + (rnd.nextFloat() * 2 - 1) * 3f, speed = v, acc = accuracy, pressure = pressure)
+        val reported = (v + gpsSpeedOffset).coerceAtLeast(0f)
+        var p = RawPoint(t, nLat, nLon, alt = alt + (rnd.nextFloat() * 2 - 1) * 3f, speed = reported, acc = accuracy, pressure = pressure, speedAcc = speedAccuracy)
+        if (sensors) {
+            val noise = (rnd.nextFloat() * 2 - 1) * 0.15f
+            p = p.copy(sLon = lonAccel + noise, sMin = lonAccel + noise - 0.4f, sMax = lonAccel + noise + 0.4f, sLat = kotlin.math.abs(latAccel) + 0.2f)
+        }
+        points += p
     }
 
     /** Moves for [seconds], changing speed towards [target] by at most [accel] m/s per second. */
@@ -36,6 +50,8 @@ class DriveSim(
         repeat((seconds * 1000 / stepMs).toInt()) {
             val dv = (target - speed).coerceIn(-accel * dt, accel * dt)
             speed += dv
+            lonAccel = dv / dt
+            latAccel = (speed * Math.toRadians(turnPerSec)).toFloat()
             heading += turnPerSec * dt
             val d = speed * dt
             lat += d * cos(Math.toRadians(heading)) / 110_540.0

@@ -69,6 +69,9 @@ object TripProcessor {
         val mov = FloatArray(wn)
         val vmax = FloatArray(wn)
         val a2 = FloatArray(wn)
+        val sensorMs = IntArray(wn)
+        val saccSum = FloatArray(wn)
+        val lat = FloatArray(wn)
         fun window(t: Long) = ((t - start) / step).toInt().coerceIn(0, wn - 1)
 
         if (moving[0]) vmax[window(pts[0].t)] = vs[0]
@@ -96,6 +99,11 @@ object TripProcessor {
                 vmax[w] = max(vmax[w], vs[i])
                 val acc = (v[i] - v[i - 1]) / (dt / 1000f)
                 a2[w] += acc * acc * (dt / 1000f)
+                if (!b.sLon.isNaN()) {
+                    sensorMs[w] += dt.toInt()
+                    saccSum[w] += b.sLon * dt
+                    if (!b.sLat.isNaN()) lat[w] = max(lat[w], b.sLat)
+                }
             }
         }
 
@@ -109,9 +117,16 @@ object TripProcessor {
             altCount[w]++
         }
         val alt = FloatArray(wn) { if (altCount[it] > 0) (altSum[it] / altCount[it]).toFloat() else Float.NaN }
-        val profile = Profile(step, dist, IntArray(wn) { min(step.toFloat(), mov[it]).toInt() }, vmax, alt, a2)
+        val sensed = sensorMs.any { it > 0 }
+        val profile = Profile(
+            step, dist, IntArray(wn) { min(step.toFloat(), mov[it]).toInt() }, vmax, alt, a2,
+            if (sensed) IntArray(wn) { min(step, sensorMs[it]) } else IntArray(0),
+            if (sensed) FloatArray(wn) { if (sensorMs[it] > 0) saccSum[it] / sensorMs[it] else 0f } else FloatArray(0),
+            if (sensed) lat else FloatArray(0),
+        )
 
-        val events = HarshEventDetector.detect(pts, start, cfg.brakeThreshold, cfg.accelThreshold)
+        val gpsEvents = HarshEventDetector.detect(pts, start, cfg.brakeThreshold, cfg.accelThreshold)
+        val events = if (sensed) SensorEvents.fuse(gpsEvents, pts, vs, start, cfg.brakeThreshold, cfg.accelThreshold) else gpsEvents
         val route = buildRoute(pts, vs, moving, start, cfg.epsilonM)
         return Segment(start, end, SegmentData(route, profile, events, baro))
     }

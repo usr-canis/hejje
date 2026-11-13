@@ -5,18 +5,20 @@ import com.canis.hejje.R
 import com.canis.hejje.data.DriveLog
 import com.canis.hejje.data.LogKind
 import com.canis.hejje.data.RawBuffer
-import com.canis.hejje.data.toPlace
-import com.canis.hejje.domain.Places
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.RawDao
+import com.canis.hejje.data.toPlace
+import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.ProcessorConfig
+import com.canis.hejje.domain.StatsCalculator
 import com.canis.hejje.domain.TripProcessor
 import com.canis.hejje.work.PlaceWorker
 import com.canis.hejje.work.SummaryWorker
 import com.canis.hejje.widget.HejjeWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /** Turns the raw fixes of a finished recording into a stored trip and discards the raw data. */
@@ -46,6 +48,10 @@ class TripFinalizer(
             tripId == null -> log?.add(LogKind.TRIP_SHORT, distance)
             (trips.trip(tripId)?.startTime ?: segment.start) < segment.start -> log?.add(LogKind.TRIP_MERGED, distance, tripId)
             else -> log?.add(LogKind.TRIP_SAVED, distance, tripId)
+        }
+        if (tripId != null) {
+            val share = StatsCalculator.compute(listOf(segment)).sensorShare
+            log?.add(LogKind.SENSORS, (share * 100).roundToInt().toString(), tripId)
         }
         rawDao.delete(session) // only after the trip is safely stored
         val route = segment.data.route

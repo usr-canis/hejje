@@ -60,6 +60,7 @@ class RecordingService : Service() {
     private var foreground = false
     private var shownText: String? = ""
     private var shownFinishing: Boolean? = null
+    private lateinit var motion: MotionSensors
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -104,6 +105,7 @@ class RecordingService : Service() {
         controller = container.controller
         notifier = container.notifier
         fused = LocationServices.getFusedLocationProviderClient(this)
+        motion = MotionSensors(this)
         ContextCompat.registerReceiver(
             this, powerReceiver,
             IntentFilter().apply {
@@ -184,6 +186,7 @@ class RecordingService : Service() {
         getSystemService(SensorManager::class.java)?.let { sm ->
             sm.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sm.registerListener(pressureListener, it, SensorManager.SENSOR_DELAY_NORMAL) }
         }
+        motion.start()
         requestUpdates()
         handler.removeCallbacks(watchdog)
         handler.postDelayed(watchdog, 10_000)
@@ -221,6 +224,7 @@ class RecordingService : Service() {
         intervalMs = 0
         fused.removeLocationUpdates(callback)
         getSystemService(SensorManager::class.java)?.unregisterListener(pressureListener)
+        motion.stop()
         pressure = Float.NaN
         handler.removeCallbacks(watchdog)
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -242,15 +246,21 @@ class RecordingService : Service() {
             l.hasAltitude() -> l.altitude.toFloat()
             else -> Float.NaN
         }
+        val speed = if (l.hasSpeed()) l.speed else Float.NaN
+        val sensed = motion.onFix(l.elapsedRealtimeNanos, speed)
         return RawPoint(
             t = System.currentTimeMillis() - ageMs.coerceIn(0, 10_000),
             lat = l.latitude,
             lon = l.longitude,
             alt = altitude,
-            speed = if (l.hasSpeed()) l.speed else Float.NaN,
+            speed = speed,
             acc = if (l.hasAccuracy()) l.accuracy else Float.NaN,
             pressure = pressure,
             speedAcc = if (l.hasSpeedAccuracy()) l.speedAccuracyMetersPerSecond else Float.NaN,
+            sLon = sensed?.meanLon ?: Float.NaN,
+            sMin = sensed?.minLon ?: Float.NaN,
+            sMax = sensed?.maxLon ?: Float.NaN,
+            sLat = sensed?.peakLat ?: Float.NaN,
         )
     }
 

@@ -186,7 +186,7 @@ class DataTest {
         points.drop(20).forEach { buffer.append("s1", it) }
         assertEquals(20, db.raw().points("s1").size)
         // The app dies here: nothing was flushed. A new instance recovers the journal.
-        File(dir, "s1.journal").appendBytes(byteArrayOf(1, 2, 3)) // plus a half-written record
+        File(dir, "s1.journal2").appendBytes(byteArrayOf(1, 2, 3)) // plus a half-written record
         RawBuffer(dir, db.raw()).recover()
         val stored = db.raw().points("s1").map(RawBuffer::toRaw)
         assertEquals(points.size, stored.size)
@@ -197,6 +197,25 @@ class DataTest {
         // Recovering twice must not duplicate anything.
         RawBuffer(dir, db.raw()).recover()
         assertEquals(points.size, db.raw().points("s1").size)
+    }
+
+    @Test fun rawBuffer_keepsSensorValues_andReadsJournalsFromOlderVersions() = runBlocking {
+        val dir = File(app.cacheDir, "raw-test-2").apply { deleteRecursively() }
+        val p = RawPoint(10, 12.0, 77.0, speed = 5f, sLon = -2.5f, sMin = -3.1f, sMax = -1f, sLat = 0.8f)
+        RawBuffer(dir, db.raw()).append("s2", p)
+        // A journal written by 1.0.x (no sensor values), left behind by an update mid-drive.
+        java.io.DataOutputStream(File(dir, "s3.journal").outputStream()).use { o ->
+            o.writeLong(20); o.writeDouble(12.5); o.writeDouble(77.5)
+            repeat(5) { o.writeFloat(1.5f) }
+        }
+        RawBuffer(dir, db.raw()).recover()
+        val recovered = RawBuffer.toRaw(db.raw().points("s2").single())
+        assertEquals(-3.1f, recovered.sMin, 0f)
+        assertEquals(0.8f, recovered.sLat, 0f)
+        val old = RawBuffer.toRaw(db.raw().points("s3").single())
+        assertEquals(12.5, old.lat, 0.0)
+        assertTrue(old.sLon.isNaN())
+        assertTrue(dir.listFiles().orEmpty().isEmpty())
     }
 
     @Test fun rawPoint_missingValuesRoundTripThroughTheDatabase() = runBlocking {
