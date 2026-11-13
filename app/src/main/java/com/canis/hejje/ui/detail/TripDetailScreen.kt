@@ -18,12 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -56,13 +54,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -144,28 +139,8 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
         if (uri != null) vm.exportGpx(uri) { ok -> undo.show(if (ok) msgGpxSaved else msgFailed) }
     }
 
-    // Collapsing map: the list scrolls the map area smaller before it scrolls itself.
-    val maxMap = with(density) { 360.dp.toPx() }
-    val minMap = with(density) { 150.dp.toPx() } + WindowInsets.statusBars.getTop(density)
-    var mapHeight by rememberSaveable { mutableFloatStateOf(maxMap) }
-    val collapse = remember(maxMap, minMap) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y >= 0 || mapHeight <= minMap) return Offset.Zero
-                val consumed = available.y.coerceAtLeast(minMap - mapHeight)
-                mapHeight += consumed
-                return Offset(0f, consumed)
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y <= 0 || mapHeight >= maxMap) return Offset.Zero
-                val used = available.y.coerceAtMost(maxMap - mapHeight)
-                mapHeight += used
-                return Offset(0f, used)
-            }
-        }
-    }
-
+    // The map keeps a fixed height (about 40% of the screen) while the stats scroll below it.
+    val mapHeight = (LocalConfiguration.current.screenHeightDp * 0.4f).dp.coerceIn(240.dp, 420.dp)
 
     val item = state.item
     val trip = item?.trip
@@ -175,16 +150,7 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
         Column(Modifier.fillMaxSize()) {
-            Box(
-                Modifier.fillMaxWidth()
-                    // Height is read during layout only, so scrolling never recomposes the screen.
-                    .layout { measurable, constraints ->
-                        val h = mapHeight.roundToInt()
-                        val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
-                        layout(placeable.width, h) { placeable.place(0, 0) }
-                    }
-                    .clipToBounds().background(palette.mapBackground),
-            ) {
+            Box(Modifier.fillMaxWidth().height(mapHeight).clipToBounds().background(palette.mapBackground)) {
                 // The map is heavy to create, so it waits until the screen has finished sliding in
                 // (no stutter during the transition), then fades in and draws the route.
                 var mapReady by rememberSaveable { mutableStateOf(false) }
@@ -200,7 +166,7 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
                     exit = androidx.compose.animation.ExitTransition.None,
                 ) {
                     TripMap(
-                        routes = state.routes, modifier = Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(360.dp),
+                        routes = state.routes, modifier = Modifier.fillMaxSize(),
                         bySpeed = state.settings.routeBySpeed, markers = state.markers, highlight = highlight,
                         animate = true, description = stringResource(R.string.detail_map_description, title),
                     )
@@ -217,7 +183,7 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
                 }
             }
             LazyColumn(
-                Modifier.fillMaxSize().nestedScroll(collapse),
+                Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = ScreenPadding, end = ScreenPadding, top = 20.dp,
                     bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
