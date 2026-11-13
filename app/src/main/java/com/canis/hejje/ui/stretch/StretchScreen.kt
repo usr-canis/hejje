@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -61,10 +62,18 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 
-/** Pick two points on roads you drove and compare every drive between them. */
+/**
+ * Pick two points on roads you drove and compare every drive between them. With [partOfTrip],
+ * the points are picked on the trip [fromTrip] alone, to see the stats of that part of it.
+ */
 @Composable
-fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long, from: Long, to: Long) -> Unit) {
-    val vm = hejjeViewModel(key = "stretch-$fromTrip") { StretchViewModel(it, fromTrip) }
+fun StretchScreen(
+    fromTrip: Long?,
+    onBack: () -> Unit,
+    onSection: (tripId: Long, from: Long, to: Long) -> Unit,
+    partOfTrip: Boolean = false,
+) {
+    val vm = hejjeViewModel(key = "stretch-$fromTrip-$partOfTrip") { StretchViewModel(it, fromTrip, onlyTrip = partOfTrip) }
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by LocalContainer.current.settings.data.collectAsStateWithLifecycle()
     val f = rememberFormatter(settings.miles)
@@ -77,7 +86,7 @@ fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long,
     val stretchLine = remember(shown) { shown?.let { MapRoute(it.lat, it.lon, FloatArray(it.lat.size)) } }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        HejjeTopBar(stringResource(R.string.stretch_title), onBack = onBack)
+        HejjeTopBar(stringResource(if (partOfTrip) R.string.part_title else R.string.stretch_title), onBack = onBack)
         Box(Modifier.fillMaxWidth().height(mapHeight).clipToBounds()) {
             StretchMap(
                 lines = state.lines, frame = state.frame, a = state.a, b = state.b, stretch = stretchLine,
@@ -86,18 +95,21 @@ fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long,
             )
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
-        Guide(state, onSwap = { haptics.tick(); vm.swap() }, onClear = { haptics.tick(); vm.clear() })
+        Guide(state, partOfTrip, onSwap = { haptics.tick(); vm.swap() }, onClear = { haptics.tick(); vm.clear() })
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = ScreenPadding, end = ScreenPadding, bottom = 32.dp)) {
             when {
                 state.a == null || state.b == null -> item(key = "intro") {
                     Text(
-                        stringResource(R.string.stretch_intro), style = MaterialTheme.typography.bodyLarge,
+                        stringResource(if (partOfTrip) R.string.part_intro else R.string.stretch_intro), style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 20.dp),
                     )
                 }
                 state.searching -> item(key = "searching") {
                     Box(Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                }
+                summary == null && partOfTrip -> item(key = "none") {
+                    Text(stringResource(R.string.part_none), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 20.dp))
                 }
                 summary == null -> item(key = "none") {
                     Column(Modifier.padding(top = 20.dp)) {
@@ -105,6 +117,31 @@ fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long,
                         TextButton(onClick = { haptics.tick(); vm.swap() }, contentPadding = PaddingValues(0.dp)) {
                             Text(stringResource(R.string.stretch_swap))
                         }
+                    }
+                }
+                partOfTrip && summary.passes.size == 1 -> item(key = "part") {
+                    val p = summary.passes.single()
+                    Column(Modifier.padding(top = 20.dp)) {
+                        Text(f.distance(p.distanceM) + " · " + f.duration(p.durationMs), style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            f.time(p.start) + " – " + f.time(p.end), style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(onClick = { haptics.confirm(); onSection(p.tripId, p.start, p.end) }, modifier = Modifier.padding(top = 16.dp)) {
+                            Text(stringResource(R.string.part_show))
+                        }
+                    }
+                }
+                partOfTrip -> {
+                    // The trip went past these points more than once (e.g. there and back again).
+                    item(key = "times") {
+                        Text(
+                            pluralStringResource(R.plurals.part_several, summary.passes.size, summary.passes.size), style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = 20.dp),
+                        )
+                    }
+                    items(summary.passes, key = { "${it.tripId}-${it.start}" }) { p ->
+                        PassRow(p, f, thisTrip = false, summary) { onSection(p.tripId, p.start, p.end) }
                     }
                 }
                 else -> {
@@ -127,13 +164,13 @@ fun StretchScreen(fromTrip: Long?, onBack: () -> Unit, onSection: (tripId: Long,
 
 /** One line under the map: what to do next, and swap / start over once both points are set. */
 @Composable
-private fun Guide(state: StretchState, onSwap: () -> Unit, onClear: () -> Unit) {
+private fun Guide(state: StretchState, partOfTrip: Boolean, onSwap: () -> Unit, onClear: () -> Unit) {
     val text = when {
         state.message != null -> stringResource(state.message)
         state.loading -> stringResource(R.string.stretch_loading)
-        state.a == null -> stringResource(R.string.stretch_pick_start)
+        state.a == null -> stringResource(if (partOfTrip) R.string.part_pick_start else R.string.stretch_pick_start)
         state.b == null -> stringResource(R.string.stretch_pick_end)
-        else -> stringResource(R.string.stretch_tap_again)
+        else -> stringResource(if (partOfTrip) R.string.part_tap_again else R.string.stretch_tap_again)
     }
     Row(
         Modifier.fillMaxWidth().height(52.dp).padding(start = ScreenPadding, end = 8.dp),
@@ -143,7 +180,7 @@ private fun Guide(state: StretchState, onSwap: () -> Unit, onClear: () -> Unit) 
             text, style = MaterialTheme.typography.bodyMedium, maxLines = 2, modifier = Modifier.weight(1f),
             color = if (state.message != null) LocalPalette.current.accentText else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (state.a != null && state.b != null) TextButton(onClick = onSwap) { Text(stringResource(R.string.stretch_swap_short)) }
+        if (state.a != null && state.b != null && !partOfTrip) TextButton(onClick = onSwap) { Text(stringResource(R.string.stretch_swap_short)) }
         if (state.a != null) TextButton(onClick = onClear) { Text(stringResource(R.string.stretch_clear)) }
     }
 }

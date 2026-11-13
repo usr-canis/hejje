@@ -200,6 +200,7 @@ object Routes {
     fun trip(id: Long) = "trip/$id"
     fun stretch(fromTrip: Long? = null) = if (fromTrip != null) "stretch?trip=$fromTrip" else "stretch"
     fun section(tripId: Long, from: Long, to: Long) = "section/$tripId/$from/$to"
+    fun part(tripId: Long) = "part/$tripId"
     val TOP = setOf(TRIPS, INSIGHTS, SETTINGS)
 }
 
@@ -348,7 +349,7 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                         ScreenBackground {
                             TripDetailScreen(
                                 id, onBack = { nav.popBackStack() }, onStretch = { nav.navigate(Routes.stretch(id)) },
-                                onSection = { trip, from, to -> nav.navigate(Routes.section(trip, from, to)) },
+                                onPart = { nav.navigate(Routes.part(id)) },
                             )
                         }
                     }
@@ -359,6 +360,15 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                         val from = back.arguments?.getLong("trip")?.takeIf { it > 0 }
                         ScreenBackground {
                             StretchScreen(from, onBack = { nav.popBackStack() }, onSection = { id, a, b -> nav.navigate(Routes.section(id, a, b)) })
+                        }
+                    }
+                    composable("part/{trip}", arguments = listOf(navArgument("trip") { type = NavType.LongType })) { back ->
+                        val trip = back.arguments?.getLong("trip") ?: -1L
+                        ScreenBackground {
+                            StretchScreen(
+                                trip, onBack = { nav.popBackStack() }, partOfTrip = true,
+                                onSection = { id, a, b -> nav.navigate(Routes.section(id, a, b)) },
+                            )
                         }
                     }
                     composable(

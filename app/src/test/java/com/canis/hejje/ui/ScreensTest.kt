@@ -219,21 +219,8 @@ class ScreensTest {
         rule.mainClock.advanceTimeBy(1_000)
         // Without the map engine (as in tests) the map is drawn on a canvas that frames the latest drives.
         val tracks = runBlocking { app.container.trips.tracks() }
-        val routes = tracks.take(15).flatMap { t -> t.segments.map { it.data.route } }
-        val lats = routes.flatMap { it.lat.asList() }
-        val lons = routes.flatMap { it.lon.asList() }
-        val lat0 = (lats.min() + lats.max()) / 2
-        val lon0 = (lons.min() + lons.max()) / 2
-        val spanX = maxOf(1.0, Geo.x(lons.max(), lon0, lat0) - Geo.x(lons.min(), lon0, lat0))
-        val spanY = maxOf(1.0, Geo.y(lats.max(), lat0) - Geo.y(lats.min(), lat0))
+        val at = mapPoint(tracks.take(15).flatMap { t -> t.segments.map { it.data.route } })
         val map = rule.onNodeWithContentDescription("Map of the roads", substring = true)
-        val size = map.fetchSemanticsNode().size
-        val pad = with(rule.density) { 40.dp.toPx() }
-        val scale = minOf((size.width - 2 * pad) / spanX, (size.height - 2 * pad) / spanY)
-        fun at(lat: Double, lon: Double) = Offset(
-            (size.width / 2 + Geo.x(lon, lon0, lat0) * scale).toFloat(),
-            (size.height / 2 - Geo.y(lat, lat0) * scale).toFloat(),
-        )
         // Every seeded drive starts with the same straight road: measure from 1 to 3 minutes into it.
         val r = tracks.last().segments.first().data.route
         val i1 = r.t.indexOfFirst { it >= 60 }
@@ -254,17 +241,51 @@ class ScreensTest {
         shot("section-2")
     }
 
-    @Test fun tripMenu_showsStatsForAPartOfTheTrip() {
+    @Test fun tripMenu_statsForAPartPickedOnTheMap() {
         await("This week")
         rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()
         await("Distance")
         rule.onNodeWithContentDescription("More options").performClick()
         await("Stats for part of this trip")
         rule.onNodeWithText("Stats for part of this trip").performClick()
-        await("Drag the handles")
+        await("Tap where the part starts")
+        rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Map of the roads", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.mainClock.advanceTimeBy(1_000)
+        val trip = runBlocking { app.container.trips.all().first { it.uuid == "t2" } }
+        val segments = runBlocking { app.container.trips.segments(trip.id) }
+        val at = mapPoint(segments.map { it.data.route })
+        val map = rule.onNodeWithContentDescription("Map of the roads", substring = true)
+        val r = segments.first().data.route
+        val early = r.t.indexOfFirst { it >= 60 }
+        val later = r.t.indexOfFirst { it >= 200 }
+        // Tapped end first: the order does not matter within one trip.
+        map.performTouchInput { click(at(r.lat[later], r.lon[later])) }
+        await("Now tap where it ends")
+        map.performTouchInput { click(at(r.lat[early], r.lon[early])) }
+        await("Show stats")
+        shot("part-picked")
         rule.onNodeWithText("Show stats").performClick()
         await("Open the whole trip")
         rule.onNodeWithText("Part of", substring = true).assertExists()
+    }
+
+    /**
+     * Where a point is drawn on the plain map canvas (used when the map engine is unavailable, as
+     * in tests), which frames [routes] the same way.
+     */
+    private fun mapPoint(routes: List<com.canis.hejje.domain.Route>): (Double, Double) -> Offset {
+        val lats = routes.flatMap { it.lat.asList() }
+        val lons = routes.flatMap { it.lon.asList() }
+        val lat0 = (lats.min() + lats.max()) / 2
+        val lon0 = (lons.min() + lons.max()) / 2
+        val spanX = maxOf(1.0, Geo.x(lons.max(), lon0, lat0) - Geo.x(lons.min(), lon0, lat0))
+        val spanY = maxOf(1.0, Geo.y(lats.max(), lat0) - Geo.y(lats.min(), lat0))
+        val size = rule.onNodeWithContentDescription("Map of the roads", substring = true).fetchSemanticsNode().size
+        val pad = with(rule.density) { 40.dp.toPx() }
+        val scale = minOf((size.width - 2 * pad) / spanX, (size.height - 2 * pad) / spanY)
+        return { lat, lon ->
+            Offset((size.width / 2 + Geo.x(lon, lon0, lat0) * scale).toFloat(), (size.height / 2 - Geo.y(lat, lat0) * scale).toFloat())
+        }
     }
 
     @Test fun backGesture_looksLikeAndroidsOwn() {

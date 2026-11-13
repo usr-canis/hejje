@@ -1,6 +1,7 @@
 package com.canis.hejje.ui.map
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.view.Gravity
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -20,7 +21,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -58,6 +62,7 @@ import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import java.util.Locale
@@ -114,6 +119,9 @@ object MapEngine {
 
 private const val MAX_STOPS = 160
 
+/** Space kept above a framed route so a flag on it stays on the map. */
+internal val FLAG_ROOM = 34.dp
+
 /**
  * The map. It first shows the route on a plain background from a style stored in the app, so it
  * works offline and appears at once; map tiles then load underneath when there is internet.
@@ -160,6 +168,7 @@ fun TripMap(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
     var drawn by rememberSaveable { mutableStateOf(false) }
+    val flags = rememberFlags(palette)
     val progress = remember { Animatable(if (animate && !drawn && !reduceMotion) 0f else 1f) }
     val centerCallback by rememberUpdatedState(onCenterChanged)
 
@@ -207,12 +216,14 @@ fun TripMap(
     LaunchedEffect(map, routes, center) {
         val m = map ?: return@LaunchedEffect
         val pad = with(density) { 44.dp.roundToPx() }
+        // Room above the route for a flag standing on its first or last point.
+        val top = pad + with(density) { FLAG_ROOM.roundToPx() }
         val points = routes.flatMap { r -> (0 until r.size).map { LatLng(r.lat[it], r.lon[it]) } } + markers.map { LatLng(it.lat, it.lon) }
         runCatching {
             when {
                 center != null -> m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(center.first, center.second)).zoom(14.5).build()))
                 points.size >= 2 && points.any { it.latitude != points[0].latitude || it.longitude != points[0].longitude } ->
-                    m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad))
+                    m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad, top, pad, pad))
                 points.isNotEmpty() -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(points[0], 15.0))
                 else -> Unit
             }
@@ -221,7 +232,7 @@ fun TripMap(
 
     LaunchedEffect(style, routes, markers, circles) {
         val s = style ?: return@LaunchedEffect
-        runCatching { MapLayers.sync(s, routes, markers, circles, palette, bySpeed, progress.value) }
+        runCatching { MapLayers.sync(s, routes, markers, circles, palette, bySpeed, progress.value, flags) }
         if (progress.value < 1f && routes.isNotEmpty()) {
             progress.animateTo(1f, tween(1100, easing = FastOutSlowInEasing)) {
                 runCatching { MapLayers.gradients(s, routes, palette, bySpeed, value) }
@@ -276,7 +287,10 @@ private object MapLayers {
         else style.addSource(GeoJsonSource(id, json, GeoJsonOptions().withLineMetrics(lineMetrics).withTolerance(0.2f)))
     }
 
-    fun sync(style: Style, routes: List<MapRoute>, markers: List<MapMarker>, circles: List<MapCircle>, palette: Palette, bySpeed: Boolean, progress: Float) {
+    fun sync(
+        style: Style, routes: List<MapRoute>, markers: List<MapMarker>, circles: List<MapCircle>, palette: Palette, bySpeed: Boolean, progress: Float,
+        flags: Pair<Bitmap, Bitmap>,
+    ) {
         // Zones (under the route).
         source(style, "zones", circleJson(circles))
         if (style.getLayer("zones-fill") == null) {
@@ -311,8 +325,9 @@ private object MapLayers {
             ),
         )
         marker("marker-stop", 2, 3.5f, casing, accent, 1.5f)
-        marker("marker-start", 0, 5.5f, casing, accent, 2.5f)
-        marker("marker-end", 1, 6f, accent, casing, 2.5f)
+        addFlags(style, flags)
+        flagLayer(style, "marker-start", "markers", 0, Flags.START)
+        flagLayer(style, "marker-end", "markers", 1, Flags.END)
         marker("marker-parked", 3, 9f, accent, casing, 3.5f)
         style.addLayer(
             CircleLayer("highlight", "highlight").withProperties(
@@ -370,6 +385,8 @@ private object MapLayers {
 @Composable
 fun RouteCanvas(routes: List<MapRoute>, modifier: Modifier = Modifier, bySpeed: Boolean = true, markers: List<MapMarker> = emptyList()) {
     val palette = LocalPalette.current
+    val flags = rememberFlags(palette)
+    val flagImages = remember(flags) { flags.first.asImageBitmap() to flags.second.asImageBitmap() }
     Box(modifier) {
         Canvas(Modifier.fillMaxSize()) {
             drawRect(palette.mapBackground)
@@ -381,10 +398,12 @@ fun RouteCanvas(routes: List<MapRoute>, modifier: Modifier = Modifier, bySpeed: 
             val spanX = max(1.0, Geo.x(lons.max(), lon0, lat0) - Geo.x(lons.min(), lon0, lat0))
             val spanY = max(1.0, Geo.y(lats.max(), lat0) - Geo.y(lats.min(), lat0))
             val pad = 44.dp.toPx()
-            val scale = min((size.width - 2 * pad) / spanX, (size.height - 2 * pad) / spanY).toFloat()
+            val top = pad + FLAG_ROOM.toPx()
+            val scale = min((size.width - 2 * pad) / spanX, (size.height - pad - top) / spanY).toFloat()
+            val midY = top + (size.height - pad - top) / 2
             fun at(lat: Double, lon: Double) = Offset(
                 size.width / 2 + (Geo.x(lon, lon0, lat0) * scale).toFloat(),
-                size.height / 2 - (Geo.y(lat, lat0) * scale).toFloat(),
+                midY - (Geo.y(lat, lat0) * scale).toFloat(),
             )
             for (r in routes) {
                 for (i in 1 until r.size) {
@@ -398,11 +417,46 @@ fun RouteCanvas(routes: List<MapRoute>, modifier: Modifier = Modifier, bySpeed: 
             for (m in markers) {
                 val p = at(m.lat, m.lon)
                 when (m.kind) {
-                    0 -> { drawCircle(palette.accent, 7.dp.toPx(), p); drawCircle(palette.routeCasing, 4.5.dp.toPx(), p) }
+                    0 -> drawFlag(flagImages.first, p)
+                    1 -> drawFlag(flagImages.second, p)
                     2 -> { drawCircle(palette.accent, 4.5.dp.toPx(), p); drawCircle(palette.routeCasing, 3.dp.toPx(), p) }
                     else -> { drawCircle(palette.routeCasing, 8.5.dp.toPx(), p); drawCircle(palette.accent, 6.dp.toPx(), p) }
                 }
             }
         }
     }
+}
+
+/** The start and finish flag images for the current theme. */
+@Composable
+internal fun rememberFlags(palette: Palette): Pair<Bitmap, Bitmap> {
+    val context = LocalContext.current
+    return remember(palette.isDark) {
+        val ink = if (palette.isDark) 0xFFECE9E6.toInt() else 0xFF1C1B1A.toInt()
+        Flags.bitmap(context, false, palette.accent.toArgb(), palette.routeCasing.toArgb(), ink) to
+            Flags.bitmap(context, true, palette.accent.toArgb(), palette.routeCasing.toArgb(), ink)
+    }
+}
+
+internal fun addFlags(style: Style, flags: Pair<Bitmap, Bitmap>) {
+    if (style.getImage(Flags.START) == null) style.addImage(Flags.START, flags.first)
+    if (style.getImage(Flags.END) == null) style.addImage(Flags.END, flags.second)
+}
+
+/** A flag standing on each point of [source] whose "kind" is [kind]. */
+internal fun flagLayer(style: Style, id: String, source: String, kind: Int, image: String) {
+    style.removeLayer(id)
+    style.addLayer(
+        SymbolLayer(id, source).withFilter(Expression.eq(Expression.get("kind"), Expression.literal(kind))).withProperties(
+            PropertyFactory.iconImage(image), PropertyFactory.iconAllowOverlap(true), PropertyFactory.iconIgnorePlacement(true),
+            PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM_LEFT),
+            PropertyFactory.iconOffset(arrayOf(-Flags.BASE_DP, Flags.BASE_DP)),
+        ),
+    )
+}
+
+/** Draws a flag image so its pole stands on [at]. */
+internal fun DrawScope.drawFlag(image: ImageBitmap, at: Offset) {
+    val base = Flags.BASE_DP * density
+    drawImage(image, topLeft = Offset(at.x - base, at.y - (image.height - base)))
 }

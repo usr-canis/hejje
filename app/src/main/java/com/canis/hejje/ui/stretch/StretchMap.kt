@@ -1,5 +1,6 @@
 package com.canis.hejje.ui.stretch
 
+import android.graphics.Bitmap
 import android.view.Gravity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -16,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -32,9 +34,15 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.canis.hejje.domain.Geo
 import com.canis.hejje.ui.components.LocalContainer
+import com.canis.hejje.ui.map.FLAG_ROOM
+import com.canis.hejje.ui.map.Flags
 import com.canis.hejje.ui.map.MapEngine
 import com.canis.hejje.ui.map.MapRoute
 import com.canis.hejje.ui.map.MapStyle
+import com.canis.hejje.ui.map.addFlags
+import com.canis.hejje.ui.map.drawFlag
+import com.canis.hejje.ui.map.flagLayer
+import com.canis.hejje.ui.map.rememberFlags
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.Palette
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -44,8 +52,6 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -100,6 +106,7 @@ fun StretchMap(
 
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
+    val flags = rememberFlags(palette)
     val reachPx = with(density) { TAP_REACH.toPx() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(mapView, lifecycle) {
@@ -147,7 +154,8 @@ fun StretchMap(
         val m = map ?: return@LaunchedEffect
         if (framed || frame.isEmpty()) return@LaunchedEffect
         bounds(frame.flatMap { r -> (0 until r.size).map { LatLng(r.lat[it], r.lon[it]) } })?.let {
-            runCatching { m.moveCamera(CameraUpdateFactory.newLatLngBounds(it, with(density) { 40.dp.roundToPx() })) }
+            val pad = with(density) { 40.dp.roundToPx() }
+            runCatching { m.moveCamera(CameraUpdateFactory.newLatLngBounds(it, pad, pad + with(density) { FLAG_ROOM.roundToPx() }, pad, pad)) }
         }
         framed = true
     }
@@ -155,7 +163,8 @@ fun StretchMap(
         val m = map ?: return@LaunchedEffect
         val s = stretch ?: return@LaunchedEffect
         bounds((0 until s.size).map { LatLng(s.lat[it], s.lon[it]) })?.let {
-            runCatching { m.animateCamera(CameraUpdateFactory.newLatLngBounds(it, with(density) { 56.dp.roundToPx() }), 600) }
+            val pad = with(density) { 56.dp.roundToPx() }
+            runCatching { m.animateCamera(CameraUpdateFactory.newLatLngBounds(it, pad, pad + with(density) { FLAG_ROOM.roundToPx() }, pad, pad), 600) }
         }
     }
 
@@ -165,7 +174,7 @@ fun StretchMap(
     }
     LaunchedEffect(style, a, b, stretch) {
         val s = style ?: return@LaunchedEffect
-        runCatching { Layers.stretch(s, a, b, stretch, palette) }
+        runCatching { Layers.stretch(s, a, b, stretch, palette, flags) }
     }
 
     AndroidView(factory = { mapView }, modifier = modifier.semantics { contentDescription = description })
@@ -209,7 +218,7 @@ private object Layers {
         }
     }
 
-    fun stretch(style: Style, a: Pair<Double, Double>?, b: Pair<Double, Double>?, stretch: MapRoute?, palette: Palette) {
+    fun stretch(style: Style, a: Pair<Double, Double>?, b: Pair<Double, Double>?, stretch: MapRoute?, palette: Palette, flags: Pair<Bitmap, Bitmap>) {
         source(style, "stretch", collection(listOfNotNull(stretch?.takeIf { it.size > 1 }?.let(::line))))
         val points = listOfNotNull(a?.let { Triple(it.first, it.second, 0) }, b?.let { Triple(it.first, it.second, 1) })
         source(
@@ -221,14 +230,11 @@ private object Layers {
             val casing = palette.routeCasing.toArgb()
             style.addLayer(LineLayer("stretch-casing", "stretch").withProperties(PropertyFactory.lineColor(casing), PropertyFactory.lineWidth(9f), *round))
             style.addLayer(LineLayer("stretch", "stretch").withProperties(PropertyFactory.lineColor(accent), PropertyFactory.lineWidth(5.5f), *round))
-            fun end(id: String, kind: Int, fill: Int, stroke: Int) = style.addLayer(
-                CircleLayer(id, "ends").withFilter(Expression.eq(Expression.get("kind"), Expression.literal(kind))).withProperties(
-                    PropertyFactory.circleRadius(8f), PropertyFactory.circleColor(fill),
-                    PropertyFactory.circleStrokeColor(stroke), PropertyFactory.circleStrokeWidth(3f),
-                ),
-            )
-            end("end-a", 0, casing, accent)
-            end("end-b", 1, accent, casing)
+        }
+        addFlags(style, flags)
+        if (style.getLayer("end-a") == null) {
+            flagLayer(style, "end-a", "ends", 0, Flags.START)
+            flagLayer(style, "end-b", "ends", 1, Flags.END)
         }
     }
 }
@@ -248,6 +254,8 @@ private fun StretchCanvas(
     val palette = LocalPalette.current
     val density = LocalDensity.current
     val tap by rememberUpdatedState(onTap)
+    val flags = rememberFlags(palette)
+    val flagImages = remember(flags) { flags.first.asImageBitmap() to flags.second.asImageBitmap() }
     val view = (frame.ifEmpty { lines })
     val lats = view.flatMap { it.lat.asList() }
     val lons = view.flatMap { it.lon.asList() }
@@ -287,7 +295,7 @@ private fun StretchCanvas(
             drawPath(p, palette.routeCasing, style = stroke(9.dp.toPx()))
             drawPath(p, palette.accent, style = stroke(5.5.dp.toPx()))
         }
-        a?.let { val p = at(it.first, it.second); drawCircle(palette.accent, 9.5.dp.toPx(), p); drawCircle(palette.routeCasing, 6.5.dp.toPx(), p) }
-        b?.let { val p = at(it.first, it.second); drawCircle(palette.routeCasing, 9.5.dp.toPx(), p); drawCircle(palette.accent, 6.5.dp.toPx(), p) }
+        a?.let { drawFlag(flagImages.first, at(it.first, it.second)) }
+        b?.let { drawFlag(flagImages.second, at(it.first, it.second)) }
     }
 }

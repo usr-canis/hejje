@@ -54,6 +54,10 @@
         <item quantity="one">%d hard brake</item>
         <item quantity="other">%d hard brakes</item>
     </plurals>
+    <plurals name="part_several">
+        <item quantity="one">The trip passed here %d time. Pick it:</item>
+        <item quantity="other">The trip passed here %d times. Pick one:</item>
+    </plurals>
     <plurals name="trip_count">
         <item quantity="one">%d trip</item>
         <item quantity="other">%d trips</item>
@@ -246,8 +250,13 @@
     <string name="detail_export_gpx">Export as GPX</string>
     <string name="detail_measure_stretch">Measure a stretch</string>
     <string name="detail_part_stats">Stats for part of this trip</string>
-    <string name="detail_part_hint">Drag the handles to the part you want. The dot on the map follows.</string>
-    <string name="detail_part_show">Show stats</string>
+    <string name="part_title">Part of this trip</string>
+    <string name="part_intro">Tap where the part starts on the trip\'s route, then where it ends. The order does not matter.</string>
+    <string name="part_pick_start">Tap where the part starts</string>
+    <string name="part_tap_again">Tap the map to pick another part</string>
+    <string name="part_none">The trip does not go between these two points. Tap the map to pick again.</string>
+    <string name="part_show">Show stats</string>
+
     <string name="detail_deleted">Trip deleted</string>
     <string name="detail_trimmed">Trip trimmed</string>
     <string name="detail_split_done">Trip split in two</string>
