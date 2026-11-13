@@ -78,14 +78,14 @@ class ScreensTest {
         trips.insertTrip("t6", drive(10 * 24 * hour, 3), "", "Nandi Hills", "MG Road, Bengaluru", listOf("Road trip"))
         c.db.zones().upsert(ZoneEntity(0, "Home", 12.9716, 77.5946, 300.0))
         c.settings.update {
-            it.copy(onboardingDone = true, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
+            it.copy(onboardingDone = true, updateAutoCheck = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
         }
     }
 
     /** Waits until [text] is on screen (also lets the splash fade and transitions finish). */
     private fun await(text: String) {
         rule.mainClock.advanceTimeBy(1_500)
-        rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
         rule.mainClock.advanceTimeBy(1_500)
     }
 
@@ -94,7 +94,7 @@ class ScreensTest {
     }
 
     private fun shot(name: String) {
-        rule.mainClock.advanceTimeBy(1_500)
+        rule.mainClock.advanceTimeBy(3_000)
         rule.waitForIdle()
         val bitmap = rule.onRoot().captureToImage().asAndroidBitmap()
         val dir = File("build/screens").apply { mkdirs() }
@@ -103,7 +103,7 @@ class ScreensTest {
 
     @Test fun tripsList_showsSummaryAndGroupedTrips() {
         await("This week")
-        rule.onNodeWithText("This week", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("This week", substring = true, ignoreCase = true).assertIsDisplayed()
         rule.onNodeWithText("Today").assertIsDisplayed()
         rule.onNodeWithContentDescription("Parked car location", substring = true).assertIsDisplayed()
         assertEquals(6, runBlocking { app.container.trips.all().size })
@@ -206,7 +206,7 @@ class OnboardingTest {
         val dir = File("build/screens").apply { mkdirs() }
         fun await(text: String) {
             rule.mainClock.advanceTimeBy(1_500)
-            rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10_000) { rule.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
             rule.mainClock.advanceTimeBy(1_500)
             rule.waitForIdle()
         }

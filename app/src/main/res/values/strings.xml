@@ -107,10 +107,10 @@
     <string name="trips_search_hint">Search places, notes and tags</string>
     <string name="trips_need_location">Location permission is needed to record a drive.</string>
     <string name="parked_title">Parked car</string>
-    <string name="summary_parked">Parked · %1$s</string>
+    <string name="cluster_trip">TRIP</string>
+    <string name="cluster_odometer_description">This week, %1$s</string>
     <string name="summary_idle_auto">Records when your car connects</string>
     <string name="summary_idle_setup">Set up your car</string>
-    <string name="summary_week_chart">Distance per day this week</string>
     <string name="parked_open">Parked car location. Opens the map.</string>
     <string name="parked_since">Parked %1$s</string>
     <string name="parked_navigate">Navigate back</string>
