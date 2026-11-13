@@ -65,9 +65,10 @@ object DashboardBitmap {
         val name = context.getString(R.string.brand_name)
         p.textSize = 100f
         val bounds = android.graphics.Rect().also { p.getTextBounds(name, 0, name.length, it) }
-        val fit = min(140f / bounds.width(), 100f / bounds.height())
+        // 70% of the space available, centred in the left part.
+        val fit = min(140f / bounds.width(), 100f / bounds.height()) * 0.7f
         p.textSize = 100f * fit
-        cv.drawText(name, 18f - bounds.left * fit, 80f - (bounds.top + bounds.bottom) / 2f * fit, p)
+        cv.drawText(name, 18f + (140f - bounds.width() * fit) / 2f - bounds.left * fit, 80f - (bounds.top + bounds.bottom) / 2f * fit, p)
 
         // Label.
         val x0 = 172f
