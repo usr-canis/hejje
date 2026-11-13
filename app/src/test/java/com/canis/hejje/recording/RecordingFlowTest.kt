@@ -54,10 +54,10 @@ class RecordingFlowTest {
     @After fun tearDown() = db.close()
 
     /** A controller as a freshly started app process would create it. */
-    private fun controller() = RecordingController(
+    private fun controller(log: com.canis.hejje.data.DriveLog? = null) = RecordingController(
         app, app.container.settings, RawBuffer(dir, db.raw()), db.raw(),
-        TripFinalizer(app, db.raw(), trips, app.container.settings),
-        CoroutineScope(SupervisorJob() + Dispatchers.Default), clock = { now }, graceMs = grace,
+        TripFinalizer(app, db.raw(), trips, app.container.settings, log),
+        CoroutineScope(SupervisorJob() + Dispatchers.Default), clock = { now }, graceMs = grace, log = log,
     )
 
     private fun eventually(what: String, condition: () -> Boolean) {
@@ -263,6 +263,36 @@ class RecordingFlowTest {
         setLocation(false)
         controller().carConnected()
         assertNull(locationNotice())
+    }
+
+    @Test fun diagnosticsLog_tellsTheStoryOfADrive() {
+        val log = com.canis.hejje.data.DriveLog(db.log(), CoroutineScope(SupervisorJob() + Dispatchers.Default), clock = { now })
+        val c = controller(log)
+        c.carConnected(com.canis.hejje.data.DriveLog.SOURCE_COMPANION)
+        passTime(6_000)
+        val sim = DriveSim(t = now).drive(60, 15f)
+        c.feed(sim)
+        passTime(20_000) // tunnel: no fixes
+        c.checkFix()
+        sim.t = now
+        val before = sim.points.size
+        sim.drive(30, 15f).drive(8, 0f, accel = 2f)
+        c.feed(sim, before)
+        c.carDisconnected(source = com.canis.hejje.data.DriveLog.SOURCE_BLUETOOTH)
+        passTime(grace)
+        eventually("trip saved") { tripCount() == 1 }
+        eventually("log complete") { runBlocking { db.log().recent(0) }.any { it.kind == "TRIP_SAVED" } }
+        val entries = runBlocking { db.log().recent(0) }.sortedWith(compareBy({ it.t }, { it.id }))
+        assertEquals(
+            listOf("CAR_CONNECTED", "REC_STARTED", "FIRST_FIX", "GPS_LOST", "GPS_REGAINED", "CAR_DISCONNECTED", "TRIP_SAVED"),
+            entries.map { it.kind },
+        )
+        assertEquals("companion", entries[0].detail)
+        assertEquals("auto", entries[1].detail)
+        assertEquals("7", entries[2].detail) // first fix 7 s after the start
+        assertTrue(entries[4].detail.toLong() >= 20)
+        val trip = runBlocking { trips.all().single() }
+        assertEquals(trip.id, entries.last().tripId)
     }
 
     @Test fun autoRecordOff_ignoresTheCar() {

@@ -1,6 +1,7 @@
 package com.canis.hejje
 
 import android.app.Application
+import kotlinx.coroutines.launch
 
 class HejjeApp : Application() {
     lateinit var container: AppContainer
@@ -12,6 +13,7 @@ class HejjeApp : Application() {
         container.notifier.createChannels()
         // If the app was killed or the phone rebooted mid-drive, pick the recording up again.
         container.controller.recover()
+        container.scope.launch { container.log.prune() }
         container.scheduleWork()
     }
 }

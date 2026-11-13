@@ -227,7 +227,7 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                         ScreenBackground { TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
                     }
                     composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
-                    composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }) } }
+                    composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }, onTrip = { nav.navigate(Routes.trip(it)) }) } }
                     composable(Routes.ZONES) { ScreenBackground { ZonesScreen(onBack = { nav.popBackStack() }) } }
                     composable(Routes.CAR) { ScreenBackground { CarScreen(onBack = { nav.popBackStack() }) } }
                     composable(Routes.ABOUT) { ScreenBackground { AboutScreen(onBack = { nav.popBackStack() }) } }

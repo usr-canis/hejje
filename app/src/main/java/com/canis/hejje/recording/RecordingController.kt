@@ -7,6 +7,8 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.canis.hejje.R
+import com.canis.hejje.data.DriveLog
+import com.canis.hejje.data.LogKind
 import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.db.RawDao
@@ -53,6 +55,7 @@ class RecordingController(
     private val clock: () -> Long = System::currentTimeMillis,
     graceMs: Long = RecordingStateMachine.DEFAULT_GRACE_MS,
     private val locationPrompt: LocationPrompt = LocationPrompt(app, com.canis.hejje.notify.Notifier(app)),
+    private val log: DriveLog? = null,
 ) {
     private val prefs = app.getSharedPreferences("recording", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
@@ -102,9 +105,15 @@ class RecordingController(
         if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block)
     }
 
-    fun carConnected() = onMain { apply(machine.onCarConnected(now(), settings.current.autoRecord)) }
+    fun carConnected(source: String = "") = onMain {
+        log?.add(LogKind.CAR_CONNECTED, source)
+        apply(machine.onCarConnected(now(), settings.current.autoRecord))
+    }
 
-    fun carDisconnected(at: Long = now()) = onMain { apply(machine.onCarDisconnected(at)) }
+    fun carDisconnected(at: Long = now(), source: String = "") = onMain {
+        log?.add(LogKind.CAR_DISCONNECTED, source)
+        apply(machine.onCarDisconnected(at))
+    }
 
     fun manualStart() = onMain { apply(machine.onManualStart(now())) }
 
@@ -131,6 +140,7 @@ class RecordingController(
         lastPoint = null
         autoStartPending = !e.manual
         _live.value = LiveState(e.at, e.manual)
+        log?.add(LogKind.REC_STARTED, if (e.manual) DriveLog.MANUAL else DriveLog.AUTO)
         locationPrompt.onDriveStart(settings.current.locationPrompts)
         launchService()
     }
@@ -153,6 +163,7 @@ class RecordingController(
         _live.value = null
         persist()
         locationPrompt.onDriveEnd(enabled = false)
+        log?.add(LogKind.START_REFUSED, reason)
         reportProblem(reason)
         if (id != null) scope.launch { finalizer.finalizeOrphan(id) }
     }
@@ -201,6 +212,10 @@ class RecordingController(
             }
             lastPoint = p
         }
+        when {
+            live.lastFixAt == 0L -> log?.add(LogKind.FIRST_FIX, ((p.t - live.startedAt) / 1000).coerceAtLeast(0).toString())
+            !live.hasFix -> log?.add(LogKind.GPS_REGAINED, ((p.t - live.lastFixAt) / 1000).toString())
+        }
         _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p)
         if (autoStartPending) {
             autoStartPending = false
@@ -215,7 +230,10 @@ class RecordingController(
     /** Called regularly by the service: flags GPS loss (tunnel) for the notification. */
     fun checkFix() {
         val live = _live.value ?: return
-        if (live.hasFix && now() - live.lastFixAt > FIX_LOST_MS) _live.value = live.copy(hasFix = false)
+        if (live.hasFix && now() - live.lastFixAt > FIX_LOST_MS) {
+            _live.value = live.copy(hasFix = false)
+            log?.add(LogKind.GPS_LOST)
+        }
     }
 
     /**
@@ -248,12 +266,14 @@ class RecordingController(
         // instead of carrying on with a huge hole in the middle.
         val lastSeen = lastTime ?: s.startedAt
         if (now() - lastSeen > STALE_MS) {
+            log?.add(LogKind.STALE_CLOSED)
             machine.state = RecordingStateMachine.State()
             main.removeCallbacks(timer)
             persist()
             stop(s.startedAt, lastSeen)
             return
         }
+        log?.add(LogKind.RECOVERED)
         if (_live.value == null) _live.value = LiveState(s.startedAt, s.manual, distance, lastFixAt = lastTime ?: 0)
         if (!launchService()) return
         if (s.disconnectAt != 0L) {

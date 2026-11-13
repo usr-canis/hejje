@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.IntentCompat
 import com.canis.hejje.HejjeApp
+import com.canis.hejje.data.DriveLog
 
 private val Context.container get() = (applicationContext as HejjeApp).container
 
@@ -24,8 +25,8 @@ class BluetoothReceiver : BroadcastReceiver() {
         val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         if (!CarBluetooth.deviceAddress(device).equals(car, ignoreCase = true)) return
         when (intent.action) {
-            BluetoothDevice.ACTION_ACL_CONNECTED -> context.container.controller.carConnected()
-            BluetoothDevice.ACTION_ACL_DISCONNECTED -> context.container.controller.carDisconnected()
+            BluetoothDevice.ACTION_ACL_CONNECTED -> context.container.controller.carConnected(DriveLog.SOURCE_BLUETOOTH)
+            BluetoothDevice.ACTION_ACL_DISCONNECTED -> context.container.controller.carDisconnected(source = DriveLog.SOURCE_BLUETOOTH)
         }
     }
 }
@@ -42,8 +43,8 @@ class CarPresenceService : CompanionDeviceService() {
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
         if (Build.VERSION.SDK_INT < 36) return
         when (event.event) {
-            DevicePresenceEvent.EVENT_BT_CONNECTED -> container.controller.carConnected()
-            DevicePresenceEvent.EVENT_BT_DISCONNECTED -> container.controller.carDisconnected()
+            DevicePresenceEvent.EVENT_BT_CONNECTED -> container.controller.carConnected(DriveLog.SOURCE_COMPANION)
+            DevicePresenceEvent.EVENT_BT_DISCONNECTED -> container.controller.carDisconnected(source = DriveLog.SOURCE_COMPANION)
         }
     }
 
@@ -67,13 +68,13 @@ class CarPresenceService : CompanionDeviceService() {
     private fun appeared() {
         if (Build.VERSION.SDK_INT >= 36) return
         val address = car ?: return
-        CarBluetooth.isConnected(this, address) { if (it) container.controller.carConnected() }
+        CarBluetooth.isConnected(this, address) { if (it) container.controller.carConnected(DriveLog.SOURCE_COMPANION) }
     }
 
     private fun disappeared() {
         if (Build.VERSION.SDK_INT >= 36) return
         val address = car ?: return
-        CarBluetooth.isConnected(this, address) { if (!it) container.controller.carDisconnected() }
+        CarBluetooth.isConnected(this, address) { if (!it) container.controller.carDisconnected(source = DriveLog.SOURCE_COMPANION) }
     }
 }
 

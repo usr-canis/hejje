@@ -91,6 +91,10 @@ data class TripWithTags(
     val tags: List<TagEntity>,
 )
 
+/**
+ * A place you named (Home, Work, Gym...). With [hide] on it is also a privacy zone: routes inside
+ * it are cut out of share cards and GPX files. [tag] is added to trips that end here.
+ */
 @Entity(tableName = "zones")
 data class ZoneEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -98,6 +102,19 @@ data class ZoneEntity(
     val lat: Double,
     val lon: Double,
     val radiusM: Double,
+    @ColumnInfo(defaultValue = "pin") val icon: String = "pin",
+    @ColumnInfo(defaultValue = "1") val hide: Boolean = true,
+    val tag: String? = null,
+)
+
+/** One line of the drive diagnostics log (kept for 14 days, no coordinates). */
+@Entity(tableName = "log", indices = [Index("t")])
+data class LogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val t: Long,
+    val kind: String,
+    val detail: String = "",
+    val tripId: Long? = null,
 )
 
 /** Cached place names, keyed by coordinates rounded to about 100 m. An empty name means "nothing found". */
@@ -117,4 +134,9 @@ data class RawPointEntity(
     val acc: Float?,
     val pressure: Float?,
     val speedAcc: Float?,
+    /** Phone-sensor summary since the previous fix (null when the phone was not settled). */
+    val sLon: Float? = null,
+    val sMin: Float? = null,
+    val sMax: Float? = null,
+    val sLat: Float? = null,
 )

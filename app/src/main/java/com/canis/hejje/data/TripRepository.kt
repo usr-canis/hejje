@@ -171,5 +171,6 @@ class TripRepository(private val db: HejjeDb) {
         db.zones().deleteAll()
         db.places().deleteAll()
         db.raw().deleteAll()
+        db.log().deleteAll()
     }
 }

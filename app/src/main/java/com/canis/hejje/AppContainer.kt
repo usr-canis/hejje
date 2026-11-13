@@ -2,12 +2,14 @@ package com.canis.hejje
 
 import android.app.Application
 import com.canis.hejje.data.BackupManager
+import com.canis.hejje.data.DriveLog
 import com.canis.hejje.data.PlaceRepository
 import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.HejjeDb
 import com.canis.hejje.notify.Notifier
+import com.canis.hejje.recording.LocationPrompt
 import com.canis.hejje.recording.RecordingController
 import com.canis.hejje.recording.TripFinalizer
 import com.canis.hejje.update.Updater
@@ -39,8 +41,12 @@ class AppContainer(val app: Application) {
     val backup = BackupManager(app, db, trips, settings)
     val updater = Updater(app, http, settings, scope)
     private val buffer = RawBuffer(File(app.filesDir, "raw"), db.raw())
-    private val finalizer = TripFinalizer(app, db.raw(), trips, settings)
-    val controller = RecordingController(app, settings, buffer, db.raw(), finalizer, scope)
+    val log = DriveLog(db.log(), scope)
+    private val finalizer = TripFinalizer(app, db.raw(), trips, settings, log)
+    val controller = RecordingController(
+        app, settings, buffer, db.raw(), finalizer, scope,
+        locationPrompt = LocationPrompt(app, notifier, log), log = log,
+    )
 
     fun scheduleWork() {
         runCatching { Work.schedule(app) }

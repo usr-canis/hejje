@@ -72,6 +72,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // The exported database schemas let tests check every upgrade against the real old versions.
+    // Debug builds only: release and preview APKs do not contain them.
+    sourceSets.getByName("debug").assets.directories.add("$projectDir/schemas")
+
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
@@ -136,6 +140,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.room.testing)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.work.testing)
     debugImplementation(libs.compose.ui.test.manifest)

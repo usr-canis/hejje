@@ -57,7 +57,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -140,7 +140,8 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
     }
 
     // The map keeps a fixed height (about 40% of the screen) while the stats scroll below it.
-    val mapHeight = (LocalConfiguration.current.screenHeightDp * 0.4f).dp.coerceIn(240.dp, 420.dp)
+    val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val mapHeight = (windowHeight * 0.4f).coerceIn(240.dp, 420.dp)
 
     val item = state.item
     val trip = item?.trip

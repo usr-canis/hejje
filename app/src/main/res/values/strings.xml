@@ -339,6 +339,29 @@
     <string name="health_last_start">Last successful automatic start</string>
     <string name="health_never">Not yet</string>
     <string name="health_last_problem">Last problem</string>
+    <string name="health_activity">Recent activity</string>
+    <string name="health_activity_empty">Nothing yet. Bluetooth events, recordings and saved trips will appear here.</string>
+    <string name="health_share_log">Share log</string>
+    <string name="log_share_title">Hejje %1$s activity log</string>
+    <string name="log_car_connected">Car connected</string>
+    <string name="log_car_connected_companion">Car connected (companion link)</string>
+    <string name="log_car_connected_bluetooth">Car connected (Bluetooth)</string>
+    <string name="log_car_disconnected">Car disconnected</string>
+    <string name="log_bluetooth_off">Bluetooth switched off</string>
+    <string name="log_rec_auto">Recording started automatically</string>
+    <string name="log_rec_manual">Recording started by hand</string>
+    <string name="log_first_fix">First GPS position after %1$d s</string>
+    <string name="log_gps_lost">GPS signal lost (tunnel or indoors)</string>
+    <string name="log_gps_regained">GPS signal back after %1$d s</string>
+    <string name="log_recovered">Android restarted the app; the drive carried on</string>
+    <string name="log_stale_closed">Android restarted the app; the earlier drive was closed at its last position</string>
+    <string name="log_start_refused">Recording could not start: %1$s</string>
+    <string name="log_trip_saved">Trip saved \u00b7 %1$s</string>
+    <string name="log_trip_merged">Added to the earlier trip \u00b7 %1$s</string>
+    <string name="log_trip_short">Drive shorter than the minimum trip length; not kept</string>
+    <string name="log_no_gps">No GPS position during the drive; nothing to save</string>
+    <string name="log_location_off">Location was off; reminder shown</string>
+    <string name="log_sensors">Phone sensors used for %1$d%% of the drive</string>
     <string name="health_open_settings">Open Android settings for this app</string>
 
     <!-- Privacy zones -->

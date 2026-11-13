@@ -2,6 +2,8 @@ package com.canis.hejje.recording
 
 import android.content.Context
 import com.canis.hejje.R
+import com.canis.hejje.data.DriveLog
+import com.canis.hejje.data.LogKind
 import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.TripRepository
@@ -13,6 +15,7 @@ import com.canis.hejje.work.SummaryWorker
 import com.canis.hejje.widget.HejjeWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToLong
 
 /** Turns the raw fixes of a finished recording into a stored trip and discards the raw data. */
 class TripFinalizer(
@@ -20,12 +23,14 @@ class TripFinalizer(
     private val rawDao: RawDao,
     private val trips: TripRepository,
     private val settings: SettingsStore,
+    private val log: DriveLog? = null,
 ) {
     suspend fun finalize(session: String, start: Long, end: Long): Long? = withContext(Dispatchers.Default) {
         val raw = rawDao.points(session).map(RawBuffer::toRaw)
         val s = settings.current
         val segment = TripProcessor.process(raw, start, end, ProcessorConfig(s.brakeThreshold, s.accelThreshold))
         if (segment == null) {
+            log?.add(LogKind.NO_GPS)
             rawDao.delete(session)
             if (end - start > 60_000) {
                 settings.update { it.copy(lastProblem = context.getString(R.string.problem_no_gps), lastProblemAt = System.currentTimeMillis()) }
@@ -33,6 +38,12 @@ class TripFinalizer(
             return@withContext null
         }
         val tripId = trips.addRecording(segment, s.mergeGapMs, s.minTripM)
+        val distance = segment.data.profile.dist.sum().toDouble().roundToLong().toString()
+        when {
+            tripId == null -> log?.add(LogKind.TRIP_SHORT, distance)
+            (trips.trip(tripId)?.startTime ?: segment.start) < segment.start -> log?.add(LogKind.TRIP_MERGED, distance, tripId)
+            else -> log?.add(LogKind.TRIP_SAVED, distance, tripId)
+        }
         rawDao.delete(session) // only after the trip is safely stored
         val route = segment.data.route
         if (route.size > 0) {

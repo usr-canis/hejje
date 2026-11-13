@@ -77,6 +77,16 @@ class ScreensTest {
         trips.insertTrip("t5", drive(9 * 24 * hour, 2), "", "MG Road, Bengaluru", "Nandi Hills", listOf("Road trip"))
         trips.insertTrip("t6", drive(10 * 24 * hour, 3), "", "Nandi Hills", "MG Road, Bengaluru", listOf("Road trip"))
         c.db.zones().upsert(ZoneEntity(0, "Home", 12.9716, 77.5946, 300.0))
+        val h = System.currentTimeMillis() - 2 * hour
+        listOf(
+            com.canis.hejje.data.db.LogEntity(0, h - 1_800_000, "CAR_CONNECTED", "companion"),
+            com.canis.hejje.data.db.LogEntity(0, h - 1_799_000, "REC_STARTED", "auto"),
+            com.canis.hejje.data.db.LogEntity(0, h - 1_793_000, "FIRST_FIX", "6"),
+            com.canis.hejje.data.db.LogEntity(0, h - 1_200_000, "GPS_LOST", ""),
+            com.canis.hejje.data.db.LogEntity(0, h - 1_170_000, "GPS_REGAINED", "30"),
+            com.canis.hejje.data.db.LogEntity(0, h - 1_000, "CAR_DISCONNECTED", "companion"),
+            com.canis.hejje.data.db.LogEntity(0, h, "TRIP_SAVED", "20700", c.trips.all().last().id),
+        ).forEach { c.db.log().insert(it) }
         c.settings.update {
             it.copy(onboardingDone = true, updateAutoCheck = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
         }
@@ -174,6 +184,8 @@ class ScreensTest {
         rule.onNodeWithText("Recording health").performClick()
         await("Battery: unrestricted")
         shot("health-light")
+        scrollTo("Share log")
+        shot("health-activity")
     }
 
     @Test fun parkedCar_offersNavigation() {

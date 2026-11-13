@@ -46,6 +46,16 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.canis.hejje.R
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.heading
+import com.canis.hejje.BuildConfig
+import com.canis.hejje.data.DriveLog
+import com.canis.hejje.data.LogKind
+import com.canis.hejje.data.db.LogEntity
+import com.canis.hejje.domain.Formatter
+import com.canis.hejje.domain.Insights
+import java.time.LocalDate
+import java.time.ZoneId
 import com.canis.hejje.recording.Health
 import com.canis.hejje.recording.HealthId
 import com.canis.hejje.ui.components.HejjeIcons
@@ -148,7 +158,7 @@ private fun text(id: HealthId) = when (id) {
 }
 
 @Composable
-fun HealthScreen(onBack: () -> Unit, onCar: () -> Unit) {
+fun HealthScreen(onBack: () -> Unit, onCar: () -> Unit, onTrip: (Long) -> Unit = {}) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val s by container.settings.data.collectAsStateWithLifecycle()
@@ -158,6 +168,8 @@ fun HealthScreen(onBack: () -> Unit, onCar: () -> Unit) {
     var refresh by remember { mutableIntStateOf(0) }
     val fix = rememberFixer(onCar) { refresh++ }
     val items = remember(resume, refresh, s) { Health.check(context, s) }
+    val logFlow = remember { container.log.observe() }
+    val entries by logFlow.collectAsStateWithLifecycle(emptyList())
     val blocking = items.count { !it.ok && it.required }
 
     Column(Modifier.fillMaxSize()) {
@@ -213,6 +225,96 @@ fun HealthScreen(onBack: () -> Unit, onCar: () -> Unit) {
                     Text(stringResource(R.string.health_open_settings), color = LocalPalette.current.accentText)
                 }
             }
+            activityLog(entries, f, context, onTrip)
         }
     }
+}
+
+/** "Recent activity": what Hejje noticed and did, newest first, grouped by day. */
+private fun androidx.compose.foundation.lazy.LazyListScope.activityLog(
+    entries: List<LogEntity>, f: Formatter, context: Context, onTrip: (Long) -> Unit,
+) {
+    item(key = "activity-title") {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle(stringResource(R.string.health_activity), Modifier.weight(1f))
+            if (entries.isNotEmpty()) {
+                TextButton(onClick = { shareLog(context, entries, f) }, modifier = Modifier.padding(top = 16.dp)) {
+                    Text(stringResource(R.string.health_share_log), color = LocalPalette.current.accentText)
+                }
+            }
+        }
+        if (entries.isEmpty()) {
+            Text(stringResource(R.string.health_activity_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    entries.groupBy { Insights.dayOf(it.t, zone) }.forEach { (day, list) ->
+        item(key = "day-$day") {
+            Text(
+                f.dayLabel(day, today), style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 14.dp, bottom = 4.dp).semantics { heading() },
+            )
+        }
+        items(list, key = { it.id }) { e ->
+            val tripId = e.tripId
+            Row(
+                Modifier.fillMaxWidth()
+                    .then(if (tripId != null) Modifier.clickable { onTrip(tripId) } else Modifier)
+                    .padding(vertical = 7.dp)
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    f.time(e.t, zone), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(56.dp),
+                )
+                Text(describeLog(context, e, f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                if (tripId != null) Icon(HejjeIcons.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** Plain-language text for one log line. Never contains coordinates. */
+fun describeLog(context: Context, e: LogEntity, f: Formatter): String {
+    fun n() = e.detail.toLongOrNull() ?: 0L
+    fun km() = f.distance((e.detail.toDoubleOrNull() ?: 0.0))
+    return when (LogKind.entries.firstOrNull { it.name == e.kind }) {
+        LogKind.CAR_CONNECTED -> context.getString(
+            when (e.detail) {
+                DriveLog.SOURCE_COMPANION -> R.string.log_car_connected_companion
+                DriveLog.SOURCE_BLUETOOTH -> R.string.log_car_connected_bluetooth
+                else -> R.string.log_car_connected
+            },
+        )
+        LogKind.CAR_DISCONNECTED -> context.getString(if (e.detail == DriveLog.SOURCE_BLUETOOTH_OFF) R.string.log_bluetooth_off else R.string.log_car_disconnected)
+        LogKind.REC_STARTED -> context.getString(if (e.detail == DriveLog.MANUAL) R.string.log_rec_manual else R.string.log_rec_auto)
+        LogKind.FIRST_FIX -> context.getString(R.string.log_first_fix, n())
+        LogKind.GPS_LOST -> context.getString(R.string.log_gps_lost)
+        LogKind.GPS_REGAINED -> context.getString(R.string.log_gps_regained, n())
+        LogKind.RECOVERED -> context.getString(R.string.log_recovered)
+        LogKind.STALE_CLOSED -> context.getString(R.string.log_stale_closed)
+        LogKind.START_REFUSED -> context.getString(R.string.log_start_refused, e.detail)
+        LogKind.TRIP_SAVED -> context.getString(R.string.log_trip_saved, km())
+        LogKind.TRIP_MERGED -> context.getString(R.string.log_trip_merged, km())
+        LogKind.TRIP_SHORT -> context.getString(R.string.log_trip_short)
+        LogKind.NO_GPS -> context.getString(R.string.log_no_gps)
+        LogKind.LOCATION_OFF -> context.getString(R.string.log_location_off)
+        LogKind.SENSORS -> context.getString(R.string.log_sensors, n())
+        null -> e.kind
+    }
+}
+
+private fun shareLog(context: Context, entries: List<LogEntity>, f: Formatter) {
+    val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    val zone = ZoneId.systemDefault()
+    val text = buildString {
+        append(context.getString(R.string.log_share_title, BuildConfig.VERSION_NAME)).append('\n')
+        for (e in entries.sortedBy { it.t }) {
+            append(java.time.Instant.ofEpochMilli(e.t).atZone(zone).format(stamp)).append("  ").append(describeLog(context, e, f)).append('\n')
+        }
+    }
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    runCatching { context.startActivity(Intent.createChooser(send, context.getString(R.string.health_share_log))) }
 }

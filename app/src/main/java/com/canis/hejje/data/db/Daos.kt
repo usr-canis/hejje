@@ -113,6 +113,24 @@ interface PlaceDao {
 }
 
 @Dao
+interface LogDao {
+    @Insert
+    suspend fun insert(entry: LogEntity)
+
+    @Query("SELECT * FROM log WHERE t >= :since ORDER BY t DESC, id DESC LIMIT 400")
+    fun observe(since: Long): Flow<List<LogEntity>>
+
+    @Query("SELECT * FROM log WHERE t >= :since ORDER BY t DESC, id DESC LIMIT 400")
+    suspend fun recent(since: Long): List<LogEntity>
+
+    @Query("DELETE FROM log WHERE t < :before")
+    suspend fun deleteBefore(before: Long)
+
+    @Query("DELETE FROM log")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface RawDao {
     @Insert
     suspend fun insert(points: List<RawPointEntity>)

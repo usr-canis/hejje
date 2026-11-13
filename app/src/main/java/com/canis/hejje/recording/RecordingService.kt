@@ -80,7 +80,9 @@ class RecordingService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                 // Bluetooth switched off: the car is gone even if no disconnect event arrives.
-                if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_OFF) controller.carDisconnected()
+                if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_OFF) {
+                    controller.carDisconnected(source = com.canis.hejje.data.DriveLog.SOURCE_BLUETOOTH_OFF)
+                }
             } else if (updating) {
                 requestUpdates()
             }

@@ -20,7 +20,11 @@ import com.google.android.gms.location.Priority
  * Hejje offers it with one tap (Android's own "Turn on location?" dialog). When that drive ends,
  * it offers a shortcut to turn Location off again. People who keep Location on never see either.
  */
-class LocationPrompt(private val context: Context, private val notifier: Notifier) {
+class LocationPrompt(
+    private val context: Context,
+    private val notifier: Notifier,
+    private val log: com.canis.hejje.data.DriveLog? = null,
+) {
     private val prefs = context.getSharedPreferences("recording", Context.MODE_PRIVATE)
     private var asking = false
 
@@ -33,6 +37,7 @@ class LocationPrompt(private val context: Context, private val notifier: Notifie
         if (!enabled || Health.locationOn(context)) return
         wasOff = true
         asking = true
+        log?.add(com.canis.hejje.data.LogKind.LOCATION_OFF)
         notifier.locationTurnOn()
     }
 
