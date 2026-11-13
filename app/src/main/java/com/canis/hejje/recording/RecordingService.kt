@@ -162,11 +162,13 @@ class RecordingService : Service() {
     }
 
     private fun showNotification(live: LiveState?, finishing: Boolean) {
-        val text = live?.takeIf { it.hasFix }?.let { formatter().distance(it.distanceM) }
+        val f = formatter()
+        val text = live?.takeIf { it.hasFix }?.let { f.distance(it.distanceM) }
         if (text == shownText && finishing == shownFinishing) return
         shownText = text
         shownFinishing = finishing
-        notifier.updateRecording(notifier.recording(live?.startedAt ?: controller.startedAt, text, finishing))
+        val chip = live?.takeIf { it.hasFix }?.let { f.chipDistance(it.distanceM) }
+        notifier.updateRecording(notifier.recording(live?.startedAt ?: controller.startedAt, text, finishing, chip))
     }
 
     private fun hasLocationPermission() =

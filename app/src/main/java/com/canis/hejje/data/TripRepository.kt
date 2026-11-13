@@ -10,6 +10,7 @@ import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Segment
 import com.canis.hejje.domain.StatsCalculator
 import com.canis.hejje.domain.TripEditor
+import com.canis.hejje.domain.TripTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -37,6 +38,13 @@ class TripRepository(private val db: HejjeDb) {
 
     suspend fun segments(tripId: Long): List<Segment> = withContext(Dispatchers.Default) {
         dao.segments(tripId).map(Codec::toSegment)
+    }
+
+    /** Every trip's recorded pieces, newest trip first (for measuring stretches). */
+    suspend fun tracks(): List<TripTrack> = withContext(Dispatchers.Default) {
+        dao.allSegments().groupBy { it.tripId }
+            .map { (id, rows) -> TripTrack(id, rows.map(Codec::toSegment)) }
+            .sortedByDescending { t -> t.segments.firstOrNull()?.start ?: 0L }
     }
 
     private suspend fun bundle(id: Long): TripBundle? {

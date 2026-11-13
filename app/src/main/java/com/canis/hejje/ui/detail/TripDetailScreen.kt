@@ -104,7 +104,7 @@ private const val MAP_AFTER_TRANSITION_MS = 320L
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
+fun TripDetailScreen(tripId: Long, onBack: () -> Unit, onStretch: () -> Unit = {}) {
     val vm = hejjeViewModel(key = "trip-$tripId") { TripDetailViewModel(it, tripId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
@@ -313,6 +313,7 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
                         entry(R.string.detail_split, state.chart.size > 2) { editPoint = state.chart.size / 2; edit = EditMode.SPLIT }
                         state.previous?.let { p -> entry(R.string.detail_merge_previous) { vm.merge(p.id) { u -> haptics.confirm(); undo.show(if (u != null) msgMerged else msgFailed, u) } } }
                         state.next?.let { n -> entry(R.string.detail_merge_next) { vm.merge(n.id) { u -> haptics.confirm(); undo.show(if (u != null) msgMerged else msgFailed, u) } } }
+                        entry(R.string.detail_measure_stretch, state.routes.isNotEmpty()) { onStretch() }
                         entry(R.string.detail_export_gpx) {
                             val day = trip?.let { Insights.dayOf(it.startTime, ZoneId.systemDefault()) } ?: LocalDate.now()
                             gpx.launch("hejje-$day-${trip?.let { f.time(it.startTime).replace(":", "") }}.gpx")

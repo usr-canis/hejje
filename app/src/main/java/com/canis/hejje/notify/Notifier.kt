@@ -50,8 +50,12 @@ class Notifier(private val context: Context) {
         return PendingIntent.getActivity(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    /** Ongoing notification: the system counts the elapsed time itself, so we only update when the distance changes. */
-    fun recording(startedAt: Long, distance: String?, finishing: Boolean): Notification {
+    /**
+     * Ongoing notification: the system counts the elapsed time itself, so we only update when the
+     * distance changes. On Android 16 and newer it is a Live Update: it stays at the top of the
+     * shade and on the lock screen, and shows [chip] (the distance) in the status bar.
+     */
+    fun recording(startedAt: Long, distance: String?, finishing: Boolean, chip: String? = null): Notification {
         val stop = PendingIntent.getBroadcast(
             context, 1, Intent(context, ControlReceiver::class.java).setAction(ControlReceiver.ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -66,6 +70,9 @@ class Notifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setRequestPromotedOngoing(true)
+        if (finishing) b.setShortCriticalText(context.getString(R.string.notif_chip_saving))
+        else if (chip != null) b.setShortCriticalText(chip)
         if (!finishing) {
             b.setContentText(distance ?: context.getString(R.string.notif_waiting_gps))
                 .setWhen(startedAt).setUsesChronometer(true).setShowWhen(true)

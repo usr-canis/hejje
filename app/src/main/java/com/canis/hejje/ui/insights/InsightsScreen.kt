@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -34,16 +36,17 @@ import com.canis.hejje.AppContainer
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.data.db.TripWithTags
-import com.canis.hejje.domain.Formatter
 import com.canis.hejje.data.toPlace
+import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
-import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.InsightsData
+import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.Totals
 import com.canis.hejje.domain.TripSummary
 import com.canis.hejje.ui.components.EmptyState
 import com.canis.hejje.ui.components.Heatmap
 import com.canis.hejje.ui.components.HejjeCard
+import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.HejjeTopBar
 import com.canis.hejje.ui.components.ScreenPadding
 import com.canis.hejje.ui.components.SectionTitle
@@ -85,7 +88,7 @@ class InsightsViewModel(container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun InsightsScreen(onTrip: (Long) -> Unit) {
+fun InsightsScreen(onTrip: (Long) -> Unit, onStretch: () -> Unit = {}) {
     val vm = hejjeViewModel { InsightsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
@@ -138,6 +141,21 @@ fun InsightsScreen(onTrip: (Long) -> Unit) {
                             style = MaterialTheme.typography.titleSmall,
                         )
                         dayTrips.forEach { t -> TripCard(t, f, Modifier.padding(top = 10.dp)) { onTrip(t.trip.id) } }
+                    }
+                }
+            }
+            item(key = "stretch") {
+                Column(Modifier.padding(horizontal = ScreenPadding)) {
+                    SectionTitle(stringResource(R.string.stretch_title))
+                    HejjeCard(Modifier.fillMaxWidth(), onClick = onStretch) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(HejjeIcons.Navigate, null, tint = LocalPalette.current.accent)
+                            Text(
+                                stringResource(R.string.stretch_entry_text), style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f).padding(horizontal = 14.dp),
+                            )
+                            Icon(HejjeIcons.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }

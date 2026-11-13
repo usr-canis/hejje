@@ -1,12 +1,16 @@
 package com.canis.hejje.ui
 
 import android.graphics.Bitmap
+import androidx.activity.BackEventCompat
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -14,12 +18,15 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.canis.hejje.HejjeApp
 import com.canis.hejje.MainActivity
 import com.canis.hejje.data.db.ZoneEntity
 import com.canis.hejje.domain.DriveSim
+import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Segment
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -200,6 +207,61 @@ class ScreensTest {
         rule.onNodeWithText("Office").performClick()
         await("Tag trips that end here")
         shot("place-editor")
+    }
+
+    @Test fun stretch_comparesEveryDriveBetweenTwoPoints() {
+        await("This week")
+        rule.onNodeWithText("Insights").performClick()
+        await("Pick two points")
+        rule.onNodeWithText("Pick two points", substring = true).performClick()
+        await("Tap where the stretch starts")
+        rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Map of the roads", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.mainClock.advanceTimeBy(1_000)
+        // Without the map engine (as in tests) the map is drawn on a canvas that frames the latest drives.
+        val tracks = runBlocking { app.container.trips.tracks() }
+        val routes = tracks.take(15).flatMap { t -> t.segments.map { it.data.route } }
+        val lats = routes.flatMap { it.lat.asList() }
+        val lons = routes.flatMap { it.lon.asList() }
+        val lat0 = (lats.min() + lats.max()) / 2
+        val lon0 = (lons.min() + lons.max()) / 2
+        val spanX = maxOf(1.0, Geo.x(lons.max(), lon0, lat0) - Geo.x(lons.min(), lon0, lat0))
+        val spanY = maxOf(1.0, Geo.y(lats.max(), lat0) - Geo.y(lats.min(), lat0))
+        val map = rule.onNodeWithContentDescription("Map of the roads", substring = true)
+        val size = map.fetchSemanticsNode().size
+        val pad = with(rule.density) { 40.dp.toPx() }
+        val scale = minOf((size.width - 2 * pad) / spanX, (size.height - 2 * pad) / spanY)
+        fun at(lat: Double, lon: Double) = Offset(
+            (size.width / 2 + Geo.x(lon, lon0, lat0) * scale).toFloat(),
+            (size.height / 2 - Geo.y(lat, lat0) * scale).toFloat(),
+        )
+        // Every seeded drive starts with the same straight road: measure from 1 to 3 minutes into it.
+        val r = tracks.last().segments.first().data.route
+        val i1 = r.t.indexOfFirst { it >= 60 }
+        val i2 = r.t.indexOfFirst { it >= 180 }
+        map.performTouchInput { click(at(r.lat[i1], r.lon[i1])) }
+        await("Now tap where it ends")
+        map.performTouchInput { click(at(r.lat[i2], r.lon[i2])) }
+        await("6 drives")
+        rule.onNodeWithText("Typical").assertExists()
+        shot("stretch")
+    }
+
+    @Test fun backGesture_looksLikeAndroidsOwn() {
+        await("This week")
+        rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()
+        await("Distance")
+        // Midway through the back swipe: the trip shrinks, with the list waiting behind it under a scrim.
+        rule.runOnUiThread {
+            val back = rule.activity.onBackPressedDispatcher
+            back.dispatchOnBackStarted(BackEventCompat(0f, 900f, 0f, BackEventCompat.EDGE_LEFT))
+            back.dispatchOnBackProgressed(BackEventCompat(160f, 900f, 0.22f, BackEventCompat.EDGE_LEFT))
+        }
+        rule.mainClock.advanceTimeBy(500)
+        rule.waitForIdle()
+        val bitmap = rule.onRoot().captureToImage().asAndroidBitmap()
+        File("build/screens").apply { mkdirs() }.resolve("back-gesture.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        await("This week")
     }
 
     @Test fun parkedCar_offersNavigation() {

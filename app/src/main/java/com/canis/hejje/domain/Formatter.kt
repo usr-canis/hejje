@@ -39,6 +39,13 @@ class Formatter(val miles: Boolean = false, val labels: Labels = Labels(), priva
 
     fun distance(metres: Double): String = "${distanceValue(metres)} $distanceUnit"
 
+    /** Short distance for the status-bar chip, which shows text only up to about 7 characters: "7.4 km", "12 km". */
+    fun chipDistance(metres: Double): String {
+        val v = metres / if (miles) 1609.344 else 1000.0
+        val value = if (v < 10) String.format(locale, "%.1f", v) else String.format(locale, "%d", v.roundToLong())
+        return "$value $distanceUnit"
+    }
+
     fun speedValue(ms: Float): String = (ms * if (miles) 2.236936f else 3.6f).roundToInt().toString()
 
     fun speed(ms: Float): String = "${speedValue(ms)} $speedUnit"

@@ -46,6 +46,14 @@
     <string name="this_week">This week</string>
     <string name="this_month">This month</string>
     <string name="all_time">All time</string>
+    <plurals name="stretch_drives">
+        <item quantity="one">%d drive</item>
+        <item quantity="other">%d drives</item>
+    </plurals>
+    <plurals name="hard_brake_count">
+        <item quantity="one">%d hard brake</item>
+        <item quantity="other">%d hard brakes</item>
+    </plurals>
     <plurals name="trip_count">
         <item quantity="one">%d trip</item>
         <item quantity="other">%d trips</item>
@@ -154,6 +162,31 @@
     <string name="stat_hard_braking">Hard braking</string>
     <string name="stat_hard_accel">Hard acceleration</string>
     <string name="stat_cornering">Cornering</string>
+    <string name="notif_chip_saving">Saving</string>
+    <string name="stretch_title">Measure a stretch</string>
+    <string name="stretch_entry_text">Pick two points on roads you drive and compare every drive between them.</string>
+    <string name="stretch_intro">Tap a road you\'ve driven to set the start, then tap where the stretch ends. Hejje finds every drive from the first point to the second and compares them.</string>
+    <string name="stretch_pick_start">Tap where the stretch starts</string>
+    <string name="stretch_pick_end">Now tap where it ends</string>
+    <string name="stretch_tap_again">Tap the map to measure another stretch</string>
+    <string name="stretch_not_on_road">Tap on a road you\'ve driven (the coloured lines)</string>
+    <string name="stretch_too_close">Pick an end point further from the start</string>
+    <string name="stretch_loading">Loading your drives…</string>
+    <string name="stretch_none">None of your drives went from the start to the end in this direction.</string>
+    <string name="stretch_swap">Swap direction</string>
+    <string name="stretch_swap_short">Swap</string>
+    <string name="stretch_clear">Clear</string>
+    <string name="stretch_typical">Typical</string>
+    <string name="stretch_fastest">Fastest</string>
+    <string name="stretch_slowest">Slowest</string>
+    <string name="stretch_hours">Quickest around %1$s (%2$s), slowest around %3$s (%4$s).</string>
+    <string name="stretch_by_time">By time of day</string>
+    <string name="stretch_each">Each drive</string>
+    <string name="stretch_this_trip">This trip</string>
+    <string name="stretch_avg">%1$s average</string>
+    <string name="stretch_waited">waited %1$s</string>
+    <string name="stretch_map_description">Map of the roads you have driven. Tap to choose where a stretch starts and ends.</string>
+    <string name="stretch_chart_description">Each drive along this stretch by time of day and how long it took.</string>
     <string name="cornering_gentle">Gentle</string>
     <string name="cornering_moderate">Moderate</string>
     <string name="cornering_firm">Firm</string>
@@ -188,6 +221,7 @@
     <string name="detail_merge_previous">Merge with previous trip</string>
     <string name="detail_merge_next">Merge with next trip</string>
     <string name="detail_export_gpx">Export as GPX</string>
+    <string name="detail_measure_stretch">Measure a stretch</string>
     <string name="detail_deleted">Trip deleted</string>
     <string name="detail_trimmed">Trip trimmed</string>
     <string name="detail_split_done">Trip split in two</string>

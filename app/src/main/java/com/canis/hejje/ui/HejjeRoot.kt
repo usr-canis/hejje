@@ -1,13 +1,25 @@
 package com.canis.hejje.ui
 
-import androidx.compose.ui.text.font.FontWeight
-import com.canis.hejje.ui.theme.WordmarkFont
+import androidx.activity.BackEventCompat
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -20,6 +32,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,15 +56,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -76,17 +99,12 @@ import com.canis.hejje.ui.settings.HealthScreen
 import com.canis.hejje.ui.settings.ParkedScreen
 import com.canis.hejje.ui.settings.SettingsScreen
 import com.canis.hejje.ui.settings.ZonesScreen
+import com.canis.hejje.ui.stretch.StretchScreen
 import com.canis.hejje.ui.theme.HejjeTheme
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
+import com.canis.hejje.ui.theme.WordmarkFont
 import com.canis.hejje.ui.trips.TripsScreen
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.navigation.NavBackStackEntry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -100,9 +118,8 @@ inline fun <reified VM : ViewModel> hejjeViewModel(key: String? = null, crossinl
 }
 
 /**
- * Android's standard Material motion. Opening a screen slides it in a short way from the right
- * while fading; going back reverses that, and follows the finger during the predictive back
- * gesture. Switching bottom tabs uses a plain fade-through, with no sideways movement.
+ * Opening a screen: Material shared-axis motion (slides in a short way from the right while
+ * fading). Switching bottom tabs: a plain fade-through, with no sideways movement.
  */
 private object NavMotion {
     private const val DURATION = 300
@@ -112,11 +129,57 @@ private object NavMotion {
 
     val forwardEnter: EnterTransition = slideInHorizontally(slide()) { shift(it) } + fadeIn(tween(210, delayMillis = 90))
     val forwardExit: ExitTransition = slideOutHorizontally(slide()) { -shift(it) } + fadeOut(tween(90))
-    val backEnter: EnterTransition = slideInHorizontally(slide()) { -shift(it) } + fadeIn(tween(210, delayMillis = 90))
-    val backExit: ExitTransition = slideOutHorizontally(slide()) { shift(it) } + fadeOut(tween(90))
     val tabEnter: EnterTransition = fadeIn(tween(210, delayMillis = 90))
     val tabExit: ExitTransition = fadeOut(tween(90))
 }
+
+/**
+ * Going back looks like Android's own back animation between apps' screens, with the values
+ * Android itself uses: as the finger moves, the screen shrinks to 90% with rounded corners, over
+ * the previous screen waiting 96 dp to the left under a dim scrim; on release the screen slides
+ * away and fades while the previous one comes forward (Material "emphasized", 450 ms). The back
+ * button and the app's back arrow play the same animation.
+ */
+private class BackMotion(private val shiftPx: Int, private val reduceMotion: Boolean) {
+    /** True while the current navigation is a step back (not a tab switch). Read while drawing. */
+    var active = false
+
+    private val emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    /** The screen being closed. A swipe from the left edge shrinks it towards the right, as Android does. */
+    private fun closing(origin: TransformOrigin): ExitTransition =
+        if (reduceMotion) fadeOut(tween(150))
+        else scaleOut(keyframes { durationMillis = TOTAL_MS; SCALE at SHRINK_MS }, targetScale = SCALE, transformOrigin = origin) +
+            slideOutHorizontally(keyframes { durationMillis = TOTAL_MS; IntOffset.Zero at SHRINK_MS using emphasized }) { shiftPx } +
+            fadeOut(keyframes { durationMillis = TOTAL_MS; 1f at SHRINK_MS; 0f at SHRINK_MS + COMMIT_MS / 5 })
+
+    private val exitCentred = closing(TransformOrigin.Center)
+    private val exitFromLeft = closing(TransformOrigin(1f, 0.5f))
+
+    fun exit(swipeEdge: Int? = null): ExitTransition = if (swipeEdge == BackEventCompat.EDGE_LEFT) exitFromLeft else exitCentred
+
+    /** The screen coming back: waits 96 dp to the left, shrinking with the other one, then comes forward. */
+    val enter: EnterTransition =
+        if (reduceMotion) fadeIn(tween(150))
+        else slideInHorizontally(
+            keyframes { durationMillis = TOTAL_MS; IntOffset(-shiftPx, 0) at SHRINK_MS using emphasized },
+        ) { -shiftPx } + scaleIn(keyframes { durationMillis = TOTAL_MS; SCALE at SHRINK_MS using emphasized }, initialScale = 0.999f)
+
+    companion object {
+        /** The part the finger drives (the shrink), then Android's 450 ms finish. */
+        const val SHRINK_MS = 180
+        const val COMMIT_MS = 450
+        const val TOTAL_MS = SHRINK_MS + COMMIT_MS
+        const val SHRINK_SHARE = SHRINK_MS.toFloat() / TOTAL_MS
+        const val SCALE = 0.9f
+        val SHIFT = 96.dp
+        val CORNER = 32.dp
+        const val SCRIM_LIGHT = 0.2f
+        const val SCRIM_DARK = 0.8f
+    }
+}
+
+private val LocalBackMotion = staticCompositionLocalOf<BackMotion?> { null }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(): Boolean =
     initialState.destination.route in Routes.TOP && targetState.destination.route in Routes.TOP
@@ -134,6 +197,7 @@ object Routes {
     const val CAR = "car"
     const val ABOUT = "about"
     fun trip(id: Long) = "trip/$id"
+    fun stretch(fromTrip: Long? = null) = if (fromTrip != null) "stretch?trip=$fromTrip" else "stretch"
     val TOP = setOf(TRIPS, INSIGHTS, SETTINGS)
 }
 
@@ -181,9 +245,44 @@ private fun BrandSplash() {
     }
 }
 
+/**
+ * Every screen's base. During a back step it also draws Android's back look: rounded corners on
+ * the screen being closed, and the dim scrim over the screen coming back.
+ */
 @Composable
-private fun ScreenBackground(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+private fun AnimatedContentScope.ScreenBackground(content: @Composable () -> Unit) {
+    val back = LocalBackMotion.current
+    val progress by transition.animateFloat(
+        transitionSpec = { tween(BackMotion.TOTAL_MS, easing = LinearEasing) }, label = "back",
+    ) { if (it == EnterExitState.Visible) 0f else 1f }
+    val scrim = if (LocalPalette.current.isDark) BackMotion.SCRIM_DARK else BackMotion.SCRIM_LIGHT
+    val corner = with(LocalDensity.current) { BackMotion.CORNER.toPx() }
+    val t = transition
+    Box(
+        Modifier.fillMaxSize()
+            .graphicsLayer {
+                val closing = back?.active == true && t.targetState == EnterExitState.PostExit
+                val r = if (closing) corner * (progress / BackMotion.SHRINK_SHARE).coerceIn(0f, 1f) else 0f
+                clip = r > 0f
+                shape = RoundedCornerShape(r)
+            }
+            .drawWithContent {
+                drawContent()
+                val entering = back?.active == true && t.targetState == EnterExitState.Visible && t.currentState == EnterExitState.PreEnter
+                if (entering) {
+                    val done = 1f - progress
+                    val alpha = if (done <= BackMotion.SHRINK_SHARE) scrim else scrim * (1f - (done - BackMotion.SHRINK_SHARE) / (1f - BackMotion.SHRINK_SHARE))
+                    // Like Android's scrim, it also covers the space around this (slightly shrunk) screen.
+                    if (alpha > 0f) {
+                        drawRect(
+                            Color.Black.copy(alpha = alpha.coerceIn(0f, 1f)),
+                            topLeft = Offset(-size.width, -size.height), size = Size(size.width * 3, size.height * 3),
+                        )
+                    }
+                }
+            }
+            .background(MaterialTheme.colorScheme.background),
+    ) { content() }
 }
 
 @Composable
@@ -210,7 +309,10 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
 
     val placesFlow = remember { container.db.zones().observe().map { list -> list.map { it.toPlace() } } }
     val places by placesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    CompositionLocalProvider(LocalUndo provides undoHost, LocalPlaces provides places) {
+    val density = LocalDensity.current
+    val reduceMotion = LocalReduceMotion.current
+    val back = remember(density, reduceMotion) { BackMotion(with(density) { BackMotion.SHIFT.roundToPx() }, reduceMotion) }
+    CompositionLocalProvider(LocalUndo provides undoHost, LocalPlaces provides places, LocalBackMotion provides back) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             // Without the bottom bar the snackbar would sit under the gesture area.
@@ -224,18 +326,31 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
             Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                 NavHost(
                     nav, startDestination = Routes.TRIPS,
-                    enterTransition = { if (isTabSwitch()) NavMotion.tabEnter else NavMotion.forwardEnter },
-                    exitTransition = { if (isTabSwitch()) NavMotion.tabExit else NavMotion.forwardExit },
-                    popEnterTransition = { if (isTabSwitch()) NavMotion.tabEnter else NavMotion.backEnter },
-                    popExitTransition = { if (isTabSwitch()) NavMotion.tabExit else NavMotion.backExit },
+                    enterTransition = { back.active = false; if (isTabSwitch()) NavMotion.tabEnter else NavMotion.forwardEnter },
+                    exitTransition = { back.active = false; if (isTabSwitch()) NavMotion.tabExit else NavMotion.forwardExit },
+                    popEnterTransition = { back.active = !isTabSwitch(); if (isTabSwitch()) NavMotion.tabEnter else back.enter },
+                    popExitTransition = { back.active = !isTabSwitch(); if (isTabSwitch()) NavMotion.tabExit else back.exit() },
+                    // The back swipe (predictive back) follows the finger with the same animation.
+                    predictivePopEnterTransition = { back.active = !isTabSwitch(); if (isTabSwitch()) NavMotion.tabEnter else back.enter },
+                    predictivePopExitTransition = { edge -> back.active = !isTabSwitch(); if (isTabSwitch()) NavMotion.tabExit else back.exit(edge) },
                 ) {
                     composable(Routes.TRIPS) {
                         ScreenBackground { TripsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onParked = { nav.navigate(Routes.PARKED) }) }
                     }
-                    composable(Routes.INSIGHTS) { ScreenBackground { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }) } }
+                    composable(Routes.INSIGHTS) {
+                        ScreenBackground { InsightsScreen(onTrip = { nav.navigate(Routes.trip(it)) }, onStretch = { nav.navigate(Routes.stretch()) }) }
+                    }
                     composable(Routes.SETTINGS) { ScreenBackground { SettingsScreen(onOpen = { nav.navigate(it) }) } }
                     composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
-                        ScreenBackground { TripDetailScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
+                        val id = back.arguments?.getLong("id") ?: -1L
+                        ScreenBackground { TripDetailScreen(id, onBack = { nav.popBackStack() }, onStretch = { nav.navigate(Routes.stretch(id)) }) }
+                    }
+                    composable(
+                        "stretch?trip={trip}",
+                        arguments = listOf(navArgument("trip") { type = NavType.LongType; defaultValue = -1L }),
+                    ) { back ->
+                        val from = back.arguments?.getLong("trip")?.takeIf { it > 0 }
+                        ScreenBackground { StretchScreen(from, onBack = { nav.popBackStack() }, onTrip = { nav.navigate(Routes.trip(it)) }) }
                     }
                     composable(Routes.PARKED) { ScreenBackground { ParkedScreen(onBack = { nav.popBackStack() }) } }
                     composable(Routes.HEALTH) { ScreenBackground { HealthScreen(onBack = { nav.popBackStack() }, onCar = { nav.navigate(Routes.CAR) }, onTrip = { nav.navigate(Routes.trip(it)) }) } }

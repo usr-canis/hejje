@@ -45,6 +45,9 @@ interface TripDao {
     @Query("SELECT * FROM segments WHERE tripId = :tripId ORDER BY startTime")
     suspend fun segments(tripId: Long): List<SegmentEntity>
 
+    @Query("SELECT * FROM segments ORDER BY tripId, startTime")
+    suspend fun allSegments(): List<SegmentEntity>
+
     @Insert
     suspend fun insertSegments(segments: List<SegmentEntity>)
 
