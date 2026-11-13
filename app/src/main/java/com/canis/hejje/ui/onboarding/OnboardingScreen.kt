@@ -1,5 +1,7 @@
 package com.canis.hejje.ui.onboarding
 
+import androidx.compose.ui.text.font.FontWeight
+import com.canis.hejje.ui.theme.WordmarkFont
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -112,7 +114,7 @@ fun OnboardingScreen() {
             ) {
                 if (st.icon == null) {
                     Image(painterResource(R.drawable.ic_mark), null, Modifier.size(120.dp))
-                    Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall)
+                    Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
                     Spacer(Modifier.height(20.dp))
                 } else {
                     Icon(st.icon, null, Modifier.size(56.dp), tint = palette.accent)

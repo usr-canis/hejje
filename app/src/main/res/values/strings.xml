@@ -410,6 +410,8 @@
     <string name="about_credits">Map tiles by OpenFreeMap, using the OpenMapTiles schema. Map data and place names © OpenStreetMap contributors, available under the Open Database License. Place names come from the Nominatim service.</string>
     <string name="about_link_osm">OpenStreetMap copyright</string>
     <string name="about_link_ofm">OpenFreeMap</string>
+    <string name="about_font_credit">The name ಹೆಜ್ಜೆ is set in Mallige, © 2005 Indian Institute of Science, Bangalore, used under the GNU General Public License v2.</string>
+    <string name="about_link_font">Mallige font (Brahmi project)</string>
     <string name="about_link_source">Source code and releases</string>
 
     <!-- Onboarding -->

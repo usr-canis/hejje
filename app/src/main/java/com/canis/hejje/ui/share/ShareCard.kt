@@ -1,5 +1,6 @@
 package com.canis.hejje.ui.share
 
+import androidx.core.content.res.ResourcesCompat
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -40,15 +41,17 @@ object ShareCard {
         val pad = 72f
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // Brand: icon and wordmark, drawn with the system font so the Kannada name shapes correctly.
+        // Brand: icon and wordmark, in the wordmark font (Mallige).
         ContextCompat.getDrawable(context, R.drawable.ic_mark)?.let {
             it.setBounds(pad.toInt() - 28, 44, pad.toInt() + 92, 164)
             it.draw(canvas)
         }
         paint.color = onSurface
         paint.textSize = 54f
-        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        paint.typeface = runCatching { ResourcesCompat.getFont(context, R.font.mallige_bold) }.getOrNull()
+            ?: Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         canvas.drawText(context.getString(R.string.brand_name), pad + 104, 124f, paint)
+        paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
 
         // Route panel.
         val panel = RectF(pad, 200f, WIDTH - pad, 850f)

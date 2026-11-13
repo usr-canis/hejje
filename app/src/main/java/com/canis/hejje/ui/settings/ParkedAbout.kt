@@ -1,5 +1,7 @@
 package com.canis.hejje.ui.settings
 
+import androidx.compose.ui.text.font.FontWeight
+import com.canis.hejje.ui.theme.WordmarkFont
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -117,7 +119,7 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.ic_mark), null, Modifier.size(96.dp))
-                Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall)
+                Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
                 Text(stringResource(R.string.about_meaning), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     stringResource(R.string.settings_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium,
@@ -128,9 +130,11 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(stringResource(R.string.about_privacy), style = MaterialTheme.typography.bodyLarge)
             SectionTitle(stringResource(R.string.about_credits_title))
             Text(stringResource(R.string.about_credits), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.about_font_credit), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp))
             listOf(
                 R.string.about_link_osm to "https://www.openstreetmap.org/copyright",
                 R.string.about_link_ofm to "https://openfreemap.org",
+                R.string.about_link_font to "https://brahmi.sourceforge.net",
                 R.string.about_link_source to "https://github.com/${BuildConfig.UPDATE_REPO}",
             ).forEach { (text, url) ->
                 TextButton(

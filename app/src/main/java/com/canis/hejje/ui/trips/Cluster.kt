@@ -1,5 +1,8 @@
 package com.canis.hejje.ui.trips
 
+import com.canis.hejje.ui.theme.WordmarkFont
+import com.canis.hejje.ui.theme.LocalPalette
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -74,19 +77,54 @@ import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-/** The cluster is always dark, like a real dashboard, in both app themes. */
-private object Dash {
-    val panelTop = Color(0xFF24282C)
-    val panelBottom = Color(0xFF15181A)
-    val edge = Color.White.copy(alpha = 0.06f)
-    val highlight = Color.White.copy(alpha = 0.08f)
-    val text = Color(0xFFECE9E6)
-    val muted = Color(0xFF8E8984)
-    val accent = Color(0xFFFF7A33)
-    val window = Color(0xFF0B0C0D)
-    val drumLight = Color(0xFF3A3F45)
-    val drumDark = Color(0xFF1A1D20)
-}
+/** Colours of the cluster: a dark dashboard in the dark theme, a light one in the light theme. */
+private class DashColors(
+    val panelTop: Color,
+    val panelBottom: Color,
+    val edge: Color,
+    val highlight: Color,
+    val text: Color,
+    val muted: Color,
+    val accent: Color,
+    val window: Color,
+    val drumLight: Color,
+    val drumDark: Color,
+    /** Shadow inside the top edge of recessed parts (chips, odometer window). */
+    val recess: Color,
+    val glare: Color,
+    val lip: Color,
+    /** Drum shading towards its top and bottom edges, and the shine across its middle. */
+    val drumShade: Color,
+    val drumShine: Color,
+    val wordShadow: Shadow?,
+    val panelAmbient: Color,
+    val panelSpot: Color,
+)
+
+private val DarkDash = DashColors(
+    panelTop = Color(0xFF24282C), panelBottom = Color(0xFF15181A),
+    edge = Color.White.copy(alpha = 0.06f), highlight = Color.White.copy(alpha = 0.08f),
+    text = Color(0xFFECE9E6), muted = Color(0xFF8E8984), accent = Color(0xFFFF7A33),
+    window = Color(0xFF0B0C0D), drumLight = Color(0xFF3A3F45), drumDark = Color(0xFF1A1D20),
+    recess = Color.Black.copy(alpha = 0.55f), glare = Color.White.copy(alpha = 0.13f), lip = Color.White.copy(alpha = 0.06f),
+    drumShade = Color.Black.copy(alpha = 0.65f), drumShine = Color.White.copy(alpha = 0.07f),
+    wordShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 3f), 6f),
+    panelAmbient = Color.Black.copy(alpha = 0.2f), panelSpot = Color.Black.copy(alpha = 0.35f),
+)
+
+private val LightDash = DashColors(
+    panelTop = Color(0xFFFFFFFF), panelBottom = Color(0xFFF3F0EC),
+    edge = Color.Black.copy(alpha = 0.07f), highlight = Color.White,
+    text = Color(0xFF1E1C1A), muted = Color(0xFF77706A), accent = Color(0xFFE8590C),
+    window = Color(0xFFE9E5E0), drumLight = Color(0xFFFFFFFF), drumDark = Color(0xFFE0DBD5),
+    recess = Color.Black.copy(alpha = 0.10f), glare = Color.White.copy(alpha = 0.45f), lip = Color.White,
+    drumShade = Color.Black.copy(alpha = 0.16f), drumShine = Color.White.copy(alpha = 0.5f),
+    wordShadow = null,
+    panelAmbient = Color.Black.copy(alpha = 0.10f), panelSpot = Color.Black.copy(alpha = 0.18f),
+)
+
+private val Dash: DashColors
+    @Composable @ReadOnlyComposable get() = if (LocalPalette.current.isDark) DarkDash else LightDash
 
 /**
  * Top of the Trips tab, styled as an instrument cluster: the wordmark, this week's distance on a
@@ -106,18 +144,19 @@ fun InstrumentCluster(
 ) {
     val radius = 24.dp
     val shape = RoundedCornerShape(radius)
+    val dash = Dash
     val locale = LocalConfiguration.current.locales[0]
     Row(
         modifier.fillMaxWidth()
             // A soft, short shadow that fades out within the spacing around the panel.
-            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.35f))
+            .shadow(6.dp, shape, ambientColor = dash.panelAmbient, spotColor = dash.panelSpot)
             .clip(shape)
             .background(Brush.verticalGradient(listOf(Dash.panelTop, Dash.panelBottom)))
             .border(1.dp, Dash.edge, shape)
             .drawBehind {
                 // A thin light edge along the top, as on a raised panel.
                 val inset = radius.toPx()
-                drawLine(Dash.highlight, Offset(inset, 1f), Offset(size.width - inset, 1f), 1.dp.toPx())
+                drawLine(dash.highlight, Offset(inset, 1f), Offset(size.width - inset, 1f), 1.dp.toPx())
             }
             .padding(start = 22.dp, end = 18.dp, top = 22.dp, bottom = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -127,8 +166,7 @@ fun InstrumentCluster(
             BasicText(
                 stringResource(R.string.brand_name),
                 style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Medium, color = Dash.text,
-                    shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 3f), 6f),
+                    fontFamily = WordmarkFont, fontWeight = FontWeight.Bold, color = dash.text, shadow = dash.wordShadow,
                 ),
                 maxLines = 1,
                 autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
@@ -180,12 +218,13 @@ private fun Chip(onClick: (() -> Unit)? = null, description: String? = null, con
             if (description != null) contentDescription = description
         }
     } else Modifier.semantics(mergeDescendants = true) {}
+    val dash = Dash
     Row(
         Modifier.clip(CircleShape).background(Dash.window).then(clickable)
             .drawWithContent {
                 drawContent()
                 // Recessed look: a soft shadow along the inside top edge.
-                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent), endY = 6.dp.toPx()))
+                drawRect(Brush.verticalGradient(listOf(dash.recess, Color.Transparent), endY = 6.dp.toPx()))
             }
             .heightIn(min = 34.dp).padding(start = 7.dp, end = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -255,18 +294,19 @@ private fun Odometer(distanceM: Double, f: Formatter) {
     val positions = odometerPositions(anim.value, wholeDrums)
     val unit = (if (f.miles) f.labels.mi else f.labels.km).uppercase(LocalConfiguration.current.locales[0])
     val description = stringResource(R.string.cluster_odometer_description, f.distance(distanceM))
+    val dash = Dash
     Row(
         Modifier.clip(RoundedCornerShape(12.dp)).background(Dash.window)
             .drawWithContent {
                 drawContent()
                 // Recessed window: shadow inside the top edge, glass glare, light lower lip.
-                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent), endY = 8.dp.toPx()))
+                drawRect(Brush.verticalGradient(listOf(dash.recess, Color.Transparent), endY = 8.dp.toPx()))
                 val glare = Size(size.width - 12.dp.toPx(), size.height * 0.42f)
                 drawRoundRect(
-                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.Transparent), startY = 4.dp.toPx(), endY = 4.dp.toPx() + glare.height),
+                    Brush.verticalGradient(listOf(dash.glare, Color.Transparent), startY = 4.dp.toPx(), endY = 4.dp.toPx() + glare.height),
                     topLeft = Offset(6.dp.toPx(), 4.dp.toPx()), size = glare, cornerRadius = CornerRadius(8.dp.toPx()),
                 )
-                drawLine(Color.White.copy(alpha = 0.06f), Offset(12.dp.toPx(), size.height - 1f), Offset(size.width - 12.dp.toPx(), size.height - 1f))
+                drawLine(dash.lip, Offset(12.dp.toPx(), size.height - 1f), Offset(size.width - 12.dp.toPx(), size.height - 1f))
             }
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .clearAndSetSemantics { contentDescription = description },
@@ -307,6 +347,7 @@ private fun Drum(position: Float, small: Boolean, tenths: Boolean) {
     val digitSize = with(density) { (if (small) 22.dp else 25.dp).toSp() }
     val digit = floor(position).toInt().mod(10)
     val fraction = position - floor(position)
+    val dash = Dash
     val style = TextStyle(
         fontSize = digitSize, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum",
         color = if (tenths) Color.White else Dash.text,
@@ -330,10 +371,10 @@ private fun Drum(position: Float, small: Boolean, tenths: Boolean) {
         // Curved-drum shading: darker towards the top and bottom edges, a soft shine across the middle.
         Box(
             Modifier.size(width, height).drawBehind {
-                val dark = Color.Black.copy(alpha = if (tenths) 0.45f else 0.65f)
+                val dark = if (tenths) Color.Black.copy(alpha = 0.45f) else dash.drumShade
                 drawRect(
                     Brush.verticalGradient(
-                        0f to dark, 0.3f to Color.Transparent, 0.5f to Color.White.copy(alpha = if (tenths) 0.16f else 0.07f),
+                        0f to dark, 0.3f to Color.Transparent, 0.5f to (if (tenths) Color.White.copy(alpha = 0.16f) else dash.drumShine),
                         0.7f to Color.Transparent, 1f to dark,
                     ),
                 )

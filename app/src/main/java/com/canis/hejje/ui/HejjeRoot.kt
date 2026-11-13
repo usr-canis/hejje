@@ -1,5 +1,7 @@
 package com.canis.hejje.ui
 
+import androidx.compose.ui.text.font.FontWeight
+import com.canis.hejje.ui.theme.WordmarkFont
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -171,7 +173,8 @@ private fun BrandSplash() {
             // Same drawable and size as the system splash, so the icon does not move.
             Image(painterResource(R.drawable.ic_splash), null, Modifier.size(288.dp))
             Text(
-                stringResource(R.string.brand_name), style = MaterialTheme.typography.titleLarge,
+                stringResource(R.string.brand_name),
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.offset(y = 84.dp),
             )
         }
