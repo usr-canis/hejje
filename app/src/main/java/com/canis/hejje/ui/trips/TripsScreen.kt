@@ -169,13 +169,14 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                 InstrumentCluster(
                     weekDistanceM = state.week.distanceM, weekTrips = state.week.trips, settings = state.settings, live = live, f = f,
                     onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    // Same side margins as the trip cards; the vertical space lets the shadow fade out.
+                    modifier = Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp),
                 )
             }
             if (state.tags.isNotEmpty()) {
                 item(key = "tags") {
                     Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = ScreenPadding).padding(top = 16.dp),
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = ScreenPadding).padding(top = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         state.tags.forEach { tag ->
@@ -195,11 +196,11 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
                     EmptyState(stringResource(if (state.totalTrips == 0) R.string.trips_empty else R.string.trips_no_match))
                 }
             }
-            state.groups.forEach { group ->
+            state.groups.forEachIndexed { index, group ->
                 stickyHeader(key = "day-${group.day}") {
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = ScreenPadding).padding(top = 24.dp, bottom = 6.dp),
+                            .padding(horizontal = ScreenPadding).padding(top = if (index == 0) 12.dp else 24.dp, bottom = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(

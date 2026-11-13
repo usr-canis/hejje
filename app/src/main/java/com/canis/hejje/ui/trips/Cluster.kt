@@ -104,17 +104,19 @@ fun InstrumentCluster(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val radius = 24.dp
+    val shape = RoundedCornerShape(radius)
     val locale = LocalConfiguration.current.locales[0]
     Row(
         modifier.fillMaxWidth()
-            .shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            // A soft, short shadow that fades out within the spacing around the panel.
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.35f))
             .clip(shape)
             .background(Brush.verticalGradient(listOf(Dash.panelTop, Dash.panelBottom)))
             .border(1.dp, Dash.edge, shape)
             .drawBehind {
                 // A thin light edge along the top, as on a raised panel.
-                val inset = 28.dp.toPx()
+                val inset = radius.toPx()
                 drawLine(Dash.highlight, Offset(inset, 1f), Offset(size.width - inset, 1f), 1.dp.toPx())
             }
             .padding(start = 22.dp, end = 18.dp, top = 22.dp, bottom = 22.dp),
