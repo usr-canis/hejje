@@ -1,5 +1,13 @@
 package com.canis.hejje.widget
 
+import kotlin.math.roundToInt
+import androidx.glance.layout.ContentScale
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.LocalSize
+import androidx.glance.LocalContext
+import androidx.glance.ImageProvider
+import androidx.glance.Image
+import android.content.res.Configuration
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,8 +44,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Home-screen widget: this week's distance and the last trip. Colours follow light/dark mode. */
+/** Home-screen widget: the Trips-tab dashboard (this week on the odometer, trips, parked car). Follows light/dark mode. */
 class HejjeWidget : GlanceAppWidget() {
+    override val sizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as HejjeApp).container
         provideContent {
@@ -47,40 +57,23 @@ class HejjeWidget : GlanceAppWidget() {
             val zone = ZoneId.systemDefault()
             val monday = Insights.weekStart(LocalDate.now(zone))
             val week = trips.filter { Insights.dayOf(it.trip.startTime, zone) >= monday }
-            val last = trips.firstOrNull()?.trip
-            Content(
-                weekDistance = f.distance(week.sumOf { it.trip.distanceM }),
-                weekDetail = context.resources.getQuantityString(R.plurals.trip_count, week.size, week.size) +
-                    if (week.isNotEmpty()) " · " + f.duration(week.sumOf { it.trip.movingMs }) else "",
-                lastTrip = if (settings.widgetLastTrip && last != null) {
-                    context.getString(
-                        R.string.widget_last_trip,
-                        f.relative(last.endTime, System.currentTimeMillis(), zone), f.distance(last.distanceM), f.duration(last.totalMs),
-                    )
-                } else null,
-                label = context.getString(R.string.this_week),
+            val size = LocalSize.current
+            val night = (LocalContext.current.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            val km = week.sumOf { it.trip.distanceM }
+            val value = ((km / if (f.miles) 1609.344 else 1000.0).coerceIn(0.0, 9999.9) * 10).roundToInt() / 10f
+            val parked = if (settings.parkedLat != null && settings.parkedLon != null) f.relative(settings.parkedAt, System.currentTimeMillis(), zone) else null
+            val (wPx, hPx) = DashboardBitmap.pixels(context, size.width.value, size.height.value)
+            val bitmap = DashboardBitmap.draw(
+                context, wPx, hPx, night, value, (if (f.miles) f.labels.mi else f.labels.km).uppercase(),
+                context.getString(R.string.this_week).uppercase(), context.getString(R.string.cluster_trip), week.size, parked,
             )
-        }
-    }
-
-    @Composable
-    private fun Content(weekDistance: String, weekDetail: String, lastTrip: String?, label: String) {
-        val background = ColorProvider(day = Color(0xFFFAF8F6), night = Color(0xFF1B1E21))
-        val primary = ColorProvider(day = Color(0xFF1C1B1A), night = Color(0xFFECE9E6))
-        val secondary = ColorProvider(day = Color(0xFF6B6661), night = Color(0xFFA39E99))
-        val accent = ColorProvider(day = Color(0xFFB8430A), night = Color(0xFFFF8A4C))
-        Column(
-            modifier = GlanceModifier.fillMaxSize().background(background).cornerRadius(24.dp).padding(16.dp)
-                .clickable(actionStartActivity<MainActivity>()),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.Medium))
-            Text(weekDistance, style = TextStyle(color = primary, fontSize = 28.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-            Text(weekDetail, style = TextStyle(color = secondary, fontSize = 13.sp), maxLines = 1)
-            if (lastTrip != null) {
-                Spacer(GlanceModifier.height(8.dp))
-                Text(lastTrip, style = TextStyle(color = secondary, fontSize = 12.sp), maxLines = 2)
-            }
+            Image(
+                ImageProvider(bitmap),
+                contentDescription = context.getString(R.string.this_week) + ": " + f.distance(km) + ", " +
+                    context.resources.getQuantityString(R.plurals.trip_count, week.size, week.size),
+                contentScale = ContentScale.FillBounds,
+                modifier = GlanceModifier.fillMaxSize().clickable(actionStartActivity<MainActivity>()),
+            )
         }
     }
 

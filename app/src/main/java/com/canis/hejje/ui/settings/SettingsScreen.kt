@@ -138,10 +138,6 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
             item {
                 Header(R.string.settings_notifications)
                 SettingRow(stringResource(R.string.settings_summary), stringResource(summaryLabels[s.summaryTiming.coerceIn(0, 3)])) { picker = Picker.SUMMARY }
-                SwitchRow(stringResource(R.string.settings_widget_last), stringResource(R.string.settings_widget_last_summary), s.widgetLastTrip) { v ->
-                    set { it.copy(widgetLastTrip = v) }
-                    HejjeWidget.refresh(context)
-                }
             }
             item {
                 Header(R.string.settings_backup)

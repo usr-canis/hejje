@@ -264,8 +264,6 @@
     <string name="settings_summary_5">5 minutes after the drive ends</string>
     <string name="settings_summary_final">When the trip can no longer continue</string>
     <string name="settings_summary_off">Off</string>
-    <string name="settings_widget_last">Show last trip on the widget</string>
-    <string name="settings_widget_last_summary">The widget always shows this week’s distance</string>
     <string name="settings_backup">Backup</string>
     <string name="settings_export">Export everything</string>
     <string name="settings_export_summary">One file with all trips and settings</string>
@@ -439,5 +437,4 @@
     <!-- Widget -->
     <string name="widget_label" tools:ignore="UnusedResources">Hejje: this week</string>
     <string name="widget_description">This week’s distance and your last trip</string>
-    <string name="widget_last_trip">Last trip %1$s · %2$s · %3$s</string>
 </resources>
