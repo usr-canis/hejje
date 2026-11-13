@@ -145,7 +145,8 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit) {
 
     val item = state.item
     val trip = item?.trip
-    val title = trip?.let { tripTitle(it, f) }.orEmpty()
+    val places = com.canis.hejje.ui.LocalPlaces.current
+    val title = trip?.let { tripTitle(it, f, places) }.orEmpty()
     val highlightIndex = if (edit != null) editPoint else selected
     val highlight = state.chart.takeIf { highlightIndex in 0 until it.size }?.let { it.lat[highlightIndex] to it.lon[highlightIndex] }
 

@@ -104,7 +104,7 @@ class TripDetailViewModel(private val container: AppContainer, private val tripI
     ) { item, loaded, tags, settings, zones ->
         if (item == null) return@combine DetailState(loading = false, missing = true)
         if (loaded == null) return@combine DetailState(item = item, allTags = tags, settings = settings)
-        val hidden = if (settings.zonesInApp) zones.map { Zone(it.lat, it.lon, it.radiusM) } else emptyList()
+        val hidden = if (settings.zonesInApp) zones.filter { it.hide }.map { Zone(it.lat, it.lon, it.radiusM) } else emptyList()
         val routes = loaded.segments.flatMap { s -> PrivacyZones.trim(s.data.route, hidden).map(MapRoute::of) }.filter { it.size > 0 }
         val markers = ArrayList<MapMarker>()
         routes.firstOrNull()?.let { markers += MapMarker(it.lat.first(), it.lon.first(), 0) }
@@ -149,5 +149,6 @@ class TripDetailViewModel(private val container: AppContainer, private val tripI
         }
     }
 
-    suspend fun zones(): List<Zone> = container.db.zones().all().map { Zone(it.lat, it.lon, it.radiusM) }
+    /** Private places, which share cards leave out. */
+    suspend fun zones(): List<Zone> = container.db.zones().all().filter { it.hide }.map { Zone(it.lat, it.lon, it.radiusM) }
 }

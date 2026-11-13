@@ -35,7 +35,9 @@ import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Formatter
+import com.canis.hejje.data.toPlace
 import com.canis.hejje.domain.Insights
+import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.InsightsData
 import com.canis.hejje.domain.Totals
 import com.canis.hejje.domain.TripSummary
@@ -70,11 +72,13 @@ data class InsightsState(
 )
 
 class InsightsViewModel(container: AppContainer) : ViewModel() {
-    val state: StateFlow<InsightsState> = combine(container.trips.trips, container.settings.data) { trips, settings ->
+    val state: StateFlow<InsightsState> = combine(container.trips.trips, container.settings.data, container.db.zones().observe()) { trips, settings, zones ->
+        val places = zones.map { it.toPlace() }
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val summaries = trips.map { t ->
-            TripSummary(t.trip.id, t.trip.startTime, t.trip.endTime, t.trip.distanceM, t.trip.movingMs, t.trip.maxSpeed, t.trip.endPlace, t.tags.map { it.name })
+            TripSummary(t.trip.id, t.trip.startTime, t.trip.endTime, t.trip.distanceM, t.trip.movingMs, t.trip.maxSpeed,
+                Places.placeAt(t.trip.endLat, t.trip.endLon, places)?.name ?: t.trip.endPlace, t.tags.map { it.name })
         }
         InsightsState(false, if (trips.isEmpty()) null else Insights.compute(summaries, today, zone), trips, settings, today)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsState())

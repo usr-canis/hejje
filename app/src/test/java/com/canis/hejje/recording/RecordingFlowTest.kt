@@ -56,7 +56,7 @@ class RecordingFlowTest {
     /** A controller as a freshly started app process would create it. */
     private fun controller(log: com.canis.hejje.data.DriveLog? = null) = RecordingController(
         app, app.container.settings, RawBuffer(dir, db.raw()), db.raw(),
-        TripFinalizer(app, db.raw(), trips, app.container.settings, log),
+        TripFinalizer(app, db.raw(), trips, app.container.settings, log, db.zones()),
         CoroutineScope(SupervisorJob() + Dispatchers.Default), clock = { now }, graceMs = grace, log = log,
     )
 
@@ -293,6 +293,25 @@ class RecordingFlowTest {
         assertTrue(entries[4].detail.toLong() >= 20)
         val trip = runBlocking { trips.all().single() }
         assertEquals(trip.id, entries.last().tripId)
+    }
+
+    @Test fun homeToWork_isTaggedCommute_andAPlaceTagIsAdded() {
+        val sim = DriveSim(t = now)
+        runBlocking {
+            db.zones().upsert(com.canis.hejje.data.db.ZoneEntity(0, "Home", sim.lat, sim.lon, 200.0, icon = "home"))
+        }
+        val c = controller()
+        c.carConnected()
+        sim.drive(300, 15f).drive(8, 0f, accel = 2f)
+        runBlocking {
+            db.zones().upsert(com.canis.hejje.data.db.ZoneEntity(0, "Office", sim.lat, sim.lon, 200.0, icon = "work", hide = false, tag = "Work"))
+        }
+        c.feed(sim)
+        c.carDisconnected()
+        passTime(grace)
+        eventually("trip saved") { tripCount() == 1 }
+        val id = runBlocking { trips.all().single().id }
+        eventually("auto tags") { runBlocking { trips.tagNames(id) }.toSet() == setOf("Commute", "Work") }
     }
 
     @Test fun autoRecordOff_ignoresTheCar() {

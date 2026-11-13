@@ -76,7 +76,8 @@ class ScreensTest {
         trips.insertTrip("t4", drive(4 * 24 * hour, 1), "", "Hebbal, Bengaluru", "MG Road, Bengaluru", listOf("Work"))
         trips.insertTrip("t5", drive(9 * 24 * hour, 2), "", "MG Road, Bengaluru", "Nandi Hills", listOf("Road trip"))
         trips.insertTrip("t6", drive(10 * 24 * hour, 3), "", "Nandi Hills", "MG Road, Bengaluru", listOf("Road trip"))
-        c.db.zones().upsert(ZoneEntity(0, "Home", 12.9716, 77.5946, 300.0))
+        c.db.zones().upsert(ZoneEntity(0, "Home", 12.9716, 77.5946, 300.0, icon = "home"))
+        c.db.zones().upsert(ZoneEntity(0, "Office", 12.99, 77.61, 250.0, icon = "work", hide = false, tag = "Work"))
         val h = System.currentTimeMillis() - 2 * hour
         listOf(
             com.canis.hejje.data.db.LogEntity(0, h - 1_800_000, "CAR_CONNECTED", "companion"),
@@ -127,7 +128,7 @@ class ScreensTest {
 
     @Test fun tripDetail_showsStats_andEditsCanBeUndone() {
         await("This week")
-        rule.onAllNodesWithText("Koramangala → Indiranagar").onFirst().performClick()
+        rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()
         await("Distance")
         shot("detail-light-1")
         scrollTo("Time by speed")
@@ -150,7 +151,7 @@ class ScreensTest {
 
     @Test @Config(qualifiers = "+night") fun tripDetail_dark() {
         await("This week")
-        rule.onAllNodesWithText("Indiranagar → MG Road").onFirst().performClick()
+        rule.onAllNodesWithText("Home → MG Road").onFirst().performClick()
         await("Distance")
         shot("detail-dark-1")
         scrollTo("Elevation")
@@ -186,6 +187,19 @@ class ScreensTest {
         shot("health-light")
         scrollTo("Share log")
         shot("health-activity")
+    }
+
+    @Test fun places_listAndEditor() {
+        await("This week")
+        rule.onNodeWithText("Settings").performClick()
+        await("Car Bluetooth device")
+        scrollTo("Places")
+        rule.onNodeWithText("Places").performClick()
+        await("Name the places you drive to")
+        shot("places")
+        rule.onNodeWithText("Office").performClick()
+        await("Tag trips that end here")
+        shot("place-editor")
     }
 
     @Test fun parkedCar_offersNavigation() {

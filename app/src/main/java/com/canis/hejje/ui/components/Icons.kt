@@ -81,6 +81,48 @@ object HejjeIcons {
     val Layers = icon("Layers") {
         moveTo(12f, 4f); lineTo(20f, 8.5f); lineTo(12f, 13f); lineTo(4f, 8.5f); close(); moveTo(4f, 13f); lineTo(12f, 17.5f); lineTo(20f, 13f)
     }
+    val Home = icon("Home") {
+        moveTo(4f, 11f); lineTo(12f, 4f); lineTo(20f, 11f)
+        moveTo(6f, 9.5f); verticalLineTo(20f); horizontalLineTo(18f); verticalLineTo(9.5f)
+        moveTo(10f, 20f); verticalLineTo(14f); horizontalLineTo(14f); verticalLineTo(20f)
+    }
+    val Work = icon("Work") {
+        moveTo(4f, 8f); horizontalLineTo(20f); verticalLineTo(19f); horizontalLineTo(4f); close()
+        moveTo(9f, 8f); verticalLineTo(5.5f); horizontalLineTo(15f); verticalLineTo(8f); moveTo(4f, 13f); horizontalLineTo(20f)
+    }
+    val School = icon("School") {
+        moveTo(2.5f, 9f); lineTo(12f, 4.5f); lineTo(21.5f, 9f); lineTo(12f, 13.5f); close()
+        moveTo(6.5f, 11f); verticalLineTo(16f); curveTo(9f, 18.5f, 15f, 18.5f, 17.5f, 16f); verticalLineTo(11f)
+    }
+    val Gym = icon("Gym") {
+        moveTo(4f, 9f); verticalLineTo(15f); moveTo(7f, 7f); verticalLineTo(17f); moveTo(17f, 7f); verticalLineTo(17f)
+        moveTo(20f, 9f); verticalLineTo(15f); moveTo(7f, 12f); horizontalLineTo(17f)
+    }
+    val Shop = icon("Shop") {
+        moveTo(5f, 8f); horizontalLineTo(19f); lineTo(18f, 20f); horizontalLineTo(6f); close()
+        moveTo(9f, 8f); verticalLineTo(6.5f); arcToRelative(3f, 3f, 0f, false, true, 6f, 0f); verticalLineTo(8f)
+    }
+    val Family = icon("Family") {
+        moveTo(12f, 20f); lineTo(4.6f, 12.6f); arcToRelative(4.5f, 4.5f, 0f, false, true, 7.4f, -5.8f)
+        arcToRelative(4.5f, 4.5f, 0f, false, true, 7.4f, 5.8f); close()
+    }
+    val Star = icon("Star") {
+        moveTo(12f, 4f); lineTo(14.4f, 9f); lineTo(19.8f, 9.6f); lineTo(15.8f, 13.3f); lineTo(16.9f, 18.6f)
+        lineTo(12f, 15.9f); lineTo(7.1f, 18.6f); lineTo(8.2f, 13.3f); lineTo(4.2f, 9.6f); lineTo(9.6f, 9f); close()
+    }
+
+    /** Icon for a place's icon key (see Places.ICONS). */
+    fun place(key: String) = when (key) {
+        "home" -> Home
+        "work" -> Work
+        "school" -> School
+        "gym" -> Gym
+        "shop" -> Shop
+        "family" -> Family
+        "star" -> Star
+        else -> Pin
+    }
+
     val Download = icon("Download") {
         moveTo(12f, 4f); verticalLineTo(15f); moveTo(8f, 11f); lineTo(12f, 15f); lineTo(16f, 11f); moveTo(5f, 19.5f); horizontalLineTo(19f)
     }

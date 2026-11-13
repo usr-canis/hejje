@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -58,6 +59,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.canis.hejje.AppContainer
 import com.canis.hejje.R
+import com.canis.hejje.data.toPlace
+import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalContainer
 import com.canis.hejje.ui.components.LocalUndo
@@ -115,6 +118,9 @@ private object NavMotion {
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(): Boolean =
     initialState.destination.route in Routes.TOP && targetState.destination.route in Routes.TOP
+
+/** Places the user named, for trip titles anywhere in the app. */
+val LocalPlaces = staticCompositionLocalOf<List<NamedPlace>> { emptyList() }
 
 object Routes {
     const val TRIPS = "trips"
@@ -199,7 +205,9 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
     // Quiet update check on start, at most once a day; failures are ignored.
     LaunchedEffect(Unit) { runCatching { container.updater.check(manual = false) } }
 
-    CompositionLocalProvider(LocalUndo provides undoHost) {
+    val placesFlow = remember { container.db.zones().observe().map { list -> list.map { it.toPlace() } } }
+    val places by placesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    CompositionLocalProvider(LocalUndo provides undoHost, LocalPlaces provides places) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             // Without the bottom bar the snackbar would sit under the gesture area.

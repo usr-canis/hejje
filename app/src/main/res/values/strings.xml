@@ -67,8 +67,12 @@
         <item quantity="other">%d stops</item>
     </plurals>
     <plurals name="zone_count">
-        <item quantity="one">%d zone</item>
-        <item quantity="other">%d zones</item>
+        <item quantity="one">%d place</item>
+        <item quantity="other">%d places</item>
+    </plurals>
+    <plurals name="visit_count">
+        <item quantity="one">%d visit</item>
+        <item quantity="other">%d visits</item>
     </plurals>
     <plurals name="backup_count">
         <item quantity="one">%d backup</item>
@@ -236,11 +240,11 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_route_speed">Colour routes by speed</string>
     <string name="settings_route_speed_summary">Off shows routes in a single colour</string>
-    <string name="settings_privacy">Privacy</string>
-    <string name="settings_zones">Privacy zones</string>
-    <string name="settings_zones_none">None</string>
-    <string name="settings_zones_in_app">Hide zones on the map in the app too</string>
-    <string name="settings_zones_in_app_summary">Share cards and GPX exports always hide them</string>
+    <string name="settings_privacy">Places and privacy</string>
+    <string name="settings_zones">Places</string>
+    <string name="settings_zones_none">None yet. Add Home, Work and more</string>
+    <string name="settings_zones_in_app">Hide private places on the in-app map too</string>
+    <string name="settings_zones_in_app_summary">Share cards and GPX files always hide them</string>
     <string name="settings_place_lookup">Look up place names</string>
     <string name="settings_place_lookup_summary">Sends trip start and end coordinates to OpenStreetMap when online</string>
     <string name="settings_maps">Maps</string>
@@ -365,16 +369,32 @@
     <string name="health_open_settings">Open Android settings for this app</string>
 
     <!-- Privacy zones -->
-    <string name="zones_intro">Routes inside a zone are cut out of share cards and GPX exports. Your full trips stay on this phone.</string>
-    <string name="zones_empty">Add a zone around places such as home or work.</string>
-    <string name="zones_add">Add zone</string>
-    <string name="zones_edit">Edit zone</string>
+    <string name="zones_intro">Name the places you drive to. Trips show these names, Home \u2194 Work trips are tagged Commute, and private places are cut out of share cards and GPX files.</string>
+    <string name="zones_empty">Add places like Home and Work.</string>
+    <string name="zones_add">Add place</string>
+    <string name="zones_edit">Edit place</string>
     <string name="zones_default_name">Home</string>
     <string name="zones_name">Name</string>
     <string name="zones_radius_value">Radius %1$s</string>
     <string name="zones_editor_hint">Move the map until the cross is on the place.</string>
     <string name="zones_map_description">Map for choosing the centre of the zone</string>
-    <string name="zones_removed">Zone removed</string>
+    <string name="zones_default_work">Work</string>
+    <string name="place_icon">Icon</string>
+    <string name="place_private">Private</string>
+    <string name="place_private_summary">Cut out of share cards and GPX files</string>
+    <string name="place_tag">Tag trips that end here</string>
+    <string name="place_tag_none">No tag</string>
+    <string name="places_suggested">Suggested</string>
+    <string name="places_suggested_hint">You often park here</string>
+    <string name="place_icon_home">Home</string>
+    <string name="place_icon_work">Work</string>
+    <string name="place_icon_school">School</string>
+    <string name="place_icon_gym">Gym</string>
+    <string name="place_icon_shop">Shop</string>
+    <string name="place_icon_family">Family</string>
+    <string name="place_icon_star">Favourite</string>
+    <string name="place_icon_pin">Other</string>
+    <string name="zones_removed">Place removed</string>
 
     <!-- About -->
     <string name="about_meaning">“Hejje” is Kannada for footprint.</string>

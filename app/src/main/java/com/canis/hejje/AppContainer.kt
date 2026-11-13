@@ -42,7 +42,7 @@ class AppContainer(val app: Application) {
     val updater = Updater(app, http, settings, scope)
     private val buffer = RawBuffer(File(app.filesDir, "raw"), db.raw())
     val log = DriveLog(db.log(), scope)
-    private val finalizer = TripFinalizer(app, db.raw(), trips, settings, log)
+    private val finalizer = TripFinalizer(app, db.raw(), trips, settings, log, db.zones())
     val controller = RecordingController(
         app, settings, buffer, db.raw(), finalizer, scope,
         locationPrompt = LocationPrompt(app, notifier, log), log = log,

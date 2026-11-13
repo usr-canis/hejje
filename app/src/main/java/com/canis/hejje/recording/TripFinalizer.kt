@@ -5,6 +5,8 @@ import com.canis.hejje.R
 import com.canis.hejje.data.DriveLog
 import com.canis.hejje.data.LogKind
 import com.canis.hejje.data.RawBuffer
+import com.canis.hejje.data.toPlace
+import com.canis.hejje.domain.Places
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.RawDao
@@ -24,6 +26,7 @@ class TripFinalizer(
     private val trips: TripRepository,
     private val settings: SettingsStore,
     private val log: DriveLog? = null,
+    private val zones: com.canis.hejje.data.db.ZoneDao? = null,
 ) {
     suspend fun finalize(session: String, start: Long, end: Long): Long? = withContext(Dispatchers.Default) {
         val raw = rawDao.points(session).map(RawBuffer::toRaw)
@@ -50,11 +53,21 @@ class TripFinalizer(
             settings.update { it.copy(parkedLat = route.lat.last(), parkedLon = route.lon.last(), parkedAt = end) }
         }
         if (tripId != null) {
+            autoTag(tripId)
             SummaryWorker.schedule(context, tripId, s)
             PlaceWorker.enqueue(context)
         }
         HejjeWidget.refresh(context)
         tripId
+    }
+
+    /** Home <-> Work trips become "Commute", and a place's own tag goes on trips that end there. */
+    private suspend fun autoTag(tripId: Long) {
+        val dao = zones ?: return
+        val trip = trips.trip(tripId) ?: return
+        val places = dao.all().map { it.toPlace() }
+        val tags = Places.autoTags(Places.placeAt(trip.startLat, trip.startLon, places), Places.placeAt(trip.endLat, trip.endLon, places))
+        tags.forEach { trips.setTag(tripId, it, true) }
     }
 
     /** A recording whose end we never saw (crash, power loss): it ends at its last fix. */

@@ -22,7 +22,15 @@ data class BackupFile(
 }
 
 @Serializable
-data class BackupZone(val name: String, val lat: Double, val lon: Double, val radiusM: Double)
+data class BackupZone(
+    val name: String,
+    val lat: Double,
+    val lon: Double,
+    val radiusM: Double,
+    val icon: String = "pin",
+    val hide: Boolean = true,
+    val tag: String? = null,
+)
 
 @Serializable
 data class BackupTrip(

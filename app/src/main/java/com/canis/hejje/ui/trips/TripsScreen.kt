@@ -85,6 +85,9 @@ import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Totals
 import com.canis.hejje.recording.LiveState
+import com.canis.hejje.domain.NamedPlace
+import com.canis.hejje.domain.Places
+import com.canis.hejje.ui.LocalPlaces
 import com.canis.hejje.ui.components.EmptyState
 import com.canis.hejje.ui.components.HejjeCard
 import com.canis.hejje.ui.components.HejjeIcons
@@ -214,11 +217,22 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     }
 }
 
+/** "Indiranagar, Bengaluru" next to a named place reads better as just "Indiranagar". */
+private fun short(name: String): String = name.substringBefore(", ")
+
 /**
  * "Indiranagar → MG Road": when both ends are in the same city the city is left out, so most
  * titles fit on one line. Coordinates stand in until a place name is known.
  */
-fun tripTitle(trip: TripEntity, f: Formatter): String {
+fun tripTitle(trip: TripEntity, f: Formatter, places: List<NamedPlace> = emptyList()): String {
+    val mineFrom = Places.placeAt(trip.startLat, trip.startLon, places)?.name
+    val mineTo = Places.placeAt(trip.endLat, trip.endLon, places)?.name
+    if (mineFrom != null || mineTo != null) {
+        // Next to a named place, a street name reads better without its city ("Indiranagar").
+        val from = mineFrom ?: trip.startPlace?.let(::short) ?: f.coordinates(trip.startLat, trip.startLon)
+        val to = mineTo ?: trip.endPlace?.let(::short) ?: f.coordinates(trip.endLat, trip.endLon)
+        return if (from == to) from else "$from \u2192 $to"
+    }
     val from = trip.startPlace ?: f.coordinates(trip.startLat, trip.startLon)
     val to = trip.endPlace ?: f.coordinates(trip.endLat, trip.endLon)
     if (from == to) return from
@@ -235,7 +249,7 @@ fun tripTitle(trip: TripEntity, f: Formatter): String {
 @Composable
 fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val trip = item.trip
-    val title = tripTitle(trip, f)
+    val title = tripTitle(trip, f, LocalPlaces.current)
     val time = "${f.time(trip.startTime)} – ${f.time(trip.endTime)}"
     val stats = listOf(f.distance(trip.distanceM), f.duration(trip.totalMs), f.speed(trip.avgMovingSpeed)).joinToString("  ·  ")
     HejjeCard(modifier, onClick = onClick, padding = PaddingValues(16.dp)) {
