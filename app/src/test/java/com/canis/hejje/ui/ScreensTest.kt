@@ -254,6 +254,19 @@ class ScreensTest {
         shot("section-2")
     }
 
+    @Test fun tripMenu_showsStatsForAPartOfTheTrip() {
+        await("This week")
+        rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()
+        await("Distance")
+        rule.onNodeWithContentDescription("More options").performClick()
+        await("Stats for part of this trip")
+        rule.onNodeWithText("Stats for part of this trip").performClick()
+        await("Drag the handles")
+        rule.onNodeWithText("Show stats").performClick()
+        await("Open the whole trip")
+        rule.onNodeWithText("Part of", substring = true).assertExists()
+    }
+
     @Test fun backGesture_looksLikeAndroidsOwn() {
         await("This week")
         rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()

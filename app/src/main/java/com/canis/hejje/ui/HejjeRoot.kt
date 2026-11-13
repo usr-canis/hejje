@@ -345,7 +345,12 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                     composable(Routes.SETTINGS) { ScreenBackground { SettingsScreen(onOpen = { nav.navigate(it) }) } }
                     composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                         val id = back.arguments?.getLong("id") ?: -1L
-                        ScreenBackground { TripDetailScreen(id, onBack = { nav.popBackStack() }, onStretch = { nav.navigate(Routes.stretch(id)) }) }
+                        ScreenBackground {
+                            TripDetailScreen(
+                                id, onBack = { nav.popBackStack() }, onStretch = { nav.navigate(Routes.stretch(id)) },
+                                onSection = { trip, from, to -> nav.navigate(Routes.section(trip, from, to)) },
+                            )
+                        }
                     }
                     composable(
                         "stretch?trip={trip}",

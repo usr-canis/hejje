@@ -245,6 +245,9 @@
     <string name="detail_merge_next">Merge with next trip</string>
     <string name="detail_export_gpx">Export as GPX</string>
     <string name="detail_measure_stretch">Measure a stretch</string>
+    <string name="detail_part_stats">Stats for part of this trip</string>
+    <string name="detail_part_hint">Drag the handles to the part you want. The dot on the map follows.</string>
+    <string name="detail_part_show">Show stats</string>
     <string name="detail_deleted">Trip deleted</string>
     <string name="detail_trimmed">Trip trimmed</string>
     <string name="detail_split_done">Trip split in two</string>

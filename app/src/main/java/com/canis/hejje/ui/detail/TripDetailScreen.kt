@@ -100,14 +100,20 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private enum class EditMode { TRIM, SPLIT }
+/** Trim and split edit the trip; PART only picks a part of it to look at. */
+private enum class EditMode { TRIM, SPLIT, PART }
 
 /** Slightly longer than the 300 ms screen transition. */
 private const val MAP_AFTER_TRANSITION_MS = 320L
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TripDetailScreen(tripId: Long, onBack: () -> Unit, onStretch: () -> Unit = {}) {
+fun TripDetailScreen(
+    tripId: Long,
+    onBack: () -> Unit,
+    onStretch: () -> Unit = {},
+    onSection: (tripId: Long, from: Long, to: Long) -> Unit = { _, _, _ -> },
+) {
     val vm = hejjeViewModel(key = "trip-$tripId") { TripDetailViewModel(it, tripId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
@@ -316,6 +322,7 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit, onStretch: () -> Unit = {
                         entry(R.string.detail_split, state.chart.size > 2) { editPoint = state.chart.size / 2; edit = EditMode.SPLIT }
                         state.previous?.let { p -> entry(R.string.detail_merge_previous) { vm.merge(p.id) { u -> haptics.confirm(); undo.show(if (u != null) msgMerged else msgFailed, u) } } }
                         state.next?.let { n -> entry(R.string.detail_merge_next) { vm.merge(n.id) { u -> haptics.confirm(); undo.show(if (u != null) msgMerged else msgFailed, u) } } }
+                        entry(R.string.detail_part_stats, state.chart.size > 2) { editPoint = 0; edit = EditMode.PART }
                         entry(R.string.detail_measure_stretch, state.routes.isNotEmpty()) { onStretch() }
                         entry(R.string.detail_export_gpx) {
                             val day = trip?.let { Insights.dayOf(it.startTime, ZoneId.systemDefault()) } ?: LocalDate.now()
@@ -351,12 +358,19 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit, onStretch: () -> Unit = {
         val sliderColors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent)
         ModalBottomSheet(onDismissRequest = { edit = null }, containerColor = colors.surfaceContainerLow) {
             Column(Modifier.padding(horizontal = ScreenPadding).padding(bottom = 24.dp)) {
-                Text(stringResource(if (mode == EditMode.TRIM) R.string.detail_trim else R.string.detail_split), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    stringResource(if (mode == EditMode.TRIM) R.string.detail_trim_hint else R.string.detail_split_hint),
+                    stringResource(
+                        when (mode) { EditMode.TRIM -> R.string.detail_trim; EditMode.SPLIT -> R.string.detail_split; EditMode.PART -> R.string.detail_part_stats },
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(
+                        when (mode) { EditMode.TRIM -> R.string.detail_trim_hint; EditMode.SPLIT -> R.string.detail_split_hint; EditMode.PART -> R.string.detail_part_hint },
+                    ),
                     style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
                 )
-                if (mode == EditMode.TRIM) {
+                if (mode != EditMode.SPLIT) {
                     RangeSlider(
                         value = range, valueRange = 0f..last, colors = sliderColors,
                         onValueChange = {
@@ -377,15 +391,17 @@ fun TripDetailScreen(tripId: Long, onBack: () -> Unit, onStretch: () -> Unit = {
                     TextButton(onClick = {
                         val t = trip ?: return@TextButton
                         haptics.confirm()
-                        if (mode == EditMode.TRIM) {
-                            val from = if (range.start.roundToInt() == 0) t.startTime else state.chart.times[range.start.roundToInt()]
-                            val to = if (range.endInclusive.roundToInt() >= state.chart.size - 1) t.endTime else state.chart.times[range.endInclusive.roundToInt()]
-                            vm.trim(from, to) { u -> undo.show(if (u != null) msgTrimmed else msgFailed, u) }
-                        } else {
-                            vm.split(state.chart.times[cut.roundToInt()]) { u -> undo.show(if (u != null) msgSplit else msgFailed, u) }
+                        val from = if (range.start.roundToInt() == 0) t.startTime else state.chart.times[range.start.roundToInt()]
+                        val to = if (range.endInclusive.roundToInt() >= state.chart.size - 1) t.endTime else state.chart.times[range.endInclusive.roundToInt()]
+                        when (mode) {
+                            EditMode.TRIM -> vm.trim(from, to) { u -> undo.show(if (u != null) msgTrimmed else msgFailed, u) }
+                            EditMode.SPLIT -> vm.split(state.chart.times[cut.roundToInt()]) { u -> undo.show(if (u != null) msgSplit else msgFailed, u) }
+                            EditMode.PART -> if (to > from) onSection(t.id, from, to)
                         }
                         edit = null
-                    }) { Text(stringResource(R.string.action_apply), color = palette.accentText) }
+                    }) {
+                        Text(stringResource(if (mode == EditMode.PART) R.string.detail_part_show else R.string.action_apply), color = palette.accentText)
+                    }
                 }
             }
         }
