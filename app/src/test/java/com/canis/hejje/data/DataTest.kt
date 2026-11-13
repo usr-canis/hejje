@@ -49,6 +49,21 @@ class DataTest {
 
     private fun sim(t: Long = DriveSim.T0) = DriveSim(t = t).drive(300, 15f).drive(8, 0f, accel = 4.5f).idle(40).drive(300, 20f)
 
+    @Test fun recomputeAll_refreshesStats_andKeepsNotesAndPlaces() = runBlocking {
+        val id = trips.addRecording(sim().segment(), gap, 0)!!
+        trips.setNote(id, "keep me")
+        trips.setPlaces(id, "Haralur", "Koramangala")
+        val good = trips.trip(id)!!
+        db.trips().update(good.copy(smoothness = 3, distanceM = 1.0))
+        trips.recomputeAll()
+        val again = trips.trip(id)!!
+        assertEquals(good.smoothness, again.smoothness)
+        assertEquals(good.distanceM, again.distanceM, 0.01)
+        assertEquals("keep me", again.note)
+        assertEquals("Haralur", again.startPlace)
+        assertEquals("Koramangala", again.endPlace)
+    }
+
     @Test fun presetTags_exist() = runBlocking {
         assertEquals(listOf("Commute", "Errand", "Road trip", "Work"), trips.tags.first().map { it.name })
         assertTrue(trips.tags.first().all { it.preset })

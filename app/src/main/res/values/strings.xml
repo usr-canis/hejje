@@ -94,7 +94,7 @@
     <string name="notif_saving">Saving trip…</string>
     <string name="notif_waiting_gps">Waiting for GPS…</string>
     <string name="notif_summary_title">Trip finished: %1$s in %2$s</string>
-    <string name="notif_summary_text">Average %1$s · %2$s · smoothness %3$d</string>
+    <string name="notif_summary_text">Average %1$s · %2$s · fluidity %3$d</string>
     <string name="notif_update_title">Version %1$s is available</string>
     <string name="notif_update_text">Tap to see what is new and update.</string>
     <string name="recording_now">Recording</string>
@@ -149,7 +149,7 @@
     <string name="stat_stop_time">Time stopped</string>
     <string name="stop_parked">Parked</string>
     <string name="stop_idle">Idle</string>
-    <string name="stat_smoothness">Smoothness</string>
+    <string name="stat_smoothness">Fluidity</string>
     <string name="stat_smoothness_value">%1$d / 100</string>
     <string name="stat_hard_braking">Hard braking</string>
     <string name="stat_hard_accel">Hard acceleration</string>

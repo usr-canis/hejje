@@ -104,6 +104,7 @@ data class TripStats(
     val altMax: Float,
     val hardBrakes: Int,
     val hardAccels: Int,
+    /** Fluidity, 0-100 (stored under its earlier name). */
     val smoothness: Int,
     val bandsMs: LongArray,
     val nightShare: Float,

@@ -1,6 +1,7 @@
 package com.canis.hejje
 
 import android.app.Application
+import androidx.core.content.edit
 import com.canis.hejje.data.BackupManager
 import com.canis.hejje.data.DriveLog
 import com.canis.hejje.data.PlaceRepository
@@ -23,6 +24,11 @@ import java.io.File
 
 /** Hand-wired dependencies; one instance for the whole app. */
 class AppContainer(val app: Application) {
+    companion object {
+        private const val KEY_STATS_VERSION = "statsVersion"
+        const val STATS_VERSION = 2
+    }
+
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val settings = SettingsStore(app, scope)
     val db = HejjeDb.create(app)
@@ -47,6 +53,16 @@ class AppContainer(val app: Application) {
         app, settings, buffer, db.raw(), finalizer, scope,
         locationPrompt = LocationPrompt(app, notifier, log), log = log,
     )
+
+    /** Recalculates every trip once when the way stats are computed has changed (Fluidity in 1.2.0). */
+    suspend fun upgradeStats() {
+        val prefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
+        if (prefs.getInt(KEY_STATS_VERSION, 1) >= STATS_VERSION) return
+        runCatching { trips.recomputeAll() }.onSuccess {
+            prefs.edit { putInt(KEY_STATS_VERSION, STATS_VERSION) }
+            com.canis.hejje.widget.HejjeWidget.refresh(app)
+        }
+    }
 
     fun scheduleWork() {
         runCatching { Work.schedule(app) }

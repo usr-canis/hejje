@@ -129,6 +129,16 @@ class TripRepository(private val db: HejjeDb) {
         }
     }
 
+    /** Recalculates the stored stats of every trip, e.g. after the scoring changed. Keeps notes, tags and places. */
+    suspend fun recomputeAll() {
+        for (t in dao.all()) {
+            val segments = segments(t.id)
+            if (segments.isEmpty()) continue
+            val rebuilt = withContext(Dispatchers.Default) { Codec.buildTrip(t, t.uuid, segments) }
+            dao.update(rebuilt.copy(startPlace = t.startPlace, endPlace = t.endPlace))
+        }
+    }
+
     suspend fun neighbours(id: Long): Pair<TripEntity?, TripEntity?> {
         val all = dao.all()
         val i = all.indexOfFirst { it.id == id }

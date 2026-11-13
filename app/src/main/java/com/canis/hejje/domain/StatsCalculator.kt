@@ -12,6 +12,32 @@ object StatsCalculator {
     private const val MIN_STOP_MS = 30_000L
     private const val NIGHT_SUN_ALTITUDE = -0.833
 
+    /** Profile acceleration (m/s²) at or below which Fluidity loses nothing, and at which it loses everything. */
+    private const val CALM_RMS = 0.55
+    private const val ROUGH_RMS = 1.35
+
+    /**
+     * How unevenly the speed changed, 0 (perfectly even) to 1 (very jerky). Measured from the speed
+     * of each 5-second block of the trip, so GPS jitter averages out and every trip, old or new,
+     * is scored the same way.
+     */
+    fun roughness(segments: List<Segment>): Double {
+        var sum = 0.0
+        var seconds = 0.0
+        for (s in segments) {
+            val p = s.data.profile
+            val step = p.stepMs / 1000.0
+            for (i in 1 until p.size) {
+                if (p.moving[i] == 0 && p.moving[i - 1] == 0) continue
+                val a = (p.dist[i] - p.dist[i - 1]) / step / step
+                sum += a * a * step
+                seconds += step
+            }
+        }
+        val rms = if (seconds > 0) sqrt(sum / seconds) else 0.0
+        return ((rms - CALM_RMS) / (ROUGH_RMS - CALM_RMS)).coerceIn(0.0, 1.0)
+    }
+
     fun compute(segments: List<Segment>): TripStats {
         require(segments.isNotEmpty())
         val segs = segments.sortedBy { it.start }
@@ -26,7 +52,6 @@ object StatsCalculator {
         var altMax = Float.NaN
         var brakes = 0
         var accels = 0
-        var a2 = 0.0
         val bands = LongArray(BANDS_KMH.size + 1)
         val stops = ArrayList<Stop>()
         var nightMs = 0L
@@ -40,7 +65,6 @@ object StatsCalculator {
                 distance += p.dist[i]
                 segMoving += p.moving[i]
                 maxSpeed = max(maxSpeed, p.vmax[i])
-                a2 += p.a2[i]
                 if (p.moving[i] > 0) {
                     val kmh = p.speed(i) * 3.6f
                     bands[BANDS_KMH.indexOfFirst { kmh < it }.let { if (it < 0) BANDS_KMH.size else it }] += p.moving[i].toLong()
@@ -106,11 +130,8 @@ object StatsCalculator {
         }
 
         val events = brakes + accels
-        val movingSec = moving / 1000.0
-        val rms = if (movingSec > 0) sqrt(a2 / movingSec) else 0.0
         val per10km = events / max(1.0, distance / 1000.0) * 10
-        val smoothness = (100 - 55 * ((rms - 0.45) / 0.9).coerceIn(0.0, 1.0) - min(45.0, 9 * per10km))
-            .roundToInt().coerceIn(0, 100)
+        val fluidity = (100 - 55 * roughness(segs) - min(45.0, 9 * per10km)).roundToInt().coerceIn(0, 100)
 
         return TripStats(
             start = segs.first().start,
@@ -127,7 +148,7 @@ object StatsCalculator {
             altMax = altMax,
             hardBrakes = brakes,
             hardAccels = accels,
-            smoothness = smoothness,
+            smoothness = fluidity,
             bandsMs = bands,
             nightShare = if (sampledMs > 0) nightMs.toFloat() / sampledMs else 0f,
         )
