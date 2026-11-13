@@ -12,8 +12,9 @@ data class SensorSummary(val meanLon: Float, val minLon: Float, val maxLon: Floa
 /**
  * Turns the phone's motion sensors into the car's forward/backward and sideways acceleration.
  *
- * Used only while the phone is settled: screen off, resting still (no tilting or turning other
- * than the car's own turns). "Down" comes from gravity; "forward" is learned by matching the
+ * Used only while the phone is settled: resting still (no tilting or turning other than the car's
+ * own turns). With the screen on (e.g. in a mount while you look at it) it must also hold its
+ * angle steadily, which a phone in a hand does not. "Down" comes from gravity; "forward" is learned by matching the
  * phone's horizontal acceleration with GPS speed changes, so the phone may lie in any position.
  * If the phone is picked up or moved, the learned direction is discarded and learned again.
  *
@@ -44,11 +45,16 @@ class MotionEstimator {
     private var latPeak = 0f
     private var lastSpeed = Float.NaN
     private var lastFixT = 0L
+    private val steadyRef = FloatArray(3)
+    private var steadyRefT = 0L
+    private var haveSteady = false
+    private var steadyNs = 0L
+    private var steadyOk = false
 
     val isCalibrated: Boolean get() = calibrated
 
     fun reset() {
-        haveUp = false; haveRef = false; lastT = 0; unsettledUntil = 0; settledSince = 0
+        haveUp = false; haveRef = false; lastT = 0; unsettledUntil = 0; settledSince = 0; haveSteady = false
         filtered.fill(0f); resetCalibration(); resetInterval(); lastSpeed = Float.NaN; lastFixT = 0
     }
 
@@ -85,9 +91,29 @@ class MotionEstimator {
         if (gyro != null) {
             val along = dot(gyro, up)
             val tilt = sqrt(max(0f, dot(gyro, gyro) - along * along))
-            if (tilt > HANDLING_RAD_S) unsettledUntil = t + HANDLING_HOLD_NS
+            if (tilt > if (screenOn) IN_USE_RAD_S else HANDLING_RAD_S) unsettledUntil = t + HANDLING_HOLD_NS
         }
-        if (screenOn) unsettledUntil = max(unsettledUntil, t + SCREEN_HOLD_NS)
+        if (screenOn) {
+            // In use: it counts once it has held its angle, as in a mount, through a few seconds of
+            // even driving. A hand keeps wobbling. Braking and turns make "down" lean a little,
+            // so steadiness is judged only while the car runs evenly; the verdict holds meanwhile.
+            val stepNs = if (lastT == 0L) 20_000_000L else (t - lastT).coerceIn(0L, 200_000_000L)
+            if (!haveSteady) {
+                up.copyInto(steadyRef); steadyRefT = t; haveSteady = true; steadyNs = 0; steadyOk = false
+            } else if (norm(filtered) < CALM_ACCEL) {
+                if (angleDeg(up, steadyRef) > STEADY_DEG) {
+                    steadyOk = false; steadyNs = 0
+                    up.copyInto(steadyRef); steadyRefT = t
+                } else {
+                    steadyNs += stepNs
+                    if (steadyNs >= STEADY_CONFIRM_NS) steadyOk = true
+                    if (t - steadyRefT > STEADY_WINDOW_NS) { up.copyInto(steadyRef); steadyRefT = t }
+                }
+            }
+            if (!steadyOk) unsettledUntil = max(unsettledUntil, t + 1)
+        } else {
+            haveSteady = false
+        }
 
         // Horizontal part of the acceleration, smoothed to remove road vibration.
         val vertical = dot(linear, up)
@@ -153,7 +179,12 @@ class MotionEstimator {
         private const val MOVED_DEG = 10.0
         private const val HANDLING_RAD_S = 0.35f
         private const val HANDLING_HOLD_NS = 3_000_000_000L
-        private const val SCREEN_HOLD_NS = 1_000_000_000L
+        /** Screen on: tilting faster than this (about 11°/s), or drifting more than [STEADY_DEG] within 2 s, means in a hand. */
+        private const val IN_USE_RAD_S = 0.2f
+        private const val STEADY_DEG = 3.0
+        private const val STEADY_WINDOW_NS = 2_000_000_000L
+        private const val STEADY_CONFIRM_NS = 5_000_000_000L
+        private const val CALM_ACCEL = 1.0f
         private const val SETTLE_NS = 2_000_000_000L
         private const val SMOOTH_S = 0.2f
         private const val LEARN_ACCEL = 0.6f

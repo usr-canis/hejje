@@ -80,10 +80,21 @@ class MotionEstimatorTest {
         assertEquals(2.6, peak.toDouble(), 0.7)
     }
 
-    @Test fun screenOn_meansNoSensorData() {
+    @Test fun screenOn_inAMount_stillMeasures() {
         val est = MotionEstimator()
-        val r = drive(est, 120, { mounted }, screenOn = { true })
-        assertTrue(r.summaries.all { it.first == null })
+        val r = drive(est, 240, { mounted }, screenOn = { true })
+        assertTrue(est.isCalibrated)
+        val late = r.summaries.drop(60).filter { it.first != null }
+        assertTrue("sensor data with the screen on: ${late.size}", late.size > 150)
+        val errors = late.map { abs(it.first!!.meanLon - it.second) }.sorted()
+        assertTrue("median error ${errors[errors.size / 2]}", errors[errors.size / 2] < 0.25)
+    }
+
+    @Test fun screenOn_inAHand_meansNoSensorData() {
+        val est = MotionEstimator()
+        // Held in a hand: the angle keeps wandering by a few degrees.
+        val r = drive(est, 120, { sec -> rotation(Math.toRadians(62.0 + 4 * sin(sec * 1.3)), Math.toRadians(8.0 + 3 * cos(sec * 0.9)), Math.toRadians(33.0)) }, screenOn = { true })
+        assertTrue("${r.summaries.count { it.first != null }} readings used", r.summaries.count { it.first != null } <= 3)
     }
 
     @Test fun phonePickedUp_stopsUsingSensors_thenLearnsAgain() {

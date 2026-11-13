@@ -191,7 +191,7 @@
     <string name="cornering_moderate">Moderate</string>
     <string name="cornering_firm">Firm</string>
     <string name="detail_sensor_note">Measured with phone sensors for %1$d%% of the drive, GPS for the rest.</string>
-    <string name="detail_gps_note">Measured with GPS. When the phone rests with its screen off, its motion sensors add detail.</string>
+    <string name="detail_gps_note">Measured with GPS. When the phone rests firmly (in a holder or mount, screen on or off), its motion sensors add detail.</string>
     <string name="stat_gain">Climbed</string>
     <string name="stat_loss">Descended</string>
     <string name="stat_alt_min">Lowest point</string>
