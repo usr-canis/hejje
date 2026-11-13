@@ -191,9 +191,17 @@ fun InstrumentCluster(
                         }
                     }
                     settings.parkedLat != null && settings.parkedLon != null -> {
+                        // Keeps counting ("2 min ago" → "3 min ago") while the screen is open.
+                        var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                        LaunchedEffect(Unit) {
+                            while (true) {
+                                delay(30_000)
+                                now = System.currentTimeMillis()
+                            }
+                        }
                         Chip(onClick = onParked, description = stringResource(R.string.parked_open)) {
                             Indicator("P", lit = true)
-                            Text(f.relative(settings.parkedAt, System.currentTimeMillis()), style = chipText, color = Dash.text, maxLines = 1)
+                            Text(f.relative(settings.parkedAt, now), style = chipText, color = Dash.text, maxLines = 1)
                             Icon(HejjeIcons.ChevronRight, null, Modifier.size(14.dp), tint = Dash.muted)
                         }
                     }

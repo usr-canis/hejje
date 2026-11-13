@@ -113,5 +113,7 @@ object Work {
             "auto-backup", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<BackupWorker>(7, TimeUnit.DAYS).setInitialDelay(1, TimeUnit.HOURS).build(),
         )
+        // Also covers a widget placed before this was added (an update does not re-add it).
+        com.canis.hejje.widget.WidgetRefresh.schedule(context)
     }
 }

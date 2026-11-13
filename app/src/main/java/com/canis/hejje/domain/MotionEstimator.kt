@@ -50,11 +50,16 @@ class MotionEstimator {
     private var haveSteady = false
     private var steadyNs = 0L
     private var steadyOk = false
+    /** The phone's resting angle before a jolt, and when the jolt started and last moved it. */
+    private val restUp = FloatArray(3)
+    private var joltStart = 0L
+    private var joltLast = 0L
+    private var jolting = false
 
     val isCalibrated: Boolean get() = calibrated
 
     fun reset() {
-        haveUp = false; haveRef = false; lastT = 0; unsettledUntil = 0; settledSince = 0; haveSteady = false
+        haveUp = false; haveRef = false; lastT = 0; unsettledUntil = 0; settledSince = 0; haveSteady = false; jolting = false
         filtered.fill(0f); resetCalibration(); resetInterval(); lastSpeed = Float.NaN; lastFixT = 0
     }
 
@@ -91,8 +96,23 @@ class MotionEstimator {
         if (gyro != null) {
             val along = dot(gyro, up)
             val tilt = sqrt(max(0f, dot(gyro, gyro) - along * along))
-            if (tilt > if (screenOn) IN_USE_RAD_S else HANDLING_RAD_S) unsettledUntil = t + HANDLING_HOLD_NS
+            if (tilt > if (screenOn) IN_USE_RAD_S else HANDLING_RAD_S) {
+                if (!jolting) { jolting = true; joltStart = t }
+                joltLast = t
+                unsettledUntil = max(unsettledUntil, t + HANDLING_HOLD_NS)
+            }
         }
+        // A bump (speed breaker, pothole) shakes the phone briefly and leaves it at its old angle;
+        // a hand moves it for longer, to a new angle. After a bump, carry on almost at once.
+        if (jolting && t - joltLast >= BUMP_QUIET_NS) {
+            if (joltLast - joltStart <= BUMP_MAX_NS && angleDeg(up, restUp) <= BUMP_RETURN_DEG) {
+                unsettledUntil = t
+                jolting = false
+            } else if (t >= unsettledUntil) {
+                jolting = false
+            }
+        }
+        if (!jolting && t - joltLast >= BUMP_QUIET_NS) up.copyInto(restUp)
         if (screenOn) {
             // In use: it counts once it has held its angle, as in a mount, through a few seconds of
             // even driving. A hand keeps wobbling. Braking and turns make "down" lean a little,
@@ -179,6 +199,10 @@ class MotionEstimator {
         private const val MOVED_DEG = 10.0
         private const val HANDLING_RAD_S = 0.35f
         private const val HANDLING_HOLD_NS = 3_000_000_000L
+        /** A jolt counts as a bump if it is over within this long and the phone is back within [BUMP_RETURN_DEG]. */
+        private const val BUMP_MAX_NS = 800_000_000L
+        private const val BUMP_QUIET_NS = 400_000_000L
+        private const val BUMP_RETURN_DEG = 3.0
         /** Screen on: tilting faster than this (about 11°/s), or drifting more than [STEADY_DEG] within 2 s, means in a hand. */
         private const val IN_USE_RAD_S = 0.2f
         private const val STEADY_DEG = 3.0

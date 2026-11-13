@@ -1,6 +1,7 @@
 package com.canis.hejje.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -108,6 +109,29 @@ class MotionEstimatorTest {
         assertTrue("relearned: ${late.size}", late.size > 40)
         val errors = late.map { abs(it.first!!.meanLon - it.second) }.sorted()
         assertTrue("median error ${errors[errors.size / 2]}", errors[errors.size / 2] < 0.3)
+    }
+
+    @Test fun speedBreaker_costsLessThanASecond() {
+        val est = MotionEstimator()
+        drive(est, 120, { mounted })
+        assertTrue(est.isCalibrated)
+        // A bump: the phone pitches sharply for 0.3 s and swings back to where it was.
+        val rest = doubleArrayOf(0.0, 0.0, 9.81)
+        for (k in 0 until 50) {
+            val t = 120_000_000_000L + k * 20_000_000L
+            val inBump = k in 5..19
+            val pitch = if (inBump) Math.toRadians(4.0 * sin(PI * (k - 5) / 15.0)) else 0.0
+            val gyro = if (inBump) floatArrayOf((if (k < 12) 1.0f else -1.0f), 0f, 0f) else floatArrayOf(0f, 0f, 0f)
+            val r = rotation(Math.toRadians(62.0) + pitch, Math.toRadians(8.0), Math.toRadians(33.0))
+            est.onMotion(t, apply(r, doubleArrayOf(0.0, 0.0, if (inBump) 3.0 else 0.0)), apply(r, rest), apply(r, gyro.map { it.toDouble() }.toDoubleArray()), false)
+        }
+        est.onFix(121_000_000_000L, 10f)
+        // The next second is measured again: no 3-second gap.
+        for (k in 0 until 50) {
+            val t = 121_000_000_000L + k * 20_000_000L
+            est.onMotion(t, apply(mounted, doubleArrayOf(0.0, 0.0, 0.0)), apply(mounted, rest), floatArrayOf(0f, 0f, 0f), false)
+        }
+        assertNotNull(est.onFix(122_000_000_000L, 10f))
     }
 
     @Test fun handled_noData_untilItSettles() {

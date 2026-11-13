@@ -8,14 +8,19 @@ import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.Totals
 import com.canis.hejje.recording.LiveState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 
 data class DayGroup(val day: LocalDate, val trips: List<TripWithTags>) {
     val distanceM: Double get() = trips.sumOf { it.trip.distanceM }
@@ -39,9 +44,19 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
 
     val live: StateFlow<LiveState?> = container.controller.live
 
-    val state: StateFlow<TripsState> = combine(container.trips.trips, container.settings.data, filter) { trips, settings, f ->
+    /** Today's date, which changes at midnight, so the week total and "Today" move on while the app is open. */
+    private val today = flow {
+        while (true) {
+            val zone = ZoneId.systemDefault()
+            val now = ZonedDateTime.now(zone)
+            emit(now.toLocalDate())
+            delay(Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay(zone)).toMillis() + 1_000)
+        }
+    }.distinctUntilChanged()
+
+    val state: StateFlow<TripsState> = combine(container.trips.trips, container.settings.data, filter, today) { trips, settings, f, day ->
         val zone = ZoneId.systemDefault()
-        val monday = Insights.weekStart(LocalDate.now(zone))
+        val monday = Insights.weekStart(day)
         val week = trips.filter { Insights.dayOf(it.trip.startTime, zone) >= monday }
         val q = f.query.trim().lowercase()
         val shown = trips.filter { t ->
