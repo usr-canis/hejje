@@ -3,6 +3,7 @@ package com.canis.hejje.data
 import com.canis.hejje.data.db.LogDao
 import com.canis.hejje.data.db.LogEntity
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -22,9 +23,15 @@ class DriveLog(
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    /** Entries are written one at a time so they keep the order they happened in. */
+    private val pending = Channel<LogEntity>(Channel.UNLIMITED)
+
+    init {
+        scope.launch { for (entry in pending) runCatching { dao.insert(entry) } }
+    }
+
     fun add(kind: LogKind, detail: String = "", tripId: Long? = null) {
-        val entry = LogEntity(0, clock(), kind.name, detail, tripId)
-        scope.launch { runCatching { dao.insert(entry) } }
+        pending.trySend(LogEntity(0, clock(), kind.name, detail, tripId))
     }
 
     fun observe(): Flow<List<LogEntity>> = dao.observe(clock() - KEEP_MS)
