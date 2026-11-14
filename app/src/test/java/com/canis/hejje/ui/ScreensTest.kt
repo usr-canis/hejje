@@ -100,6 +100,13 @@ class ScreensTest {
         }
     }
 
+    /** "Today" or "Yesterday": the newest seeded trip started 2 hours ago, which is yesterday just after midnight. */
+    private fun newestDay(): String {
+        val zone = java.time.ZoneId.systemDefault()
+        val newest = runBlocking { app.container.trips.all().maxOf { it.startTime } }
+        return if (com.canis.hejje.domain.Insights.dayOf(newest, zone) == java.time.LocalDate.now(zone)) "Today" else "Yesterday"
+    }
+
     /** Waits until [text] is on screen (also lets the splash fade and transitions finish). */
     private fun await(text: String) {
         rule.mainClock.advanceTimeBy(1_500)
@@ -122,7 +129,7 @@ class ScreensTest {
     @Test fun tripsList_showsSummaryAndGroupedTrips() {
         await("This week")
         rule.onNodeWithText("This week", substring = true, ignoreCase = true).assertIsDisplayed()
-        rule.onNodeWithText("Today").assertIsDisplayed()
+        rule.onNodeWithText(newestDay()).assertIsDisplayed()
         rule.onNodeWithContentDescription("Parked car location", substring = true).assertIsDisplayed()
         assertEquals(6, runBlocking { app.container.trips.all().size })
         shot("trips-light")
@@ -234,7 +241,7 @@ class ScreensTest {
         shot("stretch")
         // Each drive opens that part of its trip, with the full set of stats.
         scrollTo("Each drive")
-        rule.onAllNodesWithText("Today,", substring = true).onFirst().performClick()
+        rule.onAllNodesWithText(newestDay() + ",", substring = true).onFirst().performClick()
         await("Open the whole trip")
         shot("section")
         scrollTo("Route shape")

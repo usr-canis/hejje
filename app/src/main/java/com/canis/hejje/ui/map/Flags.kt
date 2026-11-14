@@ -21,8 +21,9 @@ object Flags {
     private const val HEIGHT_DP = 34f
     const val BASE_DP = 4f
 
-    fun bitmap(context: Context, finish: Boolean, accent: Int, casing: Int, ink: Int): Bitmap {
-        val d = context.resources.displayMetrics.density
+    /** [pxPerDp]: the size; the screen density by default. */
+    fun bitmap(context: Context, finish: Boolean, accent: Int, casing: Int, ink: Int, pxPerDp: Float = context.resources.displayMetrics.density): Bitmap {
+        val d = pxPerDp
         val bmp = createBitmap((WIDTH_DP * d).toInt(), (HEIGHT_DP * d).toInt())
         val c = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)

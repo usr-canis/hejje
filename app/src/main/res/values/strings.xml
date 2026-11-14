@@ -166,6 +166,7 @@
     <string name="stat_hard_braking">Hard braking</string>
     <string name="stat_hard_accel">Hard acceleration</string>
     <string name="stat_cornering">Cornering</string>
+    <string name="share_avg_speed">Avg speed</string>
     <string name="detail_route_shape">Route shape</string>
     <string name="insights_route_shape">Route shape this month</string>
     <string name="insights_typical_circuity">Typical circuity</string>

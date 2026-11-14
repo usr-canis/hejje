@@ -142,6 +142,9 @@ fun TripDetailScreen(
     val labelDistance = stringResource(R.string.stat_distance)
     val labelDuration = stringResource(R.string.stat_duration)
     val labelAvg = stringResource(R.string.stat_avg_speed)
+    val labelShareAvg = stringResource(R.string.share_avg_speed)
+    val labelTop = stringResource(R.string.stat_max_speed)
+    val labelFluidity = stringResource(R.string.stat_smoothness)
     val labelStops = stringResource(R.string.stat_stops)
 
     val gpx = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
@@ -295,15 +298,15 @@ fun TripDetailScreen(
                         val bitmap = withContext(Dispatchers.Default) {
                             ShareCard.render(
                                 context, state.segments.flatMap { PrivacyZones.trim(it.data.route, zones) },
-                                // Place names could reveal a hidden zone, so the card is titled by date.
-                                title = Insights.dayOf(t.startTime, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")),
-                                subtitle = "${f.time(t.startTime)} – ${f.time(t.endTime)}",
+                                // Place names could reveal a hidden place, so the card shows only the date and time.
+                                date = Insights.dayOf(t.startTime, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE · d MMM yyyy")),
+                                time = "${f.time(t.startTime)} – ${f.time(t.endTime)}",
+                                distance = t.distanceM / if (f.miles) 1609.344 else 1000.0,
+                                unit = f.distanceUnit.uppercase(),
                                 stats = listOf(
-                                    ShareCard.Stat(labelDistance, f.distance(t.distanceM)), ShareCard.Stat(labelDuration, f.duration(t.totalMs)),
-                                    ShareCard.Stat(labelAvg, f.speed(t.avgMovingSpeed)), ShareCard.Stat(labelStops, t.stopCount.toString()),
+                                    ShareCard.Stat(labelDuration, f.duration(t.totalMs)), ShareCard.Stat(labelShareAvg, f.speed(t.avgMovingSpeed)),
+                                    ShareCard.Stat(labelTop, f.speed(t.maxSpeed)), ShareCard.Stat(labelFluidity, "${t.smoothness}/100"),
                                 ),
-                                palette = palette, background = colors.background.toArgb(), surface = colors.surfaceContainerHigh.toArgb(),
-                                onSurface = colors.onSurface.toArgb(), onSurfaceVariant = colors.onSurfaceVariant.toArgb(),
                             )
                         }
                         runCatching { ShareCard.share(context, bitmap, shareTitle) }
