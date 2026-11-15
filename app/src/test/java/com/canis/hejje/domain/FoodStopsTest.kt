@@ -43,6 +43,10 @@ class FoodStopsTest {
         // Your own kind of stop.
         assertEquals("Shell, 3 kilometres ahead, for Fuel.", FoodStops.announcement("Shell", "Fuel", 3_100.0, miles = false))
         assertEquals("Fuel stop, 3 kilometres ahead.", FoodStops.announcement(null, "Fuel", 3_100.0, miles = false))
+        // Typed under Other in the parking notification.
+        assertEquals("Fuel" to "", FoodStops.splitOther(" Fuel "))
+        assertEquals("Fuel" to "Shell, MG Road", FoodStops.splitOther("Fuel, Shell, MG Road"))
+        assertEquals("Stop" to "", FoodStops.splitOther(""))
     }
 
     @Test fun ahead_onlyOnYourOwnRoad_inThisDirection_aboutFiveMinutesAway() {

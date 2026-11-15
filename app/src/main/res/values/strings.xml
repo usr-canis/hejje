@@ -173,10 +173,12 @@
     <string name="stat_cornering">Cornering</string>
     <string name="channel_food">Stop reminders</string>
     <string name="channel_food_feedback">Stop reminders: remind next time?</string>
-    <string name="food_question">Stopped for food or coffee?</string>
+    <string name="food_question">What did you stop for?</string>
     <string name="food_question_text">Name it, and Hejje reminds you next time you pass.</string>
     <string name="food_action_food">Food</string>
     <string name="food_action_coffee">Coffee</string>
+    <string name="food_action_other">Other</string>
+    <string name="food_other_hint">What for, then the place: Fuel, Shell</string>
     <string name="food_name_hint">Name of the place</string>
     <string name="food_saved">Saved: %1$s</string>
     <string name="food_feedback">How was %1$s?</string>

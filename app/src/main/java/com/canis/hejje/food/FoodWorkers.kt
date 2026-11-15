@@ -11,13 +11,14 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.canis.hejje.HejjeApp
+import com.canis.hejje.domain.FoodStops
 import com.canis.hejje.domain.Meal
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 private val Context.container get() = (applicationContext as HejjeApp).container
 
-/** 8 minutes after parking: asks "Stopped for food or coffee?" if the car is still parked. */
+/** 8 minutes after parking: asks "What did you stop for?" if the car is still parked. */
 class FoodAskWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         runCatching { applicationContext.container.food.askIfStillParked(inputData.getLong(KEY_PARKED_AT, 0)) }
@@ -74,6 +75,10 @@ class FoodReceiver : BroadcastReceiver() {
                     ACTION_FOOD, ACTION_COFFEE -> if (ask != null) {
                         c.food.save((if (intent.action == ACTION_FOOD) Meal.FOOD else Meal.COFFEE).word, name, ask.lat, ask.lon, ask.parkedAt, askId)
                     }
+                    ACTION_OTHER -> if (ask != null) {
+                        val (what, place) = FoodStops.splitOther(name)
+                        c.food.save(what, place, ask.lat, ask.lon, ask.parkedAt, askId)
+                    }
                     ACTION_DISMISS -> c.food.dismissed(askId)
                     ACTION_GOOD, ACTION_NOT_AGAIN -> ask?.placeId?.let { c.food.setRemind(it, intent.action == ACTION_GOOD, askId) }
                     ACTION_FEEDBACK_DISMISS -> c.food.feedbackDismissed(askId)
@@ -86,6 +91,7 @@ class FoodReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_FOOD = "com.canis.hejje.food.FOOD"
         const val ACTION_COFFEE = "com.canis.hejje.food.COFFEE"
+        const val ACTION_OTHER = "com.canis.hejje.food.OTHER"
         const val ACTION_DISMISS = "com.canis.hejje.food.DISMISS"
         const val ACTION_GOOD = "com.canis.hejje.food.GOOD"
         const val ACTION_NOT_AGAIN = "com.canis.hejje.food.NOT_AGAIN"

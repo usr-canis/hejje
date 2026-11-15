@@ -115,7 +115,7 @@ data class ZoneEntity(
     val purpose: String? = null,
 )
 
-/** A time Hejje asked "Stopped for food or coffee?" after a parked stop, and what came of it. */
+/** A time Hejje asked "What did you stop for?" after a parked stop, and what came of it. */
 @Entity(tableName = "stop_asks", indices = [Index("at")])
 data class StopAskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

@@ -95,11 +95,12 @@ class Notifier(private val context: Context) {
         PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
     )
 
-    /** "Stopped for food or coffee?": Food or Coffee, each with the place's name typed right in. */
+    /** "What did you stop for?": Food or Coffee with the place's name, or Other with your own purpose. */
     fun foodQuestion(askId: Long) {
         if (!canPost()) return
-        fun answer(action: String, label: Int) = NotificationCompat.Action.Builder(0, context.getString(label), foodIntent(action, askId, mutable = true))
-            .addRemoteInput(RemoteInput.Builder(FoodReceiver.KEY_NAME).setLabel(context.getString(R.string.food_name_hint)).build())
+        fun answer(action: String, label: Int, hint: Int = R.string.food_name_hint) =
+            NotificationCompat.Action.Builder(0, context.getString(label), foodIntent(action, askId, mutable = true))
+            .addRemoteInput(RemoteInput.Builder(FoodReceiver.KEY_NAME).setLabel(context.getString(hint)).build())
             .setAllowGeneratedReplies(false)
             .build()
         val n = NotificationCompat.Builder(context, CH_FOOD)
@@ -109,6 +110,7 @@ class Notifier(private val context: Context) {
             .setContentText(context.getString(R.string.food_question_text))
             .addAction(answer(FoodReceiver.ACTION_FOOD, R.string.food_action_food))
             .addAction(answer(FoodReceiver.ACTION_COFFEE, R.string.food_action_coffee))
+            .addAction(answer(FoodReceiver.ACTION_OTHER, R.string.food_action_other, R.string.food_other_hint))
             .setDeleteIntent(foodIntent(FoodReceiver.ACTION_DISMISS, askId))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

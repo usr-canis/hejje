@@ -21,7 +21,7 @@ data class FoodPlace(val id: Long, val name: String, val purpose: String, val la
     val meal: Meal? get() = Meal.of(purpose)
 }
 
-/** A time Hejje asked "Stopped for food or coffee?" and what came of it. */
+/** A time Hejje asked "What did you stop for?" and what came of it. */
 data class StopAsk(val at: Long, val lat: Double, val lon: Double, val dismissed: Boolean)
 
 /**
@@ -86,6 +86,13 @@ object FoodStops {
                 if (along < TOO_CLOSE_M || along > reach) null else p to along
             }
             .minByOrNull { it.second }
+    }
+
+    /** "Fuel" or "Fuel, Shell" typed under Other: what the stop was for, and the place's name. */
+    fun splitOther(text: String): Pair<String, String> {
+        val comma = text.indexOf(',')
+        val what = (if (comma < 0) text else text.substring(0, comma)).trim().ifEmpty { "Stop" }
+        return what to (if (comma < 0) "" else text.substring(comma + 1).trim())
     }
 
     /** "Kamat Upachar, 6 kilometres ahead, for food." */
