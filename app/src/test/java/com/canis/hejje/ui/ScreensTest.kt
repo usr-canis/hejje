@@ -30,6 +30,7 @@ import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Segment
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
@@ -246,6 +247,22 @@ class ScreensTest {
         shot("section")
         scrollTo("Route shape")
         shot("section-2")
+    }
+
+    @Test fun dashboardOdometer_includesTheDriveBeingRecorded() {
+        await("This week")
+        fun odometer() = rule.onAllNodesWithContentDescription("This week, ", substring = true).fetchSemanticsNodes()
+            .first().config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].first()
+        val before = odometer()
+        val controller = app.container.controller
+        rule.runOnUiThread { controller.manualStart() }
+        // About 1.7 km of driving arrives while recording: the odometer counts it straight away.
+        val sim = DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).drive(120, 15f)
+        rule.runOnUiThread { sim.points.forEach { controller.onLocation(it) } }
+        rule.waitUntil(5_000) { odometer() != before }
+        val km = { d: String -> d.substringAfter("This week, ").substringBefore(" ").toDouble() }
+        assertTrue("before $before, now ${odometer()}", km(odometer()) - km(before) in 1.5..1.9)
+        rule.runOnUiThread { controller.manualStop() }
     }
 
     @Test fun tripMenu_statsForAPartPickedOnTheMap() {

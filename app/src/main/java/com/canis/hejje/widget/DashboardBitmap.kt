@@ -12,6 +12,8 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
 import com.canis.hejje.R
+import com.canis.hejje.ui.trips.drawDrumDigits
+import com.canis.hejje.ui.trips.odometerPositions
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -78,17 +80,18 @@ object DashboardBitmap {
         p.letterSpacing = 0f
 
         // Odometer.
-        val whole = if (value >= 999.95f) 4 else 3
+        val whole = if (value >= 999f) 4 else 3
         val dw = if (whole == 4) 22f else 26f
         val dh = 40f
-        val digits = String.format(java.util.Locale.ROOT, "%0${whole + 2}.1f", value).replace(".", "")
+        // Whole digits, drum by drum, as on a real odometer.
+        val positions = odometerPositions(value, whole)
         val winW = 8f + (whole + 1) * dw + whole * 3f + 10f + 30f
         p.color = c.window
         cv.drawRoundRect(RectF(x0, 44f, x0 + winW, 44f + dh + 12f), 12f, 12f, p)
         var x = x0 + 8f
         p.textAlign = Paint.Align.CENTER
-        digits.forEachIndexed { i, ch ->
-            val tenths = i == digits.length - 1
+        for (i in whole downTo 0) {
+            val tenths = i == 0
             if (tenths) {
                 p.color = c.text; p.alpha = 180
                 cv.drawCircle(x + 2f, 44f + 6f + dh - 6f, 2f, p)
@@ -104,7 +107,7 @@ object DashboardBitmap {
             p.shader = null
             p.color = if (tenths) 0xFFFFFFFF.toInt() else c.text
             p.textSize = 25f
-            cv.drawText(ch.toString(), r.centerX(), r.centerY() + 9f, p)
+            cv.drawDrumDigits(r, positions[i], p, 9f)
             x += dw + 3f
         }
         p.textAlign = Paint.Align.LEFT

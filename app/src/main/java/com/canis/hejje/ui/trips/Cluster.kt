@@ -1,8 +1,5 @@
 package com.canis.hejje.ui.trips
 
-import com.canis.hejje.ui.theme.WordmarkFont
-import com.canis.hejje.ui.theme.LocalPalette
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -31,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -71,10 +69,14 @@ import com.canis.hejje.domain.Formatter
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.PulsingDot
+import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
+import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.pow
+import kotlin.math.round
 import kotlin.math.roundToInt
 
 /** Colours of the cluster: a dark dashboard in the dark theme, a light one in the light theme. */
@@ -179,7 +181,8 @@ fun InstrumentCluster(
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.6.sp),
                 color = Dash.accent, maxLines = 1,
             )
-            Odometer(weekDistanceM, f)
+            // This week so far, including the drive being recorded: it rolls on as you drive.
+            Odometer(weekDistanceM + (live?.distanceM ?: 0.0), f, rolling = live != null)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TripChip(weekTrips)
                 when {
@@ -287,17 +290,29 @@ private fun LiveChip(live: LiveState, f: Formatter) {
  * rolls up when first shown and, after a drive, only the drums that change turn, like a real one.
  */
 @Composable
-private fun Odometer(distanceM: Double, f: Formatter) {
-    // Rounded to the shown 0.1, so every drum sits square once the roll has finished.
-    val value = ((distanceM / if (f.miles) 1609.344 else 1000.0).coerceIn(0.0, 9999.9) * 10).roundToInt() / 10f
+private fun Odometer(distanceM: Double, f: Formatter, rolling: Boolean) {
+    // Completed tenths, as a real odometer reads: every drum rests on a whole digit. While driving
+    // the tenths drum rolls on one step every 100 m, and a drum above turns only as the one below
+    // goes from 9 to 0.
+    val value = (floor((distanceM / if (f.miles) 1609.344 else 1000.0) * 10).coerceIn(0.0, 99_999.0) / 10).toFloat()
     val reduceMotion = LocalReduceMotion.current
     var settled by rememberSaveable { mutableFloatStateOf(0f) }
     val anim = remember { Animatable(if (reduceMotion) value else settled) }
     LaunchedEffect(value) {
-        if (reduceMotion) anim.snapTo(value) else anim.animateTo(value, tween(900, easing = FastOutSlowInEasing))
+        when {
+            reduceMotion -> anim.snapTo(value)
+            // While driving: a short roll each time another 100 m is done.
+            value >= anim.value -> anim.animateTo(value, tween(if (rolling) STEP_ROLL_MS else 900, easing = FastOutSlowInEasing))
+            // An odometer never turns back. A lower total (a trip deleted, or a drive that is still being
+            // saved) is shown after a pause, without rolling backwards.
+            else -> {
+                delay(HOLD_LOWER_MS)
+                anim.snapTo(value)
+            }
+        }
         settled = value
     }
-    val wholeDrums = if (value >= 999.95f) 4 else 3
+    val wholeDrums = if (value >= 999f) 4 else 3
     val small = wholeDrums == 4
     val positions = odometerPositions(anim.value, wholeDrums)
     val unit = (if (f.miles) f.labels.mi else f.labels.km).uppercase(LocalConfiguration.current.locales[0])
@@ -335,9 +350,14 @@ private fun Odometer(distanceM: Double, f: Formatter) {
  * Drum positions for [value], index 0 = tenths, 1 = ones, 2 = tens and so on. Like a mechanical
  * odometer, a drum only turns while the drum below it goes from 9 to 0.
  */
+/** How long the roll to the next tenth takes while driving, and how long a lower total waits. */
+private const val STEP_ROLL_MS = 450
+private const val HOLD_LOWER_MS = 10_000L
+
 internal fun odometerPositions(value: Float, wholeDrums: Int): FloatArray {
     val out = FloatArray(wholeDrums + 1)
-    out[0] = (value * 10f) % 10f
+    // 376.4 is stored as 376.39999…: treat a hair's breadth from a digit as that digit, so drums rest square.
+    out[0] = ((value * 10f) % 10f).let { val r = round(it); if (abs(it - r) < 0.003f) r % 10f else it }
     for (i in 1..wholeDrums) {
         val base = floor(value / 10f.pow(i - 1)) % 10f
         val below = out[i - 1]

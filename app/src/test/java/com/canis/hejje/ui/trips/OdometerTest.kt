@@ -11,6 +11,12 @@ class OdometerTest {
         assertArrayEquals(floatArrayOf(3f, 4f, 6f, 4f, 1f), pos(1464.3f, 4), 0.01f)
     }
 
+    @Test fun storedValuesLikeThreeSevenSixPointFour_restOnWholeDigits() {
+        // 376.4f is really 376.39999…: the drums must still read 3 7 6 . 4, not a 3 rolled almost to 4.
+        assertArrayEquals(floatArrayOf(4f, 6f, 7f, 3f), pos(376.4f), 0f)
+        assertArrayEquals(floatArrayOf(0f, 0f, 9f, 0f), pos(90.0f), 0f)
+    }
+
     @Test fun higherDrumsTurnOnlyWhileTheOneBelowPassesNine() {
         // 19.95: tenths half way 9 -> 0, so ones and tens are half way too (9.5 and 1.5).
         assertArrayEquals(floatArrayOf(9.5f, 9.5f, 1.5f, 0f), pos(19.95f), 0.01f)

@@ -26,7 +26,7 @@ class ShareCardTest {
         val seg = sim.segment()
         val bitmap = ShareCard.render(
             ApplicationProvider.getApplicationContext(), listOf(seg.data.route),
-            date = "Fri · 14 Nov 2026", time = "21:26 – 06:13", distance = 376.4, unit = "KM",
+            date = "Fri · 14 Nov 2026", time = "21:26 – 06:13", distance = 376.45, unit = "KM",
             stats = listOf(
                 ShareCard.Stat("Duration", "8 h 47 m"), ShareCard.Stat("Avg speed", "49 km/h"),
                 ShareCard.Stat("Top speed", "124 km/h"), ShareCard.Stat("Fluidity", "98/100"),

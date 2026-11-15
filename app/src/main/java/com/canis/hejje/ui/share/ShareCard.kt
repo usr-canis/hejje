@@ -21,12 +21,13 @@ import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Route
 import com.canis.hejje.ui.map.Flags
 import com.canis.hejje.ui.theme.DarkPalette
+import com.canis.hejje.ui.trips.drawDrumDigits
+import com.canis.hejje.ui.trips.odometerPositions
 import java.io.File
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * The image shared for a trip, styled like the dashboard: the route as the hero (coloured by
@@ -124,9 +125,10 @@ object ShareCard {
     }
 
     private fun drawOdometer(c: Canvas, value: Double, unit: String, centerX: Float, top: Float, accent: Int) {
-        val v = (value.coerceIn(0.0, 99999.9) * 10).roundToInt() / 10.0
-        val whole = floor(v).toLong().toString()
-        val tenth = ((v * 10).roundToInt() % 10).toString()
+        // Completed tenths, as an odometer reads: every drum shows a whole digit.
+        val v = floor(value.coerceIn(0.0, 99_999.9) * 10) / 10
+        val count = floor(v).toLong().toString().length.coerceAtLeast(2)
+        val positions = odometerPositions(v.toFloat(), count)
         val drumW = 92f
         val drumH = 136f
         val gap = 10f
@@ -136,7 +138,7 @@ object ShareCard {
         p.textSize = 30f
         p.letterSpacing = 0.1f
         val unitW = p.measureText(unit) + 18f
-        val inner = whole.length * (drumW + gap) + dotW + drumW
+        val inner = count * (drumW + gap) + dotW + drumW
         val windowW = inner + 2 * 16f + unitW
         val left = centerX - windowW / 2
         val window = RectF(left, top, left + windowW, top + drumH + 32f)
@@ -149,7 +151,7 @@ object ShareCard {
 
         var x = window.left + 16f
         val y = window.top + 16f
-        fun drum(digit: String, tenths: Boolean) {
+        fun drum(position: Float, tenths: Boolean) {
             val r = RectF(x, y, x + drumW, y + drumH)
             p.shader = if (tenths) null else LinearGradient(r.left, 0f, r.right, 0f, intArrayOf(DRUM_DARK, DRUM_LIGHT, DRUM_DARK), null, Shader.TileMode.CLAMP)
             p.color = accent
@@ -163,16 +165,16 @@ object ShareCard {
             p.letterSpacing = 0f
             p.textSize = 92f
             p.fontFeatureSettings = "tnum"
-            c.drawText(digit, r.centerX(), r.centerY() + 33f, p)
+            c.drawDrumDigits(r, position, p, 33f)
             p.textAlign = Paint.Align.LEFT
             p.fontFeatureSettings = null
             x += drumW + gap
         }
-        whole.forEach { drum(it.toString(), tenths = false) }
+        for (i in count downTo 1) drum(positions[i], tenths = false)
         p.color = 0xB3ECE9E6.toInt()
         c.drawCircle(x + dotW / 2 - gap / 2, y + drumH - 16f, 6f, p)
         x += dotW
-        drum(tenth, tenths = true)
+        drum(positions[0], tenths = true)
         p.color = MUTED
         p.textSize = 30f
         p.letterSpacing = 0.1f

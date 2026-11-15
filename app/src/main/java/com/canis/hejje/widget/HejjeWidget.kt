@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
-import kotlin.math.roundToInt
+import kotlin.math.floor
 
 /** Home-screen widget: the Trips-tab dashboard (this week on the odometer, trips, parked car). Follows light/dark mode. */
 class HejjeWidget : GlanceAppWidget() {
@@ -60,6 +60,7 @@ class HejjeWidget : GlanceAppWidget() {
         val container = (context.applicationContext as HejjeApp).container
         provideContent {
             val trips by container.trips.trips.collectAsState(initial = emptyList())
+            val live by container.controller.live.collectAsState()
             val settings by container.settings.data.collectAsState()
             val f = context.formatter(settings.miles)
             val zone = ZoneId.systemDefault()
@@ -67,8 +68,9 @@ class HejjeWidget : GlanceAppWidget() {
             val week = trips.filter { Insights.dayOf(it.trip.startTime, zone) >= monday }
             val size = LocalSize.current
             val night = (LocalContext.current.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            val km = week.sumOf { it.trip.distanceM }
-            val value = ((km / if (f.miles) 1609.344 else 1000.0).coerceIn(0.0, 9999.9) * 10).roundToInt() / 10f
+            // This week so far, including a drive being recorded, in completed tenths as an odometer reads.
+            val km = week.sumOf { it.trip.distanceM } + (live?.distanceM ?: 0.0)
+            val value = (floor((km / if (f.miles) 1609.344 else 1000.0) * 10).coerceIn(0.0, 99_999.0) / 10).toFloat()
             val parked = if (settings.parkedLat != null && settings.parkedLon != null) f.relative(settings.parkedAt, System.currentTimeMillis(), zone) else null
             val (wPx, hPx) = DashboardBitmap.pixels(context, size.width.value, size.height.value)
             val bitmap = DashboardBitmap.draw(
