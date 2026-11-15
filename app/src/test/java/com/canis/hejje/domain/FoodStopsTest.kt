@@ -66,6 +66,9 @@ class FoodStopsTest {
         assertEquals(4_000.0, hit!!.second, 120.0)
         // 8 km away at 20 m/s: not yet.
         assertNull(FoodStops.ahead(north(parkedAt - 8_000.0), lon0, 20f, listOf(kamat), tracks))
+        // The live card looks further ahead (up to 20 km) and keeps it until you are almost there.
+        assertNotNull(FoodStops.ahead(north(parkedAt - 8_000.0), lon0, 20f, listOf(kamat), tracks, reach = 20_000f, minM = 150.0))
+        assertNotNull(FoodStops.ahead(north(parkedAt - 400.0), lon0, 20f, listOf(kamat), tracks, reach = 20_000f, minM = 150.0))
         // A place you said "not again" about: never.
         assertNull(FoodStops.ahead(north(parkedAt - 4_000.0), lon0, 20f, listOf(kamat.copy(liked = false)), tracks))
         // A place nearby but not on any road you drove to it: silent.

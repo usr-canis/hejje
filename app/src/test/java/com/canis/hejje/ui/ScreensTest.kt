@@ -29,6 +29,7 @@ import com.canis.hejje.data.db.ZoneEntity
 import com.canis.hejje.domain.DriveSim
 import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Segment
+import com.canis.hejje.food.NextStop
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -263,20 +264,29 @@ class ScreensTest {
         shot("section-2")
     }
 
-    @Test fun dashboardOdometer_includesTheDriveBeingRecorded() {
+    @Test fun dashboard_whileRecording_isAnInstrumentCluster() = liveCluster("dashboard-live")
+
+    @Test @Config(qualifiers = "+night") fun dashboard_whileRecording_dark() = liveCluster("dashboard-live-dark")
+
+    /** The Trips card grows into the live cluster, and its trip odometer counts the drive straight away. */
+    private fun liveCluster(name: String) {
         await("This week")
-        fun odometer() = rule.onAllNodesWithContentDescription("This week, ", substring = true).fetchSemanticsNodes()
-            .first().config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].first()
-        val before = odometer()
         val controller = app.container.controller
+        app.container.food.showNext(NextStop("Café Coffee Day, Hosur Road Highway Outlet", "coffee", 4_200.0, 0.0))
         rule.runOnUiThread { controller.manualStart() }
-        // About 1.7 km of driving arrives while recording: the odometer counts it straight away.
-        val sim = DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).drive(120, 15f)
+        val sim = DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).apply { heading = 10.0 }.drive(60, 15f)
+            .apply { heading = 40.0 }.drive(60, 24f, turnPerSec = 0.4)
         rule.runOnUiThread { sim.points.forEach { controller.onLocation(it) } }
-        rule.waitUntil(5_000) { odometer() != before }
-        val km = { d: String -> d.substringAfter("This week, ").substringBefore(" ").toDouble() }
-        assertTrue("before $before, now ${odometer()}", km(odometer()) - km(before) in 1.5..1.9)
+        fun trip() = rule.onAllNodesWithContentDescription("This trip, ", substring = true).fetchSemanticsNodes()
+        rule.waitUntil(5_000) { trip().isNotEmpty() && !trip().first().config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].first().contains(" 0 ") }
+        val shown = trip().first().config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].first()
+        val km = shown.substringAfter("This trip, ").substringBefore(" ").toDouble()
+        assertEquals(controller.live.value!!.distanceM / 1000, km, 0.1)
+        rule.onNodeWithText("Café Coffee Day", substring = true).assertIsDisplayed()
+        rule.waitForIdle()
+        shot(name)
         rule.runOnUiThread { controller.manualStop() }
+        app.container.food.showNext(null)
     }
 
     @Test fun tripMenu_statsForAPartPickedOnTheMap() {

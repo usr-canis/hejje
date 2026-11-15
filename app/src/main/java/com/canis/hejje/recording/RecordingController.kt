@@ -69,6 +69,9 @@ class RecordingController(
     private val _live = MutableStateFlow<LiveState?>(null)
     val live: StateFlow<LiveState?> = _live.asStateFlow()
 
+    /** The line driven so far and the heading, for the live card on the Trips tab. */
+    val trace = LiveTrace()
+
     /** True while the service has work: recording, or saving a drive that just ended. */
     private val _active = MutableStateFlow(machine.state.recording)
     val active: StateFlow<Boolean> = _active.asStateFlow()
@@ -155,6 +158,7 @@ class RecordingController(
     private fun start(e: Effect.Start) {
         session = UUID.randomUUID().toString()
         lastPoint = null
+        trace.reset()
         autoStartPending = !e.manual
         _live.value = LiveState(e.at, e.manual)
         log?.add(LogKind.REC_STARTED, if (e.manual) DriveLog.MANUAL else DriveLog.AUTO)
@@ -178,6 +182,7 @@ class RecordingController(
         main.removeCallbacks(timer)
         session = null
         _live.value = null
+        trace.reset()
         persist()
         locationPrompt.onDriveEnd(enabled = false)
         log?.add(LogKind.START_REFUSED, reason)
@@ -193,6 +198,7 @@ class RecordingController(
         val id = session ?: return
         session = null
         _live.value = null
+        trace.reset()
         finishingCount.incrementAndGet()
         _finishing.value = true
         _active.value = true
@@ -228,6 +234,7 @@ class RecordingController(
                 if (moving && speed < 70) distance += d
             }
             lastPoint = p
+            trace.add(p)
         }
         when {
             live.lastFixAt == 0L -> log?.add(LogKind.FIRST_FIX, ((p.t - live.startedAt) / 1000).coerceAtLeast(0).toString())
@@ -266,8 +273,14 @@ class RecordingController(
             buffer.recover()
             for (orphan in rawDao.sessions()) if (orphan != activeId && orphan != session) finalizer.finalizeOrphan(orphan)
             val lastTime = activeId?.let { rawDao.lastTime(it) }
-            val distance = activeId?.let { id -> liveDistance(rawDao.points(id).map(RawBuffer::toRaw)) } ?: 0.0
-            onMain { if (machine.state == saved && session == activeId) resume(activeId, lastTime, distance) }
+            val points = activeId?.let { id -> rawDao.points(id).map(RawBuffer::toRaw) }.orEmpty()
+            val distance = if (points.isEmpty()) 0.0 else liveDistance(points)
+            onMain {
+                if (machine.state == saved && session == activeId) {
+                    trace.load(points.filter { it.acc.isNaN() || it.acc <= TripProcessor.MAX_ACCURACY_M })
+                    resume(activeId, lastTime, distance)
+                }
+            }
         }
     }
 

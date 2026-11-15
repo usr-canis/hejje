@@ -113,6 +113,8 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     // Collected separately: it changes with every GPS fix and must not redraw the whole list.
     val live by vm.live.collectAsStateWithLifecycle()
+    val trace by vm.trace.collectAsStateWithLifecycle()
+    val next by vm.next.collectAsStateWithLifecycle()
     val update by container.updater.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
     val haptics = rememberHaptics()
@@ -168,7 +170,7 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
             item(key = "summary") {
                 InstrumentCluster(
                     weekDistanceM = state.week.distanceM, weekTrips = state.week.trips, settings = state.settings, live = live, f = f,
-                    onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() },
+                    onParked = onParked, onStop = { haptics.confirm(); vm.stopRecording() }, trace = trace, next = next,
                     // Same side margins as the trip cards; the vertical space lets the shadow fade out.
                     modifier = Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp),
                 )

@@ -1,6 +1,7 @@
 package com.canis.hejje.food
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.StopReminders
@@ -19,7 +20,11 @@ import com.canis.hejje.domain.TripTrack
 import com.canis.hejje.notify.Notifier
 import com.canis.hejje.recording.LiveState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalTime
@@ -34,6 +39,9 @@ fun ZoneEntity.stopPurpose(): String? = purpose ?: when (icon) {
 }
 
 fun ZoneEntity.meal(): Meal? = Meal.of(stopPurpose())
+
+/** The nearest saved stop ahead: [aheadM] along the road when the drive had covered [atDriveM]. */
+data class NextStop(val name: String, val purpose: String, val aheadM: Double, val atDriveM: Double)
 
 /**
  * Food and coffee stops, kept quiet and simple:
@@ -180,6 +188,18 @@ class FoodManager(
     private val approach = HashMap<Long, Double>()
     private var lastCheck = 0L
     private var lastSaid = 0L
+    private var lastNext = 0L
+    private val _next = MutableStateFlow<NextStop?>(null)
+    private val shownForTest = MutableStateFlow<NextStop?>(null)
+
+    /** The nearest saved stop ahead on your road while driving (any time of day), for the live card. */
+    val next: StateFlow<NextStop?> = combine(_next, shownForTest) { found, test -> test ?: found }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    @VisibleForTesting
+    internal fun showNext(stop: NextStop?) {
+        shownForTest.value = stop
+    }
 
     /** Follows the recording: cancels a pending question when a drive starts, and gives heads-ups. */
     fun watch() = scope.launch {
@@ -191,13 +211,18 @@ class FoodManager(
                 driving = false
                 return@collect
             }
-            runCatching { headsUp(l) }
+            runCatching {
+                if (driveStart == null) driveStart = l.last
+                nextStop(l)
+                headsUp(l)
+            }
         }
     }
 
     private fun endDrive() {
         tracks = null; loading = false; driveStart = null
-        announced.clear(); approach.clear(); lastCheck = 0
+        announced.clear(); approach.clear(); lastCheck = 0; lastNext = 0
+        _next.value = null
         speaker.release()
     }
 
@@ -221,10 +246,7 @@ class FoodManager(
             FoodPlace(z.id, z.name, purpose, z.lat, z.lon, liked = z.rating >= 0)
         }
         if (places.isEmpty()) return
-        val known = tracks ?: run {
-            if (!loading) { loading = true; scope.launch { tracks = runCatching { trips.tracks() }.getOrDefault(emptyList()) } }
-            return
-        }
+        val known = tracksOrLoad() ?: return
         val speed = if (p.speed.isNaN() || p.speed < 1f) DEFAULT_SPEED else p.speed
         val (place, along) = FoodStops.ahead(p.lat, p.lon, speed, places, known) ?: return
         // Only once it is clearly getting closer (two checks in a row).
@@ -238,6 +260,36 @@ class FoodManager(
         speaker.say(FoodStops.announcement(if (generic) null else place.name, place.purpose, along, s.miles))
     }
 
+    /** Your past trips, loaded once per drive in the background; null until they are. */
+    private fun tracksOrLoad(): List<TripTrack>? = tracks ?: run {
+        if (!loading) {
+            loading = true
+            scope.launch { tracks = runCatching { trips.tracks() }.getOrDefault(emptyList()) }
+        }
+        null
+    }
+
+    /** Same detection as the spoken heads-up (on your own road, this direction), up to 20 km ahead, any time. */
+    private suspend fun nextStop(l: LiveState) {
+        val p = l.last ?: return
+        val now = clock()
+        if (now - lastNext < NEXT_EVERY_MS) return
+        lastNext = now
+        val start = driveStart ?: return
+        val places = db.zones().all().mapNotNull { z ->
+            val purpose = z.stopPurpose() ?: return@mapNotNull null
+            if (z.rating < 0 || Geo.distance(z.lat, z.lon, start.lat, start.lon) < LEFT_FROM_M) return@mapNotNull null
+            FoodPlace(z.id, z.name, purpose, z.lat, z.lon)
+        }
+        if (places.isEmpty()) {
+            _next.value = null
+            return
+        }
+        val known = tracksOrLoad() ?: run { lastNext = 0; return }
+        val hit = FoodStops.ahead(p.lat, p.lon, DEFAULT_SPEED, places, known, reach = NEXT_REACH_M, minM = NEXT_MIN_M)
+        _next.value = hit?.let { (place, along) -> NextStop(place.name, place.purpose, along, l.distanceM) }
+    }
+
     companion object {
         const val ICON_FOOD = "food"
         const val ICON_COFFEE = "coffee"
@@ -247,5 +299,8 @@ class FoodManager(
         private const val BETWEEN_MS = 15 * 60_000L
         private const val LEFT_FROM_M = 2_000.0
         private const val DEFAULT_SPEED = 12f
+        private const val NEXT_EVERY_MS = 15_000L
+        private const val NEXT_REACH_M = 20_000f
+        private const val NEXT_MIN_M = 150.0
     }
 }

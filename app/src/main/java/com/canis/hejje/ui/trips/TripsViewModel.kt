@@ -7,7 +7,9 @@ import com.canis.hejje.data.SettingsData
 import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.Totals
+import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
+import com.canis.hejje.recording.TraceState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,6 +45,10 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
     private val filter = MutableStateFlow(Filter())
 
     val live: StateFlow<LiveState?> = container.controller.live
+
+    /** The line driven so far and the next saved stop ahead, for the live cluster. */
+    val trace: StateFlow<TraceState> = container.controller.trace.state
+    val next: StateFlow<NextStop?> = container.food.next
 
     /** Today's date, which changes at midnight, so the week total and "Today" move on while the app is open. */
     private val today = flow {

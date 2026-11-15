@@ -1,5 +1,7 @@
 package com.canis.hejje.ui.trips
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -32,6 +34,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,9 +69,10 @@ import androidx.compose.ui.unit.sp
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.domain.Formatter
+import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
+import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.components.HejjeIcons
-import com.canis.hejje.ui.components.PulsingDot
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
 import com.canis.hejje.ui.theme.WordmarkFont
@@ -80,7 +84,7 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 
 /** Colours of the cluster: a dark dashboard in the dark theme, a light one in the light theme. */
-private class DashColors(
+internal class DashColors(
     val panelTop: Color,
     val panelBottom: Color,
     val edge: Color,
@@ -101,6 +105,9 @@ private class DashColors(
     val wordShadow: Shadow?,
     val panelAmbient: Color,
     val panelSpot: Color,
+    /** Face of the compass, and the unlit part of the speedometer's scale. */
+    val dial: Color,
+    val track: Color,
 )
 
 private val DarkDash = DashColors(
@@ -112,6 +119,7 @@ private val DarkDash = DashColors(
     drumShade = Color.Black.copy(alpha = 0.65f), drumShine = Color.White.copy(alpha = 0.07f),
     wordShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 3f), 6f),
     panelAmbient = Color.Black.copy(alpha = 0.2f), panelSpot = Color.Black.copy(alpha = 0.35f),
+    dial = Color(0xFF1B1E21), track = Color(0xFF2C3034),
 )
 
 private val LightDash = DashColors(
@@ -123,14 +131,16 @@ private val LightDash = DashColors(
     drumShade = Color.Black.copy(alpha = 0.16f), drumShine = Color.White.copy(alpha = 0.5f),
     wordShadow = null,
     panelAmbient = Color.Black.copy(alpha = 0.10f), panelSpot = Color.Black.copy(alpha = 0.18f),
+    dial = Color(0xFFEEEAE5), track = Color(0xFFDDD7D0),
 )
 
-private val Dash: DashColors
+internal val Dash: DashColors
     @Composable @ReadOnlyComposable get() = if (LocalPalette.current.isDark) DarkDash else LightDash
 
 /**
  * Top of the Trips tab, styled as an instrument cluster: the wordmark, this week's distance on a
- * rolling odometer, this week's trip count, and the parked car as a lit "P" (or the live drive).
+ * rolling odometer, this week's trip count and the parked car as a lit "P". While a drive is
+ * recorded it grows into the live cluster (speedometer, compass with the route, trip odometer).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -143,12 +153,17 @@ fun InstrumentCluster(
     onParked: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    trace: TraceState = TraceState.EMPTY,
+    next: NextStop? = null,
 ) {
     val radius = 24.dp
     val shape = RoundedCornerShape(radius)
     val dash = Dash
     val locale = LocalConfiguration.current.locales[0]
-    Row(
+    // Kept while the live cluster fades out after the drive ends.
+    var lastLive by remember { mutableStateOf(live) }
+    if (live != null) lastLive = live
+    Box(
         modifier.fillMaxWidth()
             // A soft, short shadow that fades out within the spacing around the panel.
             .shadow(6.dp, shape, ambientColor = dash.panelAmbient, spotColor = dash.panelSpot)
@@ -160,69 +175,71 @@ fun InstrumentCluster(
                 val inset = radius.toPx()
                 drawLine(dash.highlight, Offset(inset, 1f), Offset(size.width - inset, 1f), 1.dp.toPx())
             }
-            .padding(start = 22.dp, end = 18.dp, top = 22.dp, bottom = 22.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .animateContentSize(tween(if (LocalReduceMotion.current) 0 else 450, easing = FastOutSlowInEasing)),
     ) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            BasicText(
-                stringResource(R.string.brand_name),
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontFamily = WordmarkFont, fontWeight = FontWeight.Bold, color = dash.text, shadow = dash.wordShadow,
-                ),
-                maxLines = 1,
-                autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
-                modifier = Modifier.fillMaxWidth(0.92f).semantics { heading() },
-            )
-        }
-        Column(Modifier.weight(1.3f, fill = false), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                stringResource(R.string.this_week).uppercase(locale),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.6.sp),
-                color = Dash.accent, maxLines = 1,
-            )
-            // This week so far, including the drive being recorded: it rolls on as you drive.
-            Odometer(weekDistanceM + (live?.distanceM ?: 0.0), f, rolling = live != null)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TripChip(weekTrips)
-                when {
-                    live != null -> {
-                        LiveChip(live, f)
-                        Chip(onClick = onStop, description = stringResource(R.string.action_stop)) {
-                            Icon(HejjeIcons.Stop, null, Modifier.size(14.dp), tint = Dash.text)
-                            Text(stringResource(R.string.action_stop), style = chipText, color = Dash.text)
-                        }
+        Crossfade(live != null, label = "cluster") { recording ->
+            val shown = lastLive
+            if (recording && shown != null) {
+                LiveCluster(shown, trace, next, f, onStop)
+            } else {
+                Row(
+                    Modifier.padding(start = 22.dp, end = 18.dp, top = 22.dp, bottom = 22.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        BasicText(
+                            stringResource(R.string.brand_name),
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontFamily = WordmarkFont, fontWeight = FontWeight.Bold, color = dash.text, shadow = dash.wordShadow,
+                            ),
+                            maxLines = 1,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
+                            modifier = Modifier.fillMaxWidth(0.92f).semantics { heading() },
+                        )
                     }
-                    settings.parkedLat != null && settings.parkedLon != null -> {
-                        // Keeps counting ("2 min ago" → "3 min ago") while the screen is open.
-                        var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                        LaunchedEffect(Unit) {
-                            while (true) {
-                                delay(30_000)
-                                now = System.currentTimeMillis()
+                    Column(Modifier.weight(1.3f, fill = false), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            stringResource(R.string.this_week).uppercase(locale),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.6.sp),
+                            color = Dash.accent, maxLines = 1,
+                        )
+                        Odometer(weekDistanceM, f, rolling = false)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TripChip(weekTrips)
+                            if (settings.parkedLat != null && settings.parkedLon != null) {
+                                // Keeps counting ("2 min ago" → "3 min ago") while the screen is open.
+                                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                                LaunchedEffect(Unit) {
+                                    while (true) {
+                                        delay(30_000)
+                                        now = System.currentTimeMillis()
+                                    }
+                                }
+                                Chip(onClick = onParked, description = stringResource(R.string.parked_open)) {
+                                    Indicator("P", lit = true)
+                                    Text(f.relative(settings.parkedAt, now), style = chipText, color = Dash.text, maxLines = 1)
+                                    Icon(HejjeIcons.ChevronRight, null, Modifier.size(14.dp), tint = Dash.muted)
+                                }
+                            } else {
+                                Text(
+                                    stringResource(if (settings.carAddress != null && settings.autoRecord) R.string.summary_idle_auto else R.string.summary_idle_setup),
+                                    style = chipText, color = Dash.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                )
                             }
                         }
-                        Chip(onClick = onParked, description = stringResource(R.string.parked_open)) {
-                            Indicator("P", lit = true)
-                            Text(f.relative(settings.parkedAt, now), style = chipText, color = Dash.text, maxLines = 1)
-                            Icon(HejjeIcons.ChevronRight, null, Modifier.size(14.dp), tint = Dash.muted)
-                        }
                     }
-                    else -> Text(
-                        stringResource(if (settings.carAddress != null && settings.autoRecord) R.string.summary_idle_auto else R.string.summary_idle_setup),
-                        style = chipText, color = Dash.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
                 }
             }
         }
     }
 }
 
-private val chipText = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp, fontFeatureSettings = "tnum")
+internal val chipText = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp, fontFeatureSettings = "tnum")
 
 @Composable
-private fun Chip(onClick: (() -> Unit)? = null, description: String? = null, content: @Composable RowScope.() -> Unit) {
+internal fun Chip(onClick: (() -> Unit)? = null, description: String? = null, content: @Composable RowScope.() -> Unit) {
     val clickable = if (onClick != null) {
         Modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
             role = Role.Button
@@ -267,30 +284,12 @@ private fun Indicator(letter: String, lit: Boolean) {
     ) { Text(letter, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = Color.White) }
 }
 
-@Composable
-private fun LiveChip(live: LiveState, f: Formatter) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
-    Chip {
-        PulsingDot(size = 6.dp)
-        Text(
-            if (live.hasFix) "${f.duration(now - live.startedAt)}  ·  ${f.distance(live.distanceM)}" else stringResource(R.string.notif_waiting_gps),
-            style = chipText, color = Dash.text, maxLines = 1,
-        )
-    }
-}
-
 /**
  * Rolling odometer. Three whole-number drums (four from 1000 up) and an orange tenths drum. It
  * rolls up when first shown and, after a drive, only the drums that change turn, like a real one.
  */
 @Composable
-private fun Odometer(distanceM: Double, f: Formatter, rolling: Boolean) {
+internal fun Odometer(distanceM: Double, f: Formatter, rolling: Boolean, label: String? = null) {
     // Completed tenths, as a real odometer reads: every drum rests on a whole digit. While driving
     // the tenths drum rolls on one step every 100 m, and a drum above turns only as the one below
     // goes from 9 to 0.
@@ -316,7 +315,7 @@ private fun Odometer(distanceM: Double, f: Formatter, rolling: Boolean) {
     val small = wholeDrums == 4
     val positions = odometerPositions(anim.value, wholeDrums)
     val unit = (if (f.miles) f.labels.mi else f.labels.km).uppercase(LocalConfiguration.current.locales[0])
-    val description = stringResource(R.string.cluster_odometer_description, f.distance(distanceM))
+    val description = label ?: stringResource(R.string.cluster_odometer_description, f.distance(distanceM))
     val dash = Dash
     Row(
         Modifier.clip(RoundedCornerShape(12.dp)).background(Dash.window)

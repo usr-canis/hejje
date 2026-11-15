@@ -77,13 +77,15 @@ object FoodStops {
      * ahead only if one of your own past trips went from here to it (so it is on this road, in this
      * direction), and it is within [lead] but not already too close to stop.
      */
-    fun ahead(lat: Double, lon: Double, speed: Float, places: List<FoodPlace>, tracks: List<TripTrack>): Pair<FoodPlace, Double>? {
-        val reach = lead(speed)
+    fun ahead(
+        lat: Double, lon: Double, speed: Float, places: List<FoodPlace>, tracks: List<TripTrack>,
+        reach: Float = lead(speed), minM: Double = TOO_CLOSE_M,
+    ): Pair<FoodPlace, Double>? {
         return places.asSequence()
             .filter { it.liked && Geo.distance(lat, lon, it.lat, it.lon) <= reach }
             .mapNotNull { p ->
                 val along = Stretches.find(lat, lon, p.lat, p.lon, tracks).minOfOrNull { it.distanceM } ?: return@mapNotNull null
-                if (along < TOO_CLOSE_M || along > reach) null else p to along
+                if (along < minM || along > reach) null else p to along
             }
             .minByOrNull { it.second }
     }

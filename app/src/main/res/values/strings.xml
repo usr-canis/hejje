@@ -125,6 +125,9 @@
     <string name="parked_title">Parked car</string>
     <string name="cluster_trip">TRIP</string>
     <string name="cluster_odometer_description">This week, %1$s</string>
+    <string name="cluster_trip_description">This trip, %1$s</string>
+    <string name="cluster_speed_description">Speed %1$s, heading %2$s</string>
+    <string name="cluster_next_stop">Next stop</string>
     <string name="summary_idle_auto">Records when your car connects</string>
     <string name="summary_idle_setup">Set up your car</string>
     <string name="parked_open">Parked car location. Opens the map.</string>

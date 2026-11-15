@@ -20,6 +20,16 @@ object Geo {
         return 2 * EARTH_RADIUS_M * asin(min(1.0, sqrt(a)))
     }
 
+    /** Direction from the first point to the second, in degrees clockwise from north (0 until 360). */
+    fun bearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val p1 = Math.toRadians(lat1)
+        val p2 = Math.toRadians(lat2)
+        val dl = Math.toRadians(lon2 - lon1)
+        val y = sin(dl) * cos(p2)
+        val x = cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dl)
+        return ((Math.toDegrees(atan2(y, x)) + 360.0) % 360.0).toFloat()
+    }
+
     /** Metres east of [lon0] on a flat local projection (good for short distances). */
     fun x(lon: Double, lon0: Double, lat0: Double): Double =
         (lon - lon0) * 111_320.0 * cos(Math.toRadians(lat0))
