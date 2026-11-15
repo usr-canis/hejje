@@ -110,7 +110,7 @@ internal class DashColors(
     val track: Color,
 )
 
-private val DarkDash = DashColors(
+internal val DarkDash = DashColors(
     panelTop = Color(0xFF24282C), panelBottom = Color(0xFF15181A),
     edge = Color.White.copy(alpha = 0.06f), highlight = Color.White.copy(alpha = 0.08f),
     text = Color(0xFFECE9E6), muted = Color(0xFF8E8984), accent = Color(0xFFFF7A33),
@@ -122,7 +122,7 @@ private val DarkDash = DashColors(
     dial = Color(0xFF1B1E21), track = Color(0xFF2C3034),
 )
 
-private val LightDash = DashColors(
+internal val LightDash = DashColors(
     panelTop = Color(0xFFFFFFFF), panelBottom = Color(0xFFF3F0EC),
     edge = Color.Black.copy(alpha = 0.07f), highlight = Color.White,
     text = Color(0xFF1E1C1A), muted = Color(0xFF77706A), accent = Color(0xFFE8590C),

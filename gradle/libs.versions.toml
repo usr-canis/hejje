@@ -21,6 +21,7 @@ maplibre = "13.7.1"
 playLocation = "21.4.0"
 junit = "4.13.2"
 robolectric = "4.17"
+carApp = "1.7.0"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -59,6 +60,8 @@ maplibre = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
 play-location = { module = "com.google.android.gms:play-services-location", version.ref = "playLocation" }
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+car-app = { module = "androidx.car.app:app", version.ref = "carApp" }
+car-app-testing = { module = "androidx.car.app:app-testing", version.ref = "carApp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

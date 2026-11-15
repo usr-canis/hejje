@@ -1,5 +1,6 @@
 package com.canis.hejje.ui.trips
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -128,7 +129,7 @@ internal fun LiveCluster(live: LiveState, trace: TraceState, next: NextStop?, f:
 
 private val labelStyle = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.5.sp)
 
-private fun headingLabel(heading: Float?): String {
+internal fun headingLabel(heading: Float?): String {
     if (heading == null) return "—"
     val points = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
     return "${points[((heading + 22.5f) / 45f).toInt() % 8]} · ${heading.roundToInt() % 360}°"
@@ -192,7 +193,7 @@ private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Format
     val palette = LocalPalette.current
     val measurer = rememberTextMeasurer(cacheSize = 32)
     val perMs = if (f.miles) 2.236936f else 3.6f
-    val max = if (f.miles) 120 else 200
+    val max = dialMax(f.miles)
     val shown = ((speedMs ?: 0f) * perMs).coerceIn(0f, max.toFloat())
     val needle by animateFloatAsState(
         shown, if (LocalReduceMotion.current) snap() else tween(900, easing = LinearEasing), label = "speed",
@@ -201,16 +202,7 @@ private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Format
     val unit = f.speedUnit.uppercase(LocalConfiguration.current.locales[0])
     val digits = if (speedMs == null) "–" else shown.roundToInt().toString()
     val description = stringResource(R.string.cluster_speed_description, if (speedMs == null) "–" else f.speed(speedMs), headingLabel(trace.heading))
-    // The same colours as the routes on the map: 0 to 120 km/h along the ramp, faster stays at its end.
-    val kmhPerUnit = if (f.miles) 1.609344f else 1f
-    fun stop(kmh: Float) = ((START + SWEEP * (kmh / kmhPerUnit) / max) % 360f) / 360f
-    val ramp = palette.speedRamp
-    val stops = buildList {
-        add(0f to ramp.last())
-        add(stop(max * kmhPerUnit) + 0.01f to ramp.last())
-        ramp.forEachIndexed { i, c -> add(stop(120f * i / (ramp.size - 1)) to c) }
-        add(1f to ramp.last())
-    }.toTypedArray()
+    val stops = speedStops(palette.speedRamp, f.miles)
     Canvas(modifier.semantics { contentDescription = description }) {
         val radius = r.toPx()
         val u = radius / 100f
@@ -222,7 +214,23 @@ private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Format
     }
 }
 
-private fun DrawScope.speedometer(
+/** The top of the speedometer's scale: 200 km/h, or 120 mph. */
+internal fun dialMax(miles: Boolean) = if (miles) 120 else 200
+
+/** The same colours as the routes on the map: 0 to 120 km/h along the ramp, faster stays at its end. */
+internal fun speedStops(ramp: List<Color>, miles: Boolean): Array<Pair<Float, Color>> {
+    val max = dialMax(miles)
+    val kmhPerUnit = if (miles) 1.609344f else 1f
+    fun stop(kmh: Float) = ((START + SWEEP * (kmh / kmhPerUnit) / max) % 360f) / 360f
+    return buildList {
+        add(0f to ramp.last())
+        add(stop(max * kmhPerUnit) + 0.01f to ramp.last())
+        ramp.forEachIndexed { i, c -> add(stop(120f * i / (ramp.size - 1)) to c) }
+        add(1f to ramp.last())
+    }.toTypedArray()
+}
+
+internal fun DrawScope.speedometer(
     dash: DashColors, c: Offset, radius: Float, u: Float, stroke: Float, value: Float, max: Int, colours: Brush, measurer: TextMeasurer, digits: String, unit: String,
 ) {
     val topLeft = Offset(c.x - radius, c.y - radius)
@@ -265,7 +273,7 @@ private fun DrawScope.speedometer(
  * A compass ring that turns with the car (heading up), around the line driven so far. The car is
  * the arrow in the middle; the view covers the last few hundred metres up to 2.5 km.
  */
-private fun DrawScope.compass(dash: DashColors, c: Offset, radius: Float, turn: Float, trace: TraceState, here: RawPoint?, measurer: TextMeasurer) {
+internal fun DrawScope.compass(dash: DashColors, c: Offset, radius: Float, turn: Float, trace: TraceState, here: RawPoint?, measurer: TextMeasurer) {
     val v = radius / 74f
     val face = radius - 16 * v
     drawCircle(dash.dial, face, c)
