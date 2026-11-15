@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -150,6 +151,15 @@ class ScreensTest {
         scrollTo("Timeline")
         await("Parked")
         shot("detail-timeline")
+        // Name the parked stop with your own purpose; it becomes a stop with a reminder bell.
+        rule.onNodeWithText("Name").performClick()
+        await("What was this stop?")
+        rule.onNodeWithText("What for?", substring = true).performTextInput("Fuel")
+        shot("detail-name-sheet")
+        rule.onNodeWithText("Save").performClick()
+        rule.waitUntil(10_000) { runBlocking { app.container.db.zones().all().any { it.purpose == "Fuel" } } }
+        rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Reminder on", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("detail-timeline-bell")
         scrollTo("Time by speed")
         shot("detail-light-2")
         scrollTo("Elevation")

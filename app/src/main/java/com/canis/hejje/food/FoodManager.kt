@@ -3,6 +3,7 @@ package com.canis.hejje.food
 import android.content.Context
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsStore
+import com.canis.hejje.data.StopReminders
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.HejjeDb
 import com.canis.hejje.data.db.StopAskEntity
@@ -25,12 +26,14 @@ import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.math.max
 
-/** "food" or "coffee" places are your food and coffee stops. */
-fun ZoneEntity.meal(): Meal? = when (icon) {
-    FoodManager.ICON_FOOD -> Meal.FOOD
-    FoodManager.ICON_COFFEE -> Meal.COFFEE
+/** What a saved stop is for: food, coffee or the user's own word; null for other places. */
+fun ZoneEntity.stopPurpose(): String? = purpose ?: when (icon) {
+    FoodManager.ICON_FOOD -> Meal.FOOD.word
+    FoodManager.ICON_COFFEE -> Meal.COFFEE.word
     else -> null
 }
+
+fun ZoneEntity.meal(): Meal? = Meal.of(stopPurpose())
 
 /**
  * Food and coffee stops, kept quiet and simple:
@@ -56,20 +59,20 @@ class FoodManager(
 
     /** A drive ended and the car is parked here: ask in 8 minutes, unless it drives off before. */
     fun onParked(parkedAt: Long) {
-        if (!settings.current.foodStops) return
+        if (settings.current.stopReminders == StopReminders.OFF) return
         FoodAskWorker.schedule(app, parkedAt, (FoodStops.ASK_AFTER_MS - (clock() - parkedAt)).coerceAtLeast(0))
     }
 
     /** Called by the worker 8 minutes after parking. */
     suspend fun askIfStillParked(parkedAt: Long) {
         val s = settings.current
-        if (!s.foodStops || live.value != null || s.parkedAt != parkedAt) return
+        if (s.stopReminders == StopReminders.OFF || live.value != null || s.parkedAt != parkedAt) return
         val lat = s.parkedLat ?: return
         val lon = s.parkedLon ?: return
         val zones = db.zones().all()
-        // Back at a food or coffee place you saved: that is the meal, and no question.
-        zones.firstOrNull { it.meal() != null && Geo.distance(lat, lon, it.lat, it.lon) <= it.radiusM }?.let {
-            had(it.meal()!!, parkedAt)
+        // Back at a stop you saved: no question (and at a food or coffee place, that is the meal).
+        zones.firstOrNull { it.stopPurpose() != null && Geo.distance(lat, lon, it.lat, it.lon) <= it.radiusM }?.let { z ->
+            z.meal()?.let { had(it, parkedAt) }
             return
         }
         val now = clock()
@@ -80,13 +83,29 @@ class FoodManager(
         notifier.foodQuestion(id)
     }
 
-    /** Food or coffee, with the place's name: from the notification, or later from the timeline. */
-    suspend fun save(meal: Meal, name: String, lat: Double, lon: Double, parkedAt: Long, askId: Long? = null): Long {
-        val label = name.trim().ifEmpty { app.getString(if (meal == Meal.FOOD) R.string.food_default_food else R.string.food_default_coffee) }
+    /**
+     * Saves a stop: what it was for ([purpose]: food, coffee or your own word) and the place's
+     * name. From the notification, or later from the timeline.
+     */
+    suspend fun save(purpose: String, name: String, lat: Double, lon: Double, parkedAt: Long, askId: Long? = null): Long {
+        val what = purpose.trim().ifEmpty { Meal.FOOD.word }
+        val meal = Meal.of(what)
+        val label = name.trim().ifEmpty {
+            when (meal) {
+                Meal.FOOD -> app.getString(R.string.food_default_food)
+                Meal.COFFEE -> app.getString(R.string.food_default_coffee)
+                null -> what.replaceFirstChar { it.uppercase() }
+            }
+        }
+        val icon = when (meal) {
+            Meal.FOOD -> ICON_FOOD
+            Meal.COFFEE -> ICON_COFFEE
+            null -> ICON_STOP
+        }
         val placeId = db.zones().upsert(
-            ZoneEntity(name = label, lat = lat, lon = lon, radiusM = PLACE_RADIUS_M, icon = if (meal == Meal.FOOD) ICON_FOOD else ICON_COFFEE, hide = false),
+            ZoneEntity(name = label, lat = lat, lon = lon, radiusM = PLACE_RADIUS_M, icon = icon, hide = false, purpose = meal?.word ?: what),
         )
-        had(meal, parkedAt)
+        meal?.let { had(it, parkedAt) }
         val ask = askId?.let { db.stopAsks().get(it) } ?: db.stopAsks().since(parkedAt - 60_000).firstOrNull { it.parkedAt == parkedAt }
         if (ask != null) {
             db.stopAsks().update(ask.copy(state = StopAskEntity.SAVED, placeId = placeId))
@@ -105,10 +124,10 @@ class FoodManager(
         if (ask.state == StopAskEntity.ASKED) db.stopAsks().update(ask.copy(state = StopAskEntity.DISMISSED))
     }
 
-    /** Good (suggest again) or not again; from the notification or the timeline. */
-    suspend fun rate(placeId: Long, good: Boolean, askId: Long? = null) {
+    /** Remind next time, or don't; from the notification or the timeline (works with reminders off too). */
+    suspend fun setRemind(placeId: Long, remind: Boolean, askId: Long? = null) {
         val place = db.zones().all().firstOrNull { it.id == placeId } ?: return
-        db.zones().upsert(place.copy(rating = if (good) 1 else -1))
+        db.zones().upsert(place.copy(rating = if (remind) 1 else -1))
         val ask = askId?.let { db.stopAsks().get(it) } ?: return
         db.stopAsks().update(ask.copy(feedback = -1))
         notifier.cancelFoodFeedback(ask.id)
@@ -122,6 +141,7 @@ class FoodManager(
 
     /** "How was it?": not while driving (then after the drive), at most twice, the second time in the evening. */
     suspend fun askFeedback(askId: Long) {
+        if (settings.current.stopReminders == StopReminders.OFF) return
         val ask = db.stopAsks().get(askId) ?: return
         if (ask.state != StopAskEntity.SAVED || ask.feedback !in 0..1) return
         val place = db.zones().all().firstOrNull { it.id == ask.placeId } ?: return
@@ -188,16 +208,17 @@ class FoodManager(
         if (now - lastCheck < CHECK_EVERY_MS) return
         lastCheck = now
         val s = settings.current
-        if (!s.foodStops || now - lastSaid < BETWEEN_MS) return
+        if (s.stopReminders != StopReminders.VOICE || now - lastSaid < BETWEEN_MS) return
         val meals = Meal.entries.filter { FoodStops.wanted(it, now, if (it == Meal.FOOD) s.lastFoodAt else s.lastCoffeeAt, zone) }
-        if (meals.isEmpty()) return
         val start = driveStart ?: return
         val places = db.zones().all().mapNotNull { z ->
-            val meal = z.meal() ?: return@mapNotNull null
-            if (meal !in meals || z.id in announced) return@mapNotNull null
+            val purpose = z.stopPurpose() ?: return@mapNotNull null
+            // Food and coffee only at their times (and not if already had); your own stops any time.
+            val meal = Meal.of(purpose)
+            if ((meal != null && meal !in meals) || z.id in announced) return@mapNotNull null
             // The place you just set off from is not "ahead".
             if (Geo.distance(z.lat, z.lon, start.lat, start.lon) < LEFT_FROM_M) return@mapNotNull null
-            FoodPlace(z.id, z.name, meal, z.lat, z.lon, liked = z.rating >= 0)
+            FoodPlace(z.id, z.name, purpose, z.lat, z.lon, liked = z.rating >= 0)
         }
         if (places.isEmpty()) return
         val known = tracks ?: run {
@@ -212,13 +233,15 @@ class FoodManager(
         if (before == null || straight >= before) return
         announced += place.id
         lastSaid = now
-        val generic = place.name == app.getString(R.string.food_default_food) || place.name == app.getString(R.string.food_default_coffee)
-        speaker.say(FoodStops.announcement(if (generic) null else place.name, place.meal, along, s.miles))
+        val generic = place.name == app.getString(R.string.food_default_food) || place.name == app.getString(R.string.food_default_coffee) ||
+            place.name.equals(place.purpose, ignoreCase = true)
+        speaker.say(FoodStops.announcement(if (generic) null else place.name, place.purpose, along, s.miles))
     }
 
     companion object {
         const val ICON_FOOD = "food"
         const val ICON_COFFEE = "coffee"
+        const val ICON_STOP = "pin"
         const val PLACE_RADIUS_M = 100.0
         private const val CHECK_EVERY_MS = 30_000L
         private const val BETWEEN_MS = 15 * 60_000L

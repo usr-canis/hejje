@@ -72,10 +72,10 @@ class FoodReceiver : BroadcastReceiver() {
                 val ask = c.db.stopAsks().get(askId)
                 when (intent.action) {
                     ACTION_FOOD, ACTION_COFFEE -> if (ask != null) {
-                        c.food.save(if (intent.action == ACTION_FOOD) Meal.FOOD else Meal.COFFEE, name, ask.lat, ask.lon, ask.parkedAt, askId)
+                        c.food.save((if (intent.action == ACTION_FOOD) Meal.FOOD else Meal.COFFEE).word, name, ask.lat, ask.lon, ask.parkedAt, askId)
                     }
                     ACTION_DISMISS -> c.food.dismissed(askId)
-                    ACTION_GOOD, ACTION_NOT_AGAIN -> ask?.placeId?.let { c.food.rate(it, intent.action == ACTION_GOOD, askId) }
+                    ACTION_GOOD, ACTION_NOT_AGAIN -> ask?.placeId?.let { c.food.setRemind(it, intent.action == ACTION_GOOD, askId) }
                     ACTION_FEEDBACK_DISMISS -> c.food.feedbackDismissed(askId)
                 }
             }

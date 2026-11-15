@@ -6,11 +6,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.canis.hejje.HejjeApp
 import com.canis.hejje.R
+import com.canis.hejje.data.StopReminders
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.HejjeDb
 import com.canis.hejje.data.db.StopAskEntity
 import com.canis.hejje.data.db.ZoneEntity
-import com.canis.hejje.domain.Meal
 import com.canis.hejje.notify.Notifier
 import com.canis.hejje.recording.LiveState
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -80,7 +81,7 @@ class FoodManagerTest {
         val at = park(13.00, 77.70)
         food.askIfStillParked(at)
         val ask = db.stopAsks().since(0).single()
-        val placeId = food.save(Meal.FOOD, "Kamat Upachar", 13.00, 77.70, at, ask.id)
+        val placeId = food.save("Food", "Kamat Upachar", 13.00, 77.70, at, ask.id)
         val place = db.zones().all().single { it.id == placeId }
         assertEquals("food", place.icon)
         assertEquals("Kamat Upachar", place.name)
@@ -99,18 +100,34 @@ class FoodManagerTest {
         food.onTripSaved()
         assertEquals(listOf(app.getString(R.string.food_feedback, "Kamat Upachar")), titles())
 
-        food.rate(placeId, good = false, askId = ask.id)
+        food.setRemind(placeId, remind = false, askId = ask.id)
         assertEquals(-1, db.zones().all().single { it.id == placeId }.rating)
         assertEquals(-1, db.stopAsks().get(ask.id)!!.feedback)
     }
 
     @Test fun namingLater_fromTheTimeline_withoutAName() = runBlocking {
         val at = now - 3_600_000L
-        val id = food.save(Meal.COFFEE, "  ", 13.10, 77.80, at)
+        val id = food.save("coffee", "  ", 13.10, 77.80, at)
         val place = db.zones().all().single { it.id == id }
         assertEquals(app.getString(R.string.food_default_coffee), place.name)
         assertEquals("coffee", place.icon)
         assertNotNull(place)
         assertEquals(at, app.container.settings.current.lastCoffeeAt)
+    }
+
+    @Test fun ownKindOfStop_andRemindersOff_stillLetYouNameAndChoose() = runBlocking {
+        val id = food.save("Fuel", "", 13.2, 77.9, now - 3_600_000L)
+        val place = db.zones().all().single { it.id == id }
+        assertEquals("Fuel", place.name)
+        assertEquals("Fuel", place.stopPurpose())
+        assertNull("not food or coffee", place.meal())
+        assertEquals(0L, app.container.settings.current.lastFoodAt)
+
+        // Reminders off: nothing is asked, but you can still choose remind or not.
+        app.container.settings.update { it.copy(stopReminders = StopReminders.OFF) }
+        food.askIfStillParked(park(13.00, 77.70))
+        assertTrue(titles().isEmpty())
+        food.setRemind(id, remind = false)
+        assertEquals(-1, db.zones().all().single { it.id == id }.rating)
     }
 }

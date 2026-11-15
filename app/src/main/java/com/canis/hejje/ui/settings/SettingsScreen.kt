@@ -44,7 +44,7 @@ import com.canis.hejje.update.UpdateState
 import com.canis.hejje.widget.HejjeWidget
 import kotlinx.coroutines.launch
 
-private enum class Picker { MERGE_GAP, MIN_TRIP, GPS, SENSITIVITY, UNITS, THEME, CACHE, SUMMARY, KEEP }
+private enum class Picker { MERGE_GAP, MIN_TRIP, GPS, SENSITIVITY, UNITS, THEME, CACHE, SUMMARY, KEEP, REMINDERS }
 
 @Composable
 fun SettingsScreen(onOpen: (String) -> Unit) {
@@ -138,7 +138,7 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
             item {
                 Header(R.string.settings_notifications)
                 SettingRow(stringResource(R.string.settings_summary), stringResource(summaryLabels[s.summaryTiming.coerceIn(0, 3)])) { picker = Picker.SUMMARY }
-                SwitchRow(stringResource(R.string.settings_food), stringResource(R.string.settings_food_summary), s.foodStops) { v -> set { it.copy(foodStops = v) } }
+                SettingRow(stringResource(R.string.settings_food), stringResource(reminderLabels[s.stopReminders.coerceIn(0, 2)])) { picker = Picker.REMINDERS }
             }
             item {
                 Header(R.string.settings_backup)
@@ -225,6 +225,10 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
             stringResource(R.string.settings_summary), summaryLabels.mapIndexed { i, l -> i to stringResource(l) },
             s.summaryTiming, { v -> set { it.copy(summaryTiming = v) } }, { picker = null },
         )
+        Picker.REMINDERS -> ChoiceDialog(
+            stringResource(R.string.settings_food), reminderLabels.mapIndexed { i, l -> i to stringResource(l) },
+            s.stopReminders, { v -> set { it.copy(stopReminders = v) } }, { picker = null },
+        )
         Picker.KEEP -> ChoiceDialog(
             stringResource(R.string.settings_backup_keep), listOf(2, 4, 8, 12).map { it to pluralStringResource(R.plurals.backup_count, it, it) },
             s.backupKeep, { v -> set { it.copy(backupKeep = v) } }, { picker = null },
@@ -270,4 +274,5 @@ private fun mergeGapLabel(minutes: Int): String = when {
 
 private val sensitivityLabels = listOf(R.string.settings_sensitivity_low, R.string.settings_sensitivity_normal, R.string.settings_sensitivity_high)
 private val themeLabels = listOf(R.string.settings_theme_system, R.string.settings_theme_light, R.string.settings_theme_dark)
+private val reminderLabels = listOf(R.string.settings_reminders_off, R.string.settings_reminders_notify, R.string.settings_reminders_voice)
 private val summaryLabels = listOf(R.string.settings_summary_now, R.string.settings_summary_5, R.string.settings_summary_final, R.string.settings_summary_off)

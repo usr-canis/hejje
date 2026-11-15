@@ -36,10 +36,13 @@ class FoodStopsTest {
     }
 
     @Test fun announcement_isShortAndSpoken() {
-        assertEquals("Kamat Upachar, 6 kilometres ahead, for food.", FoodStops.announcement("Kamat Upachar", Meal.FOOD, 6_240.0, miles = false))
-        assertEquals("Café Coffee Day, 1.5 kilometres ahead, for coffee.", FoodStops.announcement("Café Coffee Day", Meal.COFFEE, 1_400.0, miles = false))
-        assertEquals("Food stop, 1 kilometre ahead.", FoodStops.announcement(null, Meal.FOOD, 1_100.0, miles = false))
-        assertEquals("Kamat Upachar, 4 miles ahead, for food.", FoodStops.announcement("Kamat Upachar", Meal.FOOD, 6_240.0, miles = true))
+        assertEquals("Kamat Upachar, 6 kilometres ahead, for food.", FoodStops.announcement("Kamat Upachar", "food", 6_240.0, miles = false))
+        assertEquals("Café Coffee Day, 1.5 kilometres ahead, for coffee.", FoodStops.announcement("Café Coffee Day", "Coffee", 1_400.0, miles = false))
+        assertEquals("Food stop, 1 kilometre ahead.", FoodStops.announcement(null, "food", 1_100.0, miles = false))
+        assertEquals("Kamat Upachar, 4 miles ahead, for food.", FoodStops.announcement("Kamat Upachar", "food", 6_240.0, miles = true))
+        // Your own kind of stop.
+        assertEquals("Shell, 3 kilometres ahead, for Fuel.", FoodStops.announcement("Shell", "Fuel", 3_100.0, miles = false))
+        assertEquals("Fuel stop, 3 kilometres ahead.", FoodStops.announcement(null, "Fuel", 3_100.0, miles = false))
     }
 
     @Test fun ahead_onlyOnYourOwnRoad_inThisDirection_aboutFiveMinutesAway() {
@@ -50,7 +53,7 @@ class FoodStopsTest {
         val earlier = TripTrack(1, listOf(DriveSim().apply { heading = 0.0 }.drive(500, 20f).segment()))
         val end = earlier.segments.single().data.route
         // Saved where that trip parked.
-        val kamat = FoodPlace(7, "Kamat Upachar", Meal.FOOD, end.lat.last(), end.lon.last())
+        val kamat = FoodPlace(7, "Kamat Upachar", "food", end.lat.last(), end.lon.last())
         val parkedAt = (end.lat.last() - lat0) * 110_540.0
         val tracks = listOf(earlier)
         // 4 km before it at 20 m/s (72 km/h): 5 minutes covers 6 km, so it is announced.
@@ -62,7 +65,7 @@ class FoodStopsTest {
         // A place you said "not again" about: never.
         assertNull(FoodStops.ahead(north(parkedAt - 4_000.0), lon0, 20f, listOf(kamat.copy(liked = false)), tracks))
         // A place nearby but not on any road you drove to it: silent.
-        val offRoad = FoodPlace(8, "Somewhere", Meal.FOOD, north(9_000.0), lon0 + 0.02)
+        val offRoad = FoodPlace(8, "Somewhere", "food", north(9_000.0), lon0 + 0.02)
         assertNull(FoodStops.ahead(north(parkedAt - 4_000.0), lon0, 20f, listOf(offRoad), tracks))
     }
 }

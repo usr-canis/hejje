@@ -10,10 +10,13 @@ data class NamedPlace(
     val icon: String = "pin",
     val hide: Boolean = true,
     val tag: String? = null,
-    /** Food and coffee places: 1 = good, -1 = not again, 0 = not rated. */
+    /** Stop reminders: 1 = remind, -1 = don't remind, 0 = not set yet (reminds). */
     val rating: Int = 0,
+    /** What a stop is for (food, coffee or the user's own word); null for other places. */
+    val purpose: String? = null,
 ) {
-    val isFoodOrCoffee: Boolean get() = icon == "food" || icon == "coffee"
+    /** A stop Hejje can remind you about. */
+    val isReminder: Boolean get() = purpose != null || icon == "food" || icon == "coffee"
 }
 
 /** A frequent parking spot that is not a named place yet. */

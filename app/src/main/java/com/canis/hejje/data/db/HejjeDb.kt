@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, SegmentEntity::class, TagEntity::class, TripTagEntity::class,
         ZoneEntity::class, PlaceEntity::class, RawPointEntity::class, LogEntity::class, StopAskEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class HejjeDb : RoomDatabase() {
@@ -66,13 +66,19 @@ abstract class HejjeDb : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE zones ADD COLUMN purpose TEXT")
+            }
+        }
+
         fun create(context: Context, inMemory: Boolean = false): HejjeDb {
             val builder = if (inMemory) {
                 Room.inMemoryDatabaseBuilder(context, HejjeDb::class.java).allowMainThreadQueries()
             } else {
                 Room.databaseBuilder(context, HejjeDb::class.java, "hejje.db")
             }
-            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).addCallback(object : Callback() {
+            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) = insertPresetTags(db)
             }).build()
         }

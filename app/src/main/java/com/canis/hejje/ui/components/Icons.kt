@@ -126,6 +126,15 @@ object HejjeIcons {
         moveTo(8.5f, 4f); curveTo(8f, 5f, 9f, 5.8f, 8.5f, 7f); moveTo(12f, 4f); curveTo(11.5f, 5f, 12.5f, 5.8f, 12f, 7f)
     }
 
+    private fun PathBuilder.bell() {
+        moveTo(6f, 16.5f); verticalLineTo(11f); curveTo(6f, 7.7f, 8.7f, 5f, 12f, 5f); curveTo(15.3f, 5f, 18f, 7.7f, 18f, 11f)
+        verticalLineTo(16.5f); lineTo(19.5f, 18f); horizontalLineTo(4.5f); close()
+        moveTo(10f, 20.5f); curveTo(10.5f, 21.3f, 11.2f, 21.6f, 12f, 21.6f); curveTo(12.8f, 21.6f, 13.5f, 21.3f, 14f, 20.5f)
+        moveTo(12f, 3f); verticalLineTo(5f)
+    }
+    val Bell = icon("Bell") { bell() }
+    val BellOff = icon("BellOff") { bell(); moveTo(3.5f, 3.5f); lineTo(20.5f, 20.5f) }
+
     /** Icon for a place's icon key (see Places.ICONS). */
     fun place(key: String) = when (key) {
         "home" -> Home

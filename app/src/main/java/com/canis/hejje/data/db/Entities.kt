@@ -109,8 +109,10 @@ data class ZoneEntity(
     @ColumnInfo(defaultValue = "pin") val icon: String = "pin",
     @ColumnInfo(defaultValue = "1") val hide: Boolean = true,
     val tag: String? = null,
-    /** Food and coffee places: 1 = good, suggest again; -1 = not again; 0 = not rated. */
+    /** Stop reminders: 1 = remind, -1 = don't remind, 0 = not set yet (reminds). */
     @ColumnInfo(defaultValue = "0") val rating: Int = 0,
+    /** What a stop is for: "food", "coffee" or the user's own word (e.g. "Fuel"); null for other places. */
+    val purpose: String? = null,
 )
 
 /** A time Hejje asked "Stopped for food or coffee?" after a parked stop, and what came of it. */

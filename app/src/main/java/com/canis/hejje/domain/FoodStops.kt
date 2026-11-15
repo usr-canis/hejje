@@ -6,10 +6,20 @@ import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToInt
 
-enum class Meal { FOOD, COFFEE }
+enum class Meal(val word: String) {
+    FOOD("food"),
+    COFFEE("coffee");
 
-/** A place saved as a food or coffee stop. [liked] false: you said not again. */
-data class FoodPlace(val id: Long, val name: String, val meal: Meal, val lat: Double, val lon: Double, val liked: Boolean = true)
+    companion object {
+        /** Food or coffee, from what a stop is for; null for the user's own purposes. */
+        fun of(purpose: String?): Meal? = entries.firstOrNull { it.word.equals(purpose?.trim(), ignoreCase = true) }
+    }
+}
+
+/** A saved stop: [purpose] is food, coffee or the user's own word. [liked] false: don't remind. */
+data class FoodPlace(val id: Long, val name: String, val purpose: String, val lat: Double, val lon: Double, val liked: Boolean = true) {
+    val meal: Meal? get() = Meal.of(purpose)
+}
 
 /** A time Hejje asked "Stopped for food or coffee?" and what came of it. */
 data class StopAsk(val at: Long, val lat: Double, val lon: Double, val dismissed: Boolean)
@@ -79,12 +89,12 @@ object FoodStops {
     }
 
     /** "Kamat Upachar, 6 kilometres ahead, for food." */
-    fun announcement(name: String?, meal: Meal, distanceM: Double, miles: Boolean): String {
+    fun announcement(name: String?, purpose: String, distanceM: Double, miles: Boolean): String {
         val value = distanceM / if (miles) 1609.344 else 1000.0
         val rounded = if (value < 2) (value * 2).roundToInt() / 2.0 else value.roundToInt().toDouble()
         val number = if (rounded % 1.0 == 0.0) rounded.toInt().toString() else String.format(Locale.ENGLISH, "%.1f", rounded)
         val unit = if (miles) (if (rounded == 1.0) "mile" else "miles") else (if (rounded == 1.0) "kilometre" else "kilometres")
-        val what = if (meal == Meal.FOOD) "food" else "coffee"
+        val what = Meal.of(purpose)?.word ?: purpose.trim()
         return if (name.isNullOrBlank()) "${what.replaceFirstChar { it.uppercase() }} stop, $number $unit ahead."
         else "$name, $number $unit ahead, for $what."
     }

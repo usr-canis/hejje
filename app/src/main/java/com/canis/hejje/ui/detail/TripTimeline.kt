@@ -18,9 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,12 +49,12 @@ import androidx.compose.ui.unit.sp
 import com.canis.hejje.R
 import com.canis.hejje.data.PlaceRepository
 import com.canis.hejje.domain.Formatter
-import com.canis.hejje.domain.Meal
 import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.TimelineEntry
 import com.canis.hejje.domain.TimelineEntry.Kind
 import com.canis.hejje.ui.LocalPlaces
+import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.map.Flags
 import com.canis.hejje.ui.map.rememberFlags
 import com.canis.hejje.ui.theme.LocalPalette
@@ -107,10 +108,10 @@ internal fun TripTimeline(
     startName: String?,
     endName: String?,
     f: Formatter,
-    /** Name a parked stop that is not one of your places yet (food or coffee). */
+    /** Name a parked stop that is not one of your places yet. */
     onName: ((TimelineEntry.Point) -> Unit)? = null,
-    /** Rate (or re-rate) a food or coffee place. */
-    onRate: ((NamedPlace) -> Unit)? = null,
+    /** Switch a saved stop's reminder on or off. */
+    onRemind: ((NamedPlace) -> Unit)? = null,
     onFocus: (points: List<Pair<Double, Double>>, spot: Pair<Double, Double>?) -> Unit,
 ) {
     val places = LocalPlaces.current
@@ -119,19 +120,15 @@ internal fun TripTimeline(
             when (e) {
                 is TimelineEntry.Point -> {
                     val here = Places.placeAt(e.lat, e.lon, places)
-                    // One small link on parked stops: name it, or rate a food/coffee place.
-                    val link: Pair<String, () -> Unit>? = when {
-                        e.kind != Kind.PARKED -> null
-                        here == null && onName != null -> stringResource(R.string.tl_name) to { onName(e) }
-                        here != null && here.isFoodOrCoffee && onRate != null ->
-                            (when (here.rating) { 1 -> "👍"; -1 -> "👎"; else -> stringResource(R.string.tl_rate) }) to { onRate(here) }
-                        else -> null
-                    }
+                    // One small control on parked stops: name it, or switch its reminder on or off.
+                    val parked = e.kind == Kind.PARKED
+                    val nameIt = if (parked && here == null && onName != null) ({ onName(e) }) else null
+                    val remindIt = if (parked && here != null && here.isReminder && onRemind != null) ({ onRemind(here) }) else null
                     val name = here?.name
                         ?: (if (e.kind == Kind.START) startName else null)
                         ?: (if (e.kind == Kind.END) endName else null)
                         ?: names[PlaceRepository.keyOf(e.lat, e.lon)]
-                    PointRow(e, name, first = i == 0, last = i == entries.size - 1, f, link) { onFocus(listOf(e.lat to e.lon), e.lat to e.lon) }
+                    PointRow(e, name, first = i == 0, last = i == entries.size - 1, f, nameIt, (here?.rating ?: 0) >= 0, remindIt) { onFocus(listOf(e.lat to e.lon), e.lat to e.lon) }
                 }
                 is TimelineEntry.Leg -> LegRow(e, f) {
                     val step = (e.lat.size / 60).coerceAtLeast(1)
@@ -147,7 +144,8 @@ private val RAIL_WIDTH = 34.dp
 
 @Composable
 private fun PointRow(
-    p: TimelineEntry.Point, name: String?, first: Boolean, last: Boolean, f: Formatter, link: Pair<String, () -> Unit>?, onClick: () -> Unit,
+    p: TimelineEntry.Point, name: String?, first: Boolean, last: Boolean, f: Formatter,
+    onName: (() -> Unit)?, reminding: Boolean, onRemind: (() -> Unit)?, onClick: () -> Unit,
 ) {
     val label = stringResource(
         when (p.kind) { Kind.START -> R.string.tl_start; Kind.PARKED -> R.string.stop_parked; Kind.END -> R.string.tl_finish },
@@ -175,8 +173,17 @@ private fun PointRow(
             Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 2)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (link != null) {
-            TextButton(onClick = link.second) { Text(link.first, color = LocalPalette.current.accentText) }
+        if (onName != null) {
+            TextButton(onClick = onName) { Text(stringResource(R.string.tl_name), color = LocalPalette.current.accentText) }
+        }
+        if (onRemind != null) {
+            IconButton(onClick = onRemind) {
+                Icon(
+                    if (reminding) HejjeIcons.Bell else HejjeIcons.BellOff,
+                    contentDescription = stringResource(if (reminding) R.string.tl_reminding else R.string.tl_not_reminding),
+                    tint = if (reminding) LocalPalette.current.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -239,46 +246,38 @@ private fun Marker(kind: Kind) {
     }
 }
 
-/** Name a parked stop later: food or coffee, and the place's name. */
+/** Name a parked stop later: what it was for (food, coffee or your own word) and the place's name. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun FoodNameSheet(onDismiss: () -> Unit, onSave: (Meal, String) -> Unit) {
-    var meal by remember { mutableStateOf(Meal.FOOD) }
+internal fun StopNameSheet(onDismiss: () -> Unit, onSave: (purpose: String, name: String) -> Unit) {
+    var purpose by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surfaceContainerLow) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Text(stringResource(R.string.food_sheet_title), style = MaterialTheme.typography.titleMedium)
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(Meal.FOOD to R.string.food_action_food, Meal.COFFEE to R.string.food_action_coffee).forEach { (m, label) ->
+                listOf(R.string.food_action_food, R.string.food_action_coffee).forEach { res ->
+                    val word = stringResource(res)
                     FilterChip(
-                        selected = meal == m, onClick = { meal = m }, label = { Text(stringResource(label)) },
+                        selected = purpose.trim().equals(word, ignoreCase = true), onClick = { purpose = word }, label = { Text(word) },
                         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = colors.primaryContainer, selectedLabelColor = colors.onPrimaryContainer),
                     )
                 }
             }
             OutlinedTextField(
+                value = purpose, onValueChange = { purpose = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                label = { Text(stringResource(R.string.food_purpose_hint)) },
+            )
+            OutlinedTextField(
                 value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                placeholder = { Text(stringResource(R.string.food_name_hint)) },
+                label = { Text(stringResource(R.string.food_name_hint)) },
             )
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel), color = colors.onSurfaceVariant) }
-                TextButton(onClick = { onSave(meal, name) }) { Text(stringResource(R.string.action_save), color = LocalPalette.current.accentText) }
-            }
-        }
-    }
-}
-
-/** Rate a food or coffee place: suggest again, or not again. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun FoodRateSheet(name: String, onDismiss: () -> Unit, onRate: (Boolean) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text(stringResource(R.string.food_feedback, name), style = MaterialTheme.typography.titleMedium)
-            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { onRate(true) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.food_good)) }
-                OutlinedButton(onClick = { onRate(false) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.food_not_again)) }
+                TextButton(onClick = { onSave(purpose.trim(), name.trim()) }, enabled = purpose.isNotBlank()) {
+                    Text(stringResource(R.string.action_save), color = if (purpose.isNotBlank()) LocalPalette.current.accentText else colors.onSurfaceVariant)
+                }
             }
         }
     }

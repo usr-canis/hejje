@@ -25,7 +25,7 @@ class MigrationTest {
     @get:Rule
     val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), HejjeDb::class.java)
 
-    @Test fun version1To4_keepsTripsZonesAndUnsavedPoints() {
+    @Test fun version1To5_keepsTripsZonesAndUnsavedPoints() {
         helper.createDatabase(name, 1).apply {
             execSQL(
                 "INSERT INTO trips (id, uuid, startTime, endTime, distanceM, movingMs, idleMs, stoppedMs, maxSpeed, stopCount, stopMs, " +
@@ -43,8 +43,9 @@ class MigrationTest {
         val app = ApplicationProvider.getApplicationContext<HejjeApp>()
         helper.runMigrationsAndValidate(name, 3, true, HejjeDb.MIGRATION_2_3).close()
         helper.runMigrationsAndValidate(name, 4, true, HejjeDb.MIGRATION_3_4).close()
+        helper.runMigrationsAndValidate(name, 5, true, HejjeDb.MIGRATION_4_5).close()
         val db = Room.databaseBuilder(app, HejjeDb::class.java, name)
-            .addMigrations(HejjeDb.MIGRATION_1_2, HejjeDb.MIGRATION_2_3, HejjeDb.MIGRATION_3_4).allowMainThreadQueries().build()
+            .addMigrations(HejjeDb.MIGRATION_1_2, HejjeDb.MIGRATION_2_3, HejjeDb.MIGRATION_3_4, HejjeDb.MIGRATION_4_5).allowMainThreadQueries().build()
         runBlocking {
             val trip = db.trips().trip(7)!!
             assertEquals("kept", trip.note)
