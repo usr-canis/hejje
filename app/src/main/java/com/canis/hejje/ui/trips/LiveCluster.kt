@@ -321,10 +321,7 @@ internal fun DrawScope.compass(dash: DashColors, c: Offset, radius: Float, turn:
         val p = at(deg, radius - 8 * v)
         drawText(text, topLeft = Offset(p.x - text.size.width / 2f, p.y - text.size.height / 2f))
     }
-    // Which way you are heading: the mark at the top of the ring, and the car in the middle.
-    drawPath(Path().apply {
-        moveTo(c.x, c.y - radius - 3 * v); lineTo(c.x + 5 * v, c.y - radius + 4 * v); lineTo(c.x - 5 * v, c.y - radius + 4 * v); close()
-    }, dash.text)
+    // The car in the middle, pointing the way you are heading.
     if (trace.heading != null) {
         val car = Path().apply {
             moveTo(c.x, c.y - 9 * v); lineTo(c.x + 7 * v, c.y + 7 * v); lineTo(c.x, c.y + 3 * v); lineTo(c.x - 7 * v, c.y + 7 * v); close()
