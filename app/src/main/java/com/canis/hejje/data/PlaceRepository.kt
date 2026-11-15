@@ -29,7 +29,7 @@ class PlaceRepository(
     private var lastRequest = 0L
     private var lastFailed = false
 
-    fun key(lat: Double, lon: Double): String = String.format(Locale.US, "%.3f,%.3f", lat, lon)
+    fun key(lat: Double, lon: Double): String = keyOf(lat, lon)
 
     suspend fun cached(lat: Double, lon: Double): String? = dao.get(key(lat, lon))?.name?.takeIf { it.isNotEmpty() }
 
@@ -80,6 +80,9 @@ class PlaceRepository(
     }
 
     companion object {
+        /** Places closer than about 100 m share a name. */
+        fun keyOf(lat: Double, lon: Double): String = String.format(Locale.US, "%.3f,%.3f", lat, lon)
+
         private const val MIN_INTERVAL_MS = 1_500L
         private const val RETRY_EMPTY_MS = 7 * 86_400_000L
 

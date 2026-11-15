@@ -97,7 +97,8 @@ class ScreensTest {
             com.canis.hejje.data.db.LogEntity(0, h, "TRIP_SAVED", "20700", c.trips.all().last().id),
         ).forEach { c.db.log().insert(it) }
         c.settings.update {
-            it.copy(onboardingDone = true, updateAutoCheck = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
+            // No place-name lookups over the internet in tests.
+            it.copy(onboardingDone = true, updateAutoCheck = false, placeLookup = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
         }
     }
 
@@ -146,9 +147,12 @@ class ScreensTest {
         rule.onAllNodesWithText("Home → Indiranagar").onFirst().performClick()
         await("Distance")
         shot("detail-light-1")
+        scrollTo("Timeline")
+        await("Parked")
+        shot("detail-timeline")
         scrollTo("Time by speed")
         shot("detail-light-2")
-        scrollTo("Segments")
+        scrollTo("Elevation")
         shot("detail-light-3")
         // Delete from the menu, then bring it back with Undo.
         rule.onNodeWithContentDescription("More options").performClick()

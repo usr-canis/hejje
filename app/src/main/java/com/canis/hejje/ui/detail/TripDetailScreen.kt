@@ -159,8 +159,11 @@ fun TripDetailScreen(
     val trip = item?.trip
     val places = com.canis.hejje.ui.LocalPlaces.current
     val title = trip?.let { tripTitle(it, f, places) }.orEmpty()
+    // A stop or leg tapped in the timeline: where the map flies to, and the stop's spot.
+    var focus by remember { mutableStateOf<List<Pair<Double, Double>>?>(null) }
+    var spot by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     val highlightIndex = if (edit != null) editPoint else selected
-    val highlight = state.chart.takeIf { highlightIndex in 0 until it.size }?.let { it.lat[highlightIndex] to it.lon[highlightIndex] }
+    val highlight = spot ?: state.chart.takeIf { highlightIndex in 0 until it.size }?.let { it.lat[highlightIndex] to it.lon[highlightIndex] }
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
         Column(Modifier.fillMaxSize()) {
@@ -182,7 +185,7 @@ fun TripDetailScreen(
                     TripMap(
                         routes = state.routes, modifier = Modifier.fillMaxSize(),
                         bySpeed = state.settings.routeBySpeed, markers = state.markers, highlight = highlight,
-                        animate = true, description = stringResource(R.string.detail_map_description, title),
+                        animate = true, description = stringResource(R.string.detail_map_description, title), focus = focus,
                     )
                 }
                 Surface(
@@ -259,7 +262,7 @@ fun TripDetailScreen(
                     item(key = "chart") {
                         SectionTitle(stringResource(R.string.detail_speed_over_time))
                         SpeedChart(
-                            state.chart.speeds, selected, onSelect = { if (it != selected) haptics.tick(); selected = it }, formatter = f,
+                            state.chart.speeds, selected, onSelect = { if (it != selected) haptics.tick(); selected = it; spot = null }, formatter = f,
                             description = stringResource(R.string.detail_chart_description, f.speed(trip.avgMovingSpeed), f.speed(trip.maxSpeed)),
                         )
                         Text(
@@ -267,21 +270,20 @@ fun TripDetailScreen(
                             style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
                         )
                     }
-                    item(key = "stats") { StatsSections(stats, trip.baro, f) }
-                    if (state.segments.size > 1) {
-                        item(key = "segments") {
-                            SectionTitle(stringResource(R.string.detail_segments))
-                            state.segments.forEachIndexed { i, s ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("${i + 1}.  ${f.time(s.start)} – ${f.time(s.end)}", style = MaterialTheme.typography.bodyLarge)
-                                    Text(
-                                        f.distance(s.data.profile.dist.sum().toDouble()), style = MaterialTheme.typography.bodyLarge,
-                                        color = colors.onSurfaceVariant,
-                                    )
-                                }
+                    if (state.timeline.size > 2) {
+                        item(key = "timeline") {
+                            val names by vm.timelineNames.names.collectAsStateWithLifecycle()
+                            val lookups = timelineLookups(state.timeline, trip.startPlace, trip.endPlace)
+                            LaunchedEffect(lookups) { vm.timelineNames.lookUp(lookups) }
+                            SectionTitle(stringResource(R.string.detail_timeline))
+                            TripTimeline(state.timeline, names, trip.startPlace, trip.endPlace, f) { points, at ->
+                                haptics.tick()
+                                focus = points
+                                spot = at
                             }
                         }
                     }
+                    item(key = "stats") { StatsSections(stats, trip.baro, f) }
                 }
             }
         }
@@ -431,15 +433,6 @@ internal fun StatsSections(s: TripStats, baro: Boolean, f: Formatter) {
         StatRow {
             StatTile(stringResource(R.string.stat_stop_count), pluralStringResource(R.plurals.stop_count, s.stops.size, s.stops.size), Modifier.weight(1f))
             StatTile(stringResource(R.string.stat_stop_time), f.duration(s.stopMs), Modifier.weight(1f))
-        }
-        s.stops.take(8).forEach { stop ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    f.time(stop.start) + "  ·  " + stringResource(if (stop.parked) R.string.stop_parked else R.string.stop_idle),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(f.duration(stop.durationMs), style = MaterialTheme.typography.bodyMedium)
-            }
         }
 
         SectionTitle(stringResource(R.string.detail_style))

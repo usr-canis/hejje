@@ -140,6 +140,8 @@ fun TripMap(
     description: String = "",
     center: Pair<Double, Double>? = null,
     onCenterChanged: ((Double, Double) -> Unit)? = null,
+    /** Fly the camera to these points (one point: close up), e.g. a stop tapped in the timeline. */
+    focus: List<Pair<Double, Double>>? = null,
 ) {
     val palette = LocalPalette.current
     val context = LocalContext.current
@@ -226,6 +228,20 @@ fun TripMap(
                     m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad, top, pad, pad))
                 points.isNotEmpty() -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(points[0], 15.0))
                 else -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(map, focus) {
+        val m = map ?: return@LaunchedEffect
+        val points = focus?.map { LatLng(it.first, it.second) } ?: return@LaunchedEffect
+        val pad = with(density) { 48.dp.roundToPx() }
+        val top = pad + with(density) { FLAG_ROOM.roundToPx() }
+        runCatching {
+            if (points.size < 2 || points.all { it.latitude == points[0].latitude && it.longitude == points[0].longitude }) {
+                m.animateCamera(CameraUpdateFactory.newLatLngZoom(points[0], 15.0), 700)
+            } else {
+                m.animateCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad, top, pad, pad), 700)
             }
         }
     }

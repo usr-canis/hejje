@@ -12,6 +12,8 @@ import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.PrivacyZones
 import com.canis.hejje.domain.Segment
 import com.canis.hejje.domain.StatsCalculator
+import com.canis.hejje.domain.Timeline
+import com.canis.hejje.domain.TimelineEntry
 import com.canis.hejje.domain.TripStats
 import com.canis.hejje.domain.Zone
 import com.canis.hejje.ui.map.MapMarker
@@ -79,13 +81,20 @@ data class DetailState(
     val settings: SettingsData = SettingsData(),
     val previous: TripEntity? = null,
     val next: TripEntity? = null,
+    val timeline: List<TimelineEntry> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TripDetailViewModel(private val container: AppContainer, private val tripId: Long) : ViewModel() {
     private val trips = container.trips
 
-    private class Loaded(val segments: List<Segment>, val stats: TripStats?, val chart: ChartSeries, val previous: TripEntity?, val next: TripEntity?)
+    private class Loaded(
+        val segments: List<Segment>, val stats: TripStats?, val chart: ChartSeries, val previous: TripEntity?, val next: TripEntity?,
+        val timeline: List<TimelineEntry>,
+    )
+
+    /** Place names for the timeline's stops. */
+    val timelineNames = TimelineNames(container.places, viewModelScope)
 
     private val item = trips.observeTrip(tripId)
 
@@ -95,7 +104,8 @@ class TripDetailViewModel(private val container: AppContainer, private val tripI
             if (t == null) null else withContext(Dispatchers.Default) {
                 val segments = trips.segments(tripId)
                 val (previous, next) = trips.neighbours(tripId)
-                Loaded(segments, if (segments.isEmpty()) null else StatsCalculator.compute(segments), ChartSeries.of(segments), previous, next)
+                val stats = if (segments.isEmpty()) null else StatsCalculator.compute(segments)
+                Loaded(segments, stats, ChartSeries.of(segments), previous, next, if (stats == null) emptyList() else Timeline.of(segments, stats.stops))
             }
         }
 
@@ -113,6 +123,7 @@ class TripDetailViewModel(private val container: AppContainer, private val tripI
         DetailState(
             loading = false, item = item, segments = loaded.segments, stats = loaded.stats, chart = loaded.chart,
             routes = routes, markers = markers, allTags = tags, settings = settings, previous = loaded.previous, next = loaded.next,
+            timeline = loaded.timeline,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailState())
 

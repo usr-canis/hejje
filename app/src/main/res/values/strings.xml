@@ -161,6 +161,12 @@
     <string name="stat_stop_time">Time stopped</string>
     <string name="stop_parked">Parked</string>
     <string name="stop_idle">Idle</string>
+    <string name="detail_timeline">Timeline</string>
+    <string name="tl_start">Start</string>
+    <string name="tl_finish">Finish</string>
+    <string name="tl_avg">avg %1$s</string>
+    <string name="tl_top">top %1$s</string>
+    <string name="tl_circuity">Circuity %1$s</string>
     <string name="stat_smoothness">Fluidity</string>
     <string name="stat_smoothness_value">%1$d / 100</string>
     <string name="stat_hard_braking">Hard braking</string>
@@ -241,7 +247,6 @@
     <string name="detail_no_elevation">No altitude was recorded for this trip.</string>
     <string name="detail_elevation_baro">Measured with the phone’s barometer.</string>
     <string name="detail_elevation_gps">Estimated from GPS, so small hills may be missed.</string>
-    <string name="detail_segments">Segments</string>
     <string name="detail_trim">Trim start or end</string>
     <string name="detail_trim_hint">Drag the handles to keep only the part between them. The dot on the map follows.</string>
     <string name="detail_split">Split in two</string>

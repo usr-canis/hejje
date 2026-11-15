@@ -18,8 +18,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +45,8 @@ import com.canis.hejje.domain.Insights
 import com.canis.hejje.domain.PrivacyZones
 import com.canis.hejje.domain.RouteShape
 import com.canis.hejje.domain.StatsCalculator
+import com.canis.hejje.domain.Timeline
+import com.canis.hejje.domain.TimelineEntry
 import com.canis.hejje.domain.TripEditor
 import com.canis.hejje.domain.TripStats
 import com.canis.hejje.domain.Zone
@@ -55,6 +60,9 @@ import com.canis.hejje.ui.components.StatTile
 import com.canis.hejje.ui.components.rememberHaptics
 import com.canis.hejje.ui.detail.ChartSeries
 import com.canis.hejje.ui.detail.StatsSections
+import com.canis.hejje.ui.detail.TimelineNames
+import com.canis.hejje.ui.detail.TripTimeline
+import com.canis.hejje.ui.detail.timelineLookups
 import com.canis.hejje.ui.hejjeViewModel
 import com.canis.hejje.ui.map.MapMarker
 import com.canis.hejje.ui.map.MapRoute
@@ -79,12 +87,16 @@ data class SectionState(
     val routes: List<MapRoute> = emptyList(),
     val markers: List<MapMarker> = emptyList(),
     val settings: SettingsData = SettingsData(),
+    val timeline: List<TimelineEntry> = emptyList(),
 )
 
 /** The part of one trip between [from] and [to] (epoch ms), with the same stats as a whole trip. */
 class SectionViewModel(container: AppContainer, tripId: Long, from: Long, to: Long) : ViewModel() {
     private val _state = MutableStateFlow(SectionState(settings = container.settings.current))
     val state: StateFlow<SectionState> = _state
+
+    /** Place names for the timeline's stops. */
+    val timelineNames = TimelineNames(container.places, viewModelScope)
 
     init {
         viewModelScope.launch {
@@ -108,6 +120,7 @@ class SectionViewModel(container: AppContainer, tripId: Long, from: Long, to: Lo
                 SectionState(
                     loading = false, trip = trip, stats = computed.copy(shape = shape), baro = part.any { it.data.baro },
                     chart = ChartSeries.of(part), routes = routes, markers = markers, settings = settings,
+                    timeline = Timeline.of(part, computed.stops),
                 )
             }
             _state.value = loaded ?: SectionState(loading = false, trip = trip, settings = settings)
@@ -125,6 +138,8 @@ fun SectionScreen(tripId: Long, from: Long, to: Long, onBack: () -> Unit, onTrip
     val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
     val mapHeight = (windowHeight * 0.36f).coerceIn(220.dp, 380.dp)
     var selected by rememberSaveable { mutableIntStateOf(-1) }
+    var focus by remember { mutableStateOf<List<Pair<Double, Double>>?>(null) }
+    var spot by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     val stats = state.stats
     val trip = state.trip
 
@@ -133,8 +148,8 @@ fun SectionScreen(tripId: Long, from: Long, to: Long, onBack: () -> Unit, onTrip
         Box(Modifier.fillMaxWidth().height(mapHeight).clipToBounds()) {
             TripMap(
                 state.routes, Modifier.fillMaxSize(), bySpeed = state.settings.routeBySpeed, markers = state.markers,
-                highlight = state.chart.takeIf { selected in 0 until it.size }?.let { it.lat[selected] to it.lon[selected] },
-                description = stringResource(R.string.section_map_description),
+                highlight = spot ?: state.chart.takeIf { selected in 0 until it.size }?.let { it.lat[selected] to it.lon[selected] },
+                description = stringResource(R.string.section_map_description), focus = focus,
             )
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
@@ -176,13 +191,26 @@ fun SectionScreen(tripId: Long, from: Long, to: Long, onBack: () -> Unit, onTrip
             item(key = "chart") {
                 SectionTitle(stringResource(R.string.detail_speed_over_time))
                 SpeedChart(
-                    state.chart.speeds, selected, onSelect = { if (it != selected) haptics.tick(); selected = it }, formatter = f,
+                    state.chart.speeds, selected, onSelect = { if (it != selected) haptics.tick(); selected = it; spot = null }, formatter = f,
                     description = stringResource(R.string.detail_chart_description, f.speed(stats.avgMovingSpeed), f.speed(stats.maxSpeed)),
                 )
                 Text(
                     if (selected in 0 until state.chart.size) f.time(state.chart.times[selected]) else stringResource(R.string.detail_chart_hint),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+            if (state.timeline.size > 2) {
+                item(key = "timeline") {
+                    val names by vm.timelineNames.names.collectAsStateWithLifecycle()
+                    val lookups = timelineLookups(state.timeline, null, null)
+                    LaunchedEffect(lookups) { vm.timelineNames.lookUp(lookups) }
+                    SectionTitle(stringResource(R.string.detail_timeline))
+                    TripTimeline(state.timeline, names, null, null, f) { points, at ->
+                        haptics.tick()
+                        focus = points
+                        spot = at
+                    }
+                }
             }
             item(key = "stats") { StatsSections(stats, state.baro, f) }
         }
