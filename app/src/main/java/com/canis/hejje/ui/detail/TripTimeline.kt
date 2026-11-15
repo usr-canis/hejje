@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -84,9 +83,9 @@ internal fun timelineLookups(entries: List<TimelineEntry>, startName: String?, e
 }
 
 /**
- * The trip told in order: start, each leg with its numbers, every stop with where and how long,
- * and the finish. Parked: the phone disconnected from the car. Idle: standing still, still connected.
- * Tapping a stop shows it on the map; tapping a leg fits that leg on the map.
+ * The trip told in order: start, each leg with its numbers, every parked stop (the phone
+ * disconnected from the car) with where and how long, and the finish. Tapping a stop shows it on
+ * the map; tapping a leg fits that leg on the map.
  */
 @Composable
 internal fun TripTimeline(
@@ -123,9 +122,9 @@ private val RAIL_WIDTH = 34.dp
 @Composable
 private fun PointRow(p: TimelineEntry.Point, name: String?, first: Boolean, last: Boolean, f: Formatter, onClick: () -> Unit) {
     val label = stringResource(
-        when (p.kind) { Kind.START -> R.string.tl_start; Kind.PARKED -> R.string.stop_parked; Kind.IDLE -> R.string.stop_idle; Kind.END -> R.string.tl_finish },
+        when (p.kind) { Kind.START -> R.string.tl_start; Kind.PARKED -> R.string.stop_parked; Kind.END -> R.string.tl_finish },
     )
-    val duration = if (p.kind == Kind.PARKED || p.kind == Kind.IDLE) f.duration(p.durationMs) else null
+    val duration = if (p.kind == Kind.PARKED) f.duration(p.durationMs) else null
     val title = name ?: label
     val subtitle = when {
         name == null -> duration
@@ -206,10 +205,5 @@ private fun Marker(kind: Kind) {
             Modifier.size(22.dp).background(palette.accent, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) { Text("P", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold), color = Color.White) }
-        Kind.IDLE -> Box(
-            Modifier.size(14.dp).background(MaterialTheme.colorScheme.background, CircleShape)
-                .padding(3.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
-                .padding(2.dp).background(MaterialTheme.colorScheme.background, CircleShape),
-        )
     }
 }

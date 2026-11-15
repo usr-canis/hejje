@@ -26,19 +26,15 @@ sealed interface TimelineEntry {
 
         /** The phone disconnected from the car (engine off) and later connected again. */
         PARKED,
-
-        /** Standing still while the phone stayed connected (engine on: traffic, a signal, a quick drop-off). */
-        IDLE,
         END,
     }
 }
 
 /**
- * A trip told in order: start, each leg, each stop, end. Every parked stop is listed; idle stops
- * only from [MIN_IDLE_MS], so short waits at signals do not clutter it.
+ * A trip told in order: start, each leg, each parked stop (the phone disconnected from the car),
+ * end. Standing still with the car still connected (traffic, signals) stays part of the leg.
  */
 object Timeline {
-    const val MIN_IDLE_MS = 120_000L
     private const val MIN_LEG_M = 20.0
 
     fun of(segments: List<Segment>, stops: List<Stop>): List<TimelineEntry> {
@@ -49,11 +45,9 @@ object Timeline {
         val out = ArrayList<TimelineEntry>()
         out += TimelineEntry.Point(TimelineEntry.Kind.START, segs.first().start, first.lat[0], first.lon[0])
         var legStart = segs.first().start
-        for (stop in stops.filter { it.parked || it.durationMs >= MIN_IDLE_MS }.sortedBy { it.start }) {
+        for (stop in stops.filter { it.parked }.sortedBy { it.start }) {
             leg(segs, legStart, stop.start)?.let { out += it }
-            out += TimelineEntry.Point(
-                if (stop.parked) TimelineEntry.Kind.PARKED else TimelineEntry.Kind.IDLE, stop.start, stop.lat, stop.lon, stop.durationMs,
-            )
+            out += TimelineEntry.Point(TimelineEntry.Kind.PARKED, stop.start, stop.lat, stop.lon, stop.durationMs)
             legStart = stop.start + stop.durationMs
         }
         leg(segs, legStart, segs.last().end)?.let { out += it }

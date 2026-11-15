@@ -160,7 +160,6 @@
     <string name="stat_stop_count">Number of stops</string>
     <string name="stat_stop_time">Time stopped</string>
     <string name="stop_parked">Parked</string>
-    <string name="stop_idle">Idle</string>
     <string name="detail_timeline">Timeline</string>
     <string name="tl_start">Start</string>
     <string name="tl_finish">Finish</string>
