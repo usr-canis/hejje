@@ -9,6 +9,7 @@ import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.TripRepository
 import com.canis.hejje.data.db.HejjeDb
+import com.canis.hejje.food.FoodManager
 import com.canis.hejje.notify.Notifier
 import com.canis.hejje.recording.LocationPrompt
 import com.canis.hejje.recording.RecordingController
@@ -53,6 +54,13 @@ class AppContainer(val app: Application) {
         app, settings, buffer, db.raw(), finalizer, scope,
         locationPrompt = LocationPrompt(app, notifier, log), log = log,
     )
+    val food = FoodManager(app, db, settings, trips, notifier, controller.live, scope).also { f ->
+        finalizer.afterParked = { at ->
+            f.onParked(at)
+            f.onTripSaved()
+        }
+        f.watch()
+    }
 
     /** Recalculates every trip once when the way stats are computed has changed (Fluidity in 1.2.0, route shape in 1.4.0). */
     suspend fun upgradeStats() {

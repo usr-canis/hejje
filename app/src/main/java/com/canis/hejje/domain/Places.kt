@@ -10,13 +10,17 @@ data class NamedPlace(
     val icon: String = "pin",
     val hide: Boolean = true,
     val tag: String? = null,
-)
+    /** Food and coffee places: 1 = good, -1 = not again, 0 = not rated. */
+    val rating: Int = 0,
+) {
+    val isFoodOrCoffee: Boolean get() = icon == "food" || icon == "coffee"
+}
 
 /** A frequent parking spot that is not a named place yet. */
 data class PlaceSuggestion(val lat: Double, val lon: Double, val visits: Int, val name: String?)
 
 object Places {
-    val ICONS = listOf("home", "work", "school", "gym", "shop", "family", "star", "pin")
+    val ICONS = listOf("home", "work", "school", "gym", "shop", "family", "food", "coffee", "star", "pin")
     const val COMMUTE_TAG = "Commute"
 
     /** The named place at this spot (the nearest one if places overlap), or null. */

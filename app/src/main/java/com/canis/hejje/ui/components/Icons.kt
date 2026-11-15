@@ -111,6 +111,21 @@ object HejjeIcons {
         lineTo(12f, 15.9f); lineTo(7.1f, 18.6f); lineTo(8.2f, 13.3f); lineTo(4.2f, 9.6f); lineTo(9.6f, 9f); close()
     }
 
+    val Food = icon("Food") {
+        // Fork and knife.
+        moveTo(7f, 3f); verticalLineTo(21f); moveTo(4.5f, 3f); verticalLineTo(8f)
+        curveTo(4.5f, 9.6f, 5.6f, 10.5f, 7f, 10.5f); curveTo(8.4f, 10.5f, 9.5f, 9.6f, 9.5f, 8f); verticalLineTo(3f)
+        moveTo(17f, 21f); verticalLineTo(3f); curveTo(15f, 4f, 14.5f, 7f, 14.5f, 11f); horizontalLineTo(17f)
+    }
+    val Coffee = icon("Coffee") {
+        // A cup with a handle and steam.
+        moveTo(5f, 10f); horizontalLineTo(16f); verticalLineTo(15f); curveTo(16f, 18f, 14f, 20f, 10.5f, 20f)
+        curveTo(7f, 20f, 5f, 18f, 5f, 15f); close()
+        moveTo(16f, 11.5f); horizontalLineTo(17.5f); curveTo(19f, 11.5f, 19.8f, 12.5f, 19.8f, 13.5f)
+        curveTo(19.8f, 14.8f, 18.8f, 15.6f, 17.5f, 15.6f); horizontalLineTo(16f)
+        moveTo(8.5f, 4f); curveTo(8f, 5f, 9f, 5.8f, 8.5f, 7f); moveTo(12f, 4f); curveTo(11.5f, 5f, 12.5f, 5.8f, 12f, 7f)
+    }
+
     /** Icon for a place's icon key (see Places.ICONS). */
     fun place(key: String) = when (key) {
         "home" -> Home
@@ -120,6 +135,8 @@ object HejjeIcons {
         "shop" -> Shop
         "family" -> Family
         "star" -> Star
+        "food" -> Food
+        "coffee" -> Coffee
         else -> Pin
     }
 

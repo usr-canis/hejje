@@ -83,6 +83,8 @@ private fun iconLabel(key: String) = when (key) {
     "shop" -> R.string.place_icon_shop
     "family" -> R.string.place_icon_family
     "star" -> R.string.place_icon_star
+    "food" -> R.string.place_icon_food
+    "coffee" -> R.string.place_icon_coffee
     else -> R.string.place_icon_pin
 }
 

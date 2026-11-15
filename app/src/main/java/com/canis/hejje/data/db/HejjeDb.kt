@@ -10,9 +10,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         TripEntity::class, SegmentEntity::class, TagEntity::class, TripTagEntity::class,
-        ZoneEntity::class, PlaceEntity::class, RawPointEntity::class, LogEntity::class,
+        ZoneEntity::class, PlaceEntity::class, RawPointEntity::class, LogEntity::class, StopAskEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class HejjeDb : RoomDatabase() {
@@ -21,6 +21,7 @@ abstract class HejjeDb : RoomDatabase() {
     abstract fun places(): PlaceDao
     abstract fun raw(): RawDao
     abstract fun log(): LogDao
+    abstract fun stopAsks(): StopAskDao
 
     companion object {
         val PRESET_TAGS = listOf("Work", "Commute", "Road trip", "Errand")
@@ -52,13 +53,26 @@ abstract class HejjeDb : RoomDatabase() {
             }
         }
 
+        /** 1.6.0: food and coffee stops (a rating on places, and the questions asked after parking). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE zones ADD COLUMN rating INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `stop_asks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `at` INTEGER NOT NULL, " +
+                        "`parkedAt` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `state` TEXT NOT NULL, `placeId` INTEGER, " +
+                        "`feedback` INTEGER NOT NULL DEFAULT 0)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_stop_asks_at` ON `stop_asks` (`at`)")
+            }
+        }
+
         fun create(context: Context, inMemory: Boolean = false): HejjeDb {
             val builder = if (inMemory) {
                 Room.inMemoryDatabaseBuilder(context, HejjeDb::class.java).allowMainThreadQueries()
             } else {
                 Room.databaseBuilder(context, HejjeDb::class.java, "hejje.db")
             }
-            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3).addCallback(object : Callback() {
+            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) = insertPresetTags(db)
             }).build()
         }

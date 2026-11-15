@@ -3,6 +3,7 @@ package com.canis.hejje.ui.detail
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -14,10 +15,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -37,6 +48,8 @@ import androidx.compose.ui.unit.sp
 import com.canis.hejje.R
 import com.canis.hejje.data.PlaceRepository
 import com.canis.hejje.domain.Formatter
+import com.canis.hejje.domain.Meal
+import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.domain.Places
 import com.canis.hejje.domain.TimelineEntry
 import com.canis.hejje.domain.TimelineEntry.Kind
@@ -94,6 +107,10 @@ internal fun TripTimeline(
     startName: String?,
     endName: String?,
     f: Formatter,
+    /** Name a parked stop that is not one of your places yet (food or coffee). */
+    onName: ((TimelineEntry.Point) -> Unit)? = null,
+    /** Rate (or re-rate) a food or coffee place. */
+    onRate: ((NamedPlace) -> Unit)? = null,
     onFocus: (points: List<Pair<Double, Double>>, spot: Pair<Double, Double>?) -> Unit,
 ) {
     val places = LocalPlaces.current
@@ -101,11 +118,20 @@ internal fun TripTimeline(
         entries.forEachIndexed { i, e ->
             when (e) {
                 is TimelineEntry.Point -> {
-                    val name = Places.placeAt(e.lat, e.lon, places)?.name
+                    val here = Places.placeAt(e.lat, e.lon, places)
+                    // One small link on parked stops: name it, or rate a food/coffee place.
+                    val link: Pair<String, () -> Unit>? = when {
+                        e.kind != Kind.PARKED -> null
+                        here == null && onName != null -> stringResource(R.string.tl_name) to { onName(e) }
+                        here != null && here.isFoodOrCoffee && onRate != null ->
+                            (when (here.rating) { 1 -> "👍"; -1 -> "👎"; else -> stringResource(R.string.tl_rate) }) to { onRate(here) }
+                        else -> null
+                    }
+                    val name = here?.name
                         ?: (if (e.kind == Kind.START) startName else null)
                         ?: (if (e.kind == Kind.END) endName else null)
                         ?: names[PlaceRepository.keyOf(e.lat, e.lon)]
-                    PointRow(e, name, first = i == 0, last = i == entries.size - 1, f) { onFocus(listOf(e.lat to e.lon), e.lat to e.lon) }
+                    PointRow(e, name, first = i == 0, last = i == entries.size - 1, f, link) { onFocus(listOf(e.lat to e.lon), e.lat to e.lon) }
                 }
                 is TimelineEntry.Leg -> LegRow(e, f) {
                     val step = (e.lat.size / 60).coerceAtLeast(1)
@@ -120,7 +146,9 @@ private val TIME_WIDTH = 50.dp
 private val RAIL_WIDTH = 34.dp
 
 @Composable
-private fun PointRow(p: TimelineEntry.Point, name: String?, first: Boolean, last: Boolean, f: Formatter, onClick: () -> Unit) {
+private fun PointRow(
+    p: TimelineEntry.Point, name: String?, first: Boolean, last: Boolean, f: Formatter, link: Pair<String, () -> Unit>?, onClick: () -> Unit,
+) {
     val label = stringResource(
         when (p.kind) { Kind.START -> R.string.tl_start; Kind.PARKED -> R.string.stop_parked; Kind.END -> R.string.tl_finish },
     )
@@ -146,6 +174,9 @@ private fun PointRow(p: TimelineEntry.Point, name: String?, first: Boolean, last
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 10.dp, bottom = 10.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 2)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (link != null) {
+            TextButton(onClick = link.second) { Text(link.first, color = LocalPalette.current.accentText) }
         }
     }
 }
@@ -205,5 +236,50 @@ private fun Marker(kind: Kind) {
             Modifier.size(22.dp).background(palette.accent, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) { Text("P", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold), color = Color.White) }
+    }
+}
+
+/** Name a parked stop later: food or coffee, and the place's name. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun FoodNameSheet(onDismiss: () -> Unit, onSave: (Meal, String) -> Unit) {
+    var meal by remember { mutableStateOf(Meal.FOOD) }
+    var name by remember { mutableStateOf("") }
+    val colors = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surfaceContainerLow) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text(stringResource(R.string.food_sheet_title), style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(Meal.FOOD to R.string.food_action_food, Meal.COFFEE to R.string.food_action_coffee).forEach { (m, label) ->
+                    FilterChip(
+                        selected = meal == m, onClick = { meal = m }, label = { Text(stringResource(label)) },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = colors.primaryContainer, selectedLabelColor = colors.onPrimaryContainer),
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                placeholder = { Text(stringResource(R.string.food_name_hint)) },
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel), color = colors.onSurfaceVariant) }
+                TextButton(onClick = { onSave(meal, name) }) { Text(stringResource(R.string.action_save), color = LocalPalette.current.accentText) }
+            }
+        }
+    }
+}
+
+/** Rate a food or coffee place: suggest again, or not again. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun FoodRateSheet(name: String, onDismiss: () -> Unit, onRate: (Boolean) -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text(stringResource(R.string.food_feedback, name), style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = { onRate(true) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.food_good)) }
+                OutlinedButton(onClick = { onRate(false) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.food_not_again)) }
+            }
+        }
     }
 }

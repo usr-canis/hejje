@@ -104,6 +104,27 @@ interface ZoneDao {
 }
 
 @Dao
+interface StopAskDao {
+    @Insert
+    suspend fun insert(ask: StopAskEntity): Long
+
+    @Query("SELECT * FROM stop_asks WHERE id = :id")
+    suspend fun get(id: Long): StopAskEntity?
+
+    @Query("SELECT * FROM stop_asks WHERE at >= :since ORDER BY at")
+    suspend fun since(since: Long): List<StopAskEntity>
+
+    @Query("SELECT * FROM stop_asks WHERE state = 'dismissed'")
+    suspend fun dismissed(): List<StopAskEntity>
+
+    @Update
+    suspend fun update(ask: StopAskEntity)
+
+    @Query("DELETE FROM stop_asks")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface PlaceDao {
     @Query("SELECT * FROM places WHERE `key` = :key")
     suspend fun get(key: String): PlaceEntity?

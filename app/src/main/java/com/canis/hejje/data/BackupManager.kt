@@ -49,7 +49,7 @@ class BackupManager(
             appVersion = BuildConfig.VERSION_NAME,
             settings = settings.export(settings.current),
             tags = trips.allTags().map { it.name },
-            zones = db.zones().all().map { BackupZone(it.name, it.lat, it.lon, it.radiusM, it.icon, it.hide, it.tag) },
+            zones = db.zones().all().map { BackupZone(it.name, it.lat, it.lon, it.radiusM, it.icon, it.hide, it.tag, it.rating) },
             trips = trips.all().map { t ->
                 BackupTrip(
                     t.uuid, t.note, t.startPlace, t.endPlace, trips.tagNames(t.id),
@@ -98,7 +98,7 @@ class BackupManager(
         file.tags.forEach { trips.createTag(it) }
         val zones = db.zones().all()
         file.zones.filter { z -> zones.none { it.lat == z.lat && it.lon == z.lon && it.radiusM == z.radiusM } }
-            .forEach { db.zones().upsert(ZoneEntity(0, it.name, it.lat, it.lon, it.radiusM, it.icon, it.hide, it.tag)) }
+            .forEach { db.zones().upsert(ZoneEntity(0, it.name, it.lat, it.lon, it.radiusM, it.icon, it.hide, it.tag, it.rating)) }
         for (t in file.trips) {
             val segs = t.segments.map { Segment(it.start, it.end, it.data) }.filter { it.end > it.start }
             if (segs.isEmpty()) { failed++; continue }

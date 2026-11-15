@@ -58,6 +58,11 @@ data class SettingsData(
     val parkedLat: Double? = null,
     val parkedLon: Double? = null,
     val parkedAt: Long = 0,
+    /** Ask about food and coffee stops, and say when a liked one is coming up at meal times. */
+    val foodStops: Boolean = true,
+    /** When you last stopped for food, and for coffee (so it is not suggested again too soon). */
+    val lastFoodAt: Long = 0,
+    val lastCoffeeAt: Long = 0,
 ) {
     val mergeGapMs: Long get() = mergeGapMin * 60_000L
     val brakeThreshold: Float get() = floatArrayOf(3.6f, 3.0f, 2.5f)[brakeSensitivity.coerceIn(0, 2)]
@@ -102,6 +107,9 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val parkedLat = doublePreferencesKey("parkedLat")
         val parkedLon = doublePreferencesKey("parkedLon")
         val parkedAt = longPreferencesKey("parkedAt")
+        val foodStops = booleanPreferencesKey("foodStops")
+        val lastFoodAt = longPreferencesKey("lastFoodAt")
+        val lastCoffeeAt = longPreferencesKey("lastCoffeeAt")
     }
 
     private fun read(p: Preferences): SettingsData {
@@ -133,6 +141,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             lastAutoStart = p[K.lastAutoStart] ?: 0,
             lastProblem = p[K.lastProblem], lastProblemAt = p[K.lastProblemAt] ?: 0,
             parkedLat = p[K.parkedLat], parkedLon = p[K.parkedLon], parkedAt = p[K.parkedAt] ?: 0,
+            foodStops = p[K.foodStops] ?: d.foodStops, lastFoodAt = p[K.lastFoodAt] ?: 0, lastCoffeeAt = p[K.lastCoffeeAt] ?: 0,
         )
     }
 
@@ -150,6 +159,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         set(K.routeBySpeed, s.routeBySpeed); set(K.onboardingDone, s.onboardingDone); set(K.lastAutoStart, s.lastAutoStart)
         set(K.lastProblem, s.lastProblem); set(K.lastProblemAt, s.lastProblemAt)
         set(K.parkedLat, s.parkedLat); set(K.parkedLon, s.parkedLon); set(K.parkedAt, s.parkedAt)
+        set(K.foodStops, s.foodStops); set(K.lastFoodAt, s.lastFoodAt); set(K.lastCoffeeAt, s.lastCoffeeAt)
     }
 
     /** Always holds the latest settings; loaded once up front so background receivers can read it at once. */

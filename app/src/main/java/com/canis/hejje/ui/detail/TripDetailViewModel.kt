@@ -9,6 +9,7 @@ import com.canis.hejje.data.Undo
 import com.canis.hejje.data.db.TagEntity
 import com.canis.hejje.data.db.TripEntity
 import com.canis.hejje.data.db.TripWithTags
+import com.canis.hejje.domain.Meal
 import com.canis.hejje.domain.PrivacyZones
 import com.canis.hejje.domain.Segment
 import com.canis.hejje.domain.StatsCalculator
@@ -130,6 +131,13 @@ class TripDetailViewModel(private val container: AppContainer, private val tripI
     fun setTag(name: String, on: Boolean) = viewModelScope.launch { trips.setTag(tripId, name, on) }
 
     fun setNote(note: String) = viewModelScope.launch { trips.setNote(tripId, note) }
+
+    /** Names a parked stop as a food or coffee place (also when its notification was missed). */
+    fun nameStop(p: TimelineEntry.Point, meal: Meal, name: String) = container.scope.launch {
+        runCatching { container.food.save(meal, name, p.lat, p.lon, p.time) }
+    }
+
+    fun rateFood(placeId: Long, good: Boolean) = container.scope.launch { runCatching { container.food.rate(placeId, good) } }
 
     fun setRouteBySpeed(on: Boolean) = viewModelScope.launch { container.settings.update { it.copy(routeBySpeed = on) } }
 

@@ -138,6 +138,7 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
             item {
                 Header(R.string.settings_notifications)
                 SettingRow(stringResource(R.string.settings_summary), stringResource(summaryLabels[s.summaryTiming.coerceIn(0, 3)])) { picker = Picker.SUMMARY }
+                SwitchRow(stringResource(R.string.settings_food), stringResource(R.string.settings_food_summary), s.foodStops) { v -> set { it.copy(foodStops = v) } }
             }
             item {
                 Header(R.string.settings_backup)

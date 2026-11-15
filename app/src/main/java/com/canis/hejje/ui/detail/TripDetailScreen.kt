@@ -71,9 +71,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.canis.hejje.R
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
+import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.domain.PrivacyZones
 import com.canis.hejje.domain.RouteShape
 import com.canis.hejje.domain.StatsCalculator
+import com.canis.hejje.domain.TimelineEntry
 import com.canis.hejje.domain.TripStats
 import com.canis.hejje.ui.components.BandBars
 import com.canis.hejje.ui.components.HejjeIcons
@@ -161,6 +163,9 @@ fun TripDetailScreen(
     val title = trip?.let { tripTitle(it, f, places) }.orEmpty()
     // A stop or leg tapped in the timeline: where the map flies to, and the stop's spot.
     var focus by remember { mutableStateOf<List<Pair<Double, Double>>?>(null) }
+    // Naming or rating a food/coffee stop from the timeline.
+    var naming by remember { mutableStateOf<TimelineEntry.Point?>(null) }
+    var rating by remember { mutableStateOf<NamedPlace?>(null) }
     var spot by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     val highlightIndex = if (edit != null) editPoint else selected
     val highlight = spot ?: state.chart.takeIf { highlightIndex in 0 until it.size }?.let { it.lat[highlightIndex] to it.lon[highlightIndex] }
@@ -276,7 +281,10 @@ fun TripDetailScreen(
                             val lookups = timelineLookups(state.timeline, trip.startPlace, trip.endPlace)
                             LaunchedEffect(lookups) { vm.timelineNames.lookUp(lookups) }
                             SectionTitle(stringResource(R.string.detail_timeline))
-                            TripTimeline(state.timeline, names, trip.startPlace, trip.endPlace, f) { points, at ->
+                            TripTimeline(
+                                state.timeline, names, trip.startPlace, trip.endPlace, f,
+                                onName = { naming = it }, onRate = { rating = it },
+                            ) { points, at ->
                                 haptics.tick()
                                 focus = points
                                 spot = at
@@ -336,6 +344,21 @@ fun TripDetailScreen(
                     }
                 }
             }
+        }
+    }
+
+    naming?.let { p ->
+        FoodNameSheet(onDismiss = { naming = null }) { meal, name ->
+            haptics.confirm()
+            vm.nameStop(p, meal, name)
+            naming = null
+        }
+    }
+    rating?.let { place ->
+        FoodRateSheet(place.name, onDismiss = { rating = null }) { good ->
+            haptics.confirm()
+            vm.rateFood(place.id, good)
+            rating = null
         }
     }
 

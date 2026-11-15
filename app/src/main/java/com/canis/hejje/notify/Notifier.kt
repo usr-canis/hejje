@@ -11,11 +11,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.canis.hejje.MainActivity
 import com.canis.hejje.R
 import com.canis.hejje.data.db.TripEntity
 import com.canis.hejje.domain.Formatter
+import com.canis.hejje.food.FoodReceiver
 import com.canis.hejje.recording.ControlReceiver
 import com.canis.hejje.ui.formatter
 
@@ -36,6 +38,12 @@ class Notifier(private val context: Context) {
         )
         nm.createNotificationChannel(
             NotificationChannel(CH_LOCATION, context.getString(R.string.channel_location), NotificationManager.IMPORTANCE_HIGH),
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_FOOD, context.getString(R.string.channel_food), NotificationManager.IMPORTANCE_HIGH),
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_FOOD_FEEDBACK, context.getString(R.string.channel_food_feedback), NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
 
@@ -80,6 +88,65 @@ class Notifier(private val context: Context) {
         }
         return b.build()
     }
+
+    private fun foodIntent(action: String, askId: Long, mutable: Boolean = false): PendingIntent = PendingIntent.getBroadcast(
+        context, (askId * 8 + action.hashCode().mod(8)).toInt(),
+        Intent(context, FoodReceiver::class.java).setAction(action).putExtra(FoodReceiver.EXTRA_ASK, askId),
+        PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /** "Stopped for food or coffee?": Food or Coffee, each with the place's name typed right in. */
+    fun foodQuestion(askId: Long) {
+        if (!canPost()) return
+        fun answer(action: String, label: Int) = NotificationCompat.Action.Builder(0, context.getString(label), foodIntent(action, askId, mutable = true))
+            .addRemoteInput(RemoteInput.Builder(FoodReceiver.KEY_NAME).setLabel(context.getString(R.string.food_name_hint)).build())
+            .setAllowGeneratedReplies(false)
+            .build()
+        val n = NotificationCompat.Builder(context, CH_FOOD)
+            .setSmallIcon(R.drawable.ic_stat_hejje)
+            .setColor(ContextCompat.getColor(context, R.color.accent))
+            .setContentTitle(context.getString(R.string.food_question))
+            .setContentText(context.getString(R.string.food_question_text))
+            .addAction(answer(FoodReceiver.ACTION_FOOD, R.string.food_action_food))
+            .addAction(answer(FoodReceiver.ACTION_COFFEE, R.string.food_action_coffee))
+            .setDeleteIntent(foodIntent(FoodReceiver.ACTION_DISMISS, askId))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        notify(ID_FOOD + askId.toInt(), n)
+    }
+
+    /** Replaces the question once answered, then goes away by itself. */
+    fun foodSaved(askId: Long, name: String) {
+        if (!canPost()) return
+        val n = NotificationCompat.Builder(context, CH_FOOD)
+            .setSmallIcon(R.drawable.ic_stat_hejje)
+            .setColor(ContextCompat.getColor(context, R.color.accent))
+            .setContentTitle(context.getString(R.string.food_saved, name))
+            .setSilent(true)
+            .setTimeoutAfter(4_000)
+            .build()
+        notify(ID_FOOD + askId.toInt(), n)
+    }
+
+    fun cancelFoodQuestion(askId: Long) = manager.cancel(ID_FOOD + askId.toInt())
+
+    /** "How was it?": suggest again, or not again. */
+    fun foodFeedback(askId: Long, name: String) {
+        if (!canPost()) return
+        val n = NotificationCompat.Builder(context, CH_FOOD_FEEDBACK)
+            .setSmallIcon(R.drawable.ic_stat_hejje)
+            .setColor(ContextCompat.getColor(context, R.color.accent))
+            .setContentTitle(context.getString(R.string.food_feedback, name))
+            .addAction(0, context.getString(R.string.food_good), foodIntent(FoodReceiver.ACTION_GOOD, askId))
+            .addAction(0, context.getString(R.string.food_not_again), foodIntent(FoodReceiver.ACTION_NOT_AGAIN, askId))
+            .setDeleteIntent(foodIntent(FoodReceiver.ACTION_FEEDBACK_DISMISS, askId))
+            .setOnlyAlertOnce(true)
+            .build()
+        notify(ID_FOOD_FEEDBACK + askId.toInt(), n)
+    }
+
+    fun cancelFoodFeedback(askId: Long) = manager.cancel(ID_FOOD_FEEDBACK + askId.toInt())
 
     fun summary(trip: TripEntity, f: Formatter = context.formatter()) {
         if (!canPost()) return
@@ -169,10 +236,14 @@ class Notifier(private val context: Context) {
         const val CH_SUMMARY = "summary"
         const val CH_UPDATES = "updates"
         const val CH_LOCATION = "location"
+        const val CH_FOOD = "food"
+        const val CH_FOOD_FEEDBACK = "food-feedback"
         const val ID_RECORDING = 1
         const val ID_SUMMARY = 2
         const val ID_UPDATE = 3
         const val ID_LOCATION = 4
+        private const val ID_FOOD = 1_000
+        private const val ID_FOOD_FEEDBACK = 500_000
         const val EXTRA_TRIP_ID = "trip_id"
         const val EXTRA_SHOW_UPDATE = "show_update"
     }

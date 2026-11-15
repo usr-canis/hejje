@@ -30,6 +30,7 @@ data class BackupZone(
     val icon: String = "pin",
     val hide: Boolean = true,
     val tag: String? = null,
+    val rating: Int = 0,
 )
 
 @Serializable

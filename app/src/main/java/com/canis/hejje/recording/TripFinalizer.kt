@@ -30,6 +30,9 @@ class TripFinalizer(
     private val log: DriveLog? = null,
     private val zones: com.canis.hejje.data.db.ZoneDao? = null,
 ) {
+    /** Told when the car is parked after a saved drive (for food and coffee stops). */
+    var afterParked: (suspend (parkedAt: Long) -> Unit)? = null
+
     suspend fun finalize(session: String, start: Long, end: Long): Long? = withContext(Dispatchers.Default) {
         val raw = rawDao.points(session).map(RawBuffer::toRaw)
         val s = settings.current
@@ -57,6 +60,7 @@ class TripFinalizer(
         val route = segment.data.route
         if (route.size > 0) {
             settings.update { it.copy(parkedLat = route.lat.last(), parkedLon = route.lon.last(), parkedAt = end) }
+            runCatching { afterParked?.invoke(end) }
         }
         if (tripId != null) {
             autoTag(tripId)

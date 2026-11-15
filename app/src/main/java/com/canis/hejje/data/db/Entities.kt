@@ -109,7 +109,32 @@ data class ZoneEntity(
     @ColumnInfo(defaultValue = "pin") val icon: String = "pin",
     @ColumnInfo(defaultValue = "1") val hide: Boolean = true,
     val tag: String? = null,
+    /** Food and coffee places: 1 = good, suggest again; -1 = not again; 0 = not rated. */
+    @ColumnInfo(defaultValue = "0") val rating: Int = 0,
 )
+
+/** A time Hejje asked "Stopped for food or coffee?" after a parked stop, and what came of it. */
+@Entity(tableName = "stop_asks", indices = [Index("at")])
+data class StopAskEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** When the question was shown. */
+    val at: Long,
+    /** When the car was parked. */
+    val parkedAt: Long,
+    val lat: Double,
+    val lon: Double,
+    /** "asked", "saved" (named as food or coffee) or "dismissed" (swiped away: not asked here again). */
+    val state: String = ASKED,
+    val placeId: Long? = null,
+    /** How many times "How was it?" was shown (at most twice), or -1 once answered. */
+    @ColumnInfo(defaultValue = "0") val feedback: Int = 0,
+) {
+    companion object {
+        const val ASKED = "asked"
+        const val SAVED = "saved"
+        const val DISMISSED = "dismissed"
+    }
+}
 
 /** One line of the drive diagnostics log (kept for 14 days, no coordinates). */
 @Entity(tableName = "log", indices = [Index("t")])

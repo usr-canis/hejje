@@ -109,6 +109,7 @@
             android:theme="@style/Theme.Hejje.Transparent" />
 
         <receiver android:name=".recording.ControlReceiver" android:exported="false" />
+        <receiver android:name=".food.FoodReceiver" android:exported="false" />
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
 
         <receiver
