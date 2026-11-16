@@ -88,6 +88,13 @@ private const val SWEEP = 240f
 private const val DIAL_HEIGHT = 1.76f
 private val ODO_ROW = 52.dp
 private const val STALE_MS = 3_000L
+/** A speed this uncertain (one standard deviation, m/s) is shown as an estimate. */
+private const val UNSURE_SIGMA = 1.0f
+
+/** Whether the live speed is an estimate: no clear state, GPS quiet, or a wide error. Shared with the car screen. */
+internal fun liveUncertain(live: LiveState, now: Long): Boolean =
+    live.gap || live.motion == MotionState.UNKNOWN || now - live.lastFixAt > STALE_MS ||
+        (!live.speedSigma.isNaN() && live.speedSigma > UNSURE_SIGMA)
 private val ROW_GAP = 8.dp
 
 /**
@@ -116,9 +123,10 @@ internal fun LiveCluster(live: LiveState, trace: TraceState, next: NextStop?, f:
             val speedoCx = r * 1.035f
             val rc = minOf(r * 0.76f, (maxWidth - speedoCx * 2 - 14.dp) / 2)
             Column {
-                val speed = live.speed.takeIf { live.hasFix }
-                // Unsure (a stop not told from a crawl, or GPS gone quiet): the digits go grey.
-                val uncertain = live.motion == MotionState.UNKNOWN || now - live.lastFixAt > STALE_MS
+                // No GPS speed for too long: no number at all. Unsure (a stop not told from a crawl,
+                // GPS gone quiet, a wide error): the digits go grey and TalkBack says "about".
+                val speed = live.speed.takeIf { live.hasFix && !live.gap }
+                val uncertain = liveUncertain(live, now)
                 Dials(speed, uncertain, trace, live.last, f, r, rc, Modifier.fillMaxWidth().height(r * DIAL_HEIGHT))
                 Spacer(Modifier.height(ROW_GAP))
                 Box(Modifier.fillMaxWidth().height(ODO_ROW)) {
@@ -205,7 +213,11 @@ private fun Dials(speedMs: Float?, uncertain: Boolean, trace: TraceState, here: 
     val turn = rememberTurn(trace.heading)
     val unit = f.speedUnit.uppercase(LocalConfiguration.current.locales[0])
     val digits = if (speedMs == null) "–" else shown.roundToInt().toString()
-    val description = stringResource(R.string.cluster_speed_description, if (speedMs == null) "–" else f.speed(speedMs), headingLabel(trace.heading))
+    val description = when {
+        speedMs == null -> stringResource(R.string.cluster_speed_unknown, headingLabel(trace.heading))
+        uncertain -> stringResource(R.string.cluster_speed_unsure, f.speed(speedMs), headingLabel(trace.heading))
+        else -> stringResource(R.string.cluster_speed_description, f.speed(speedMs), headingLabel(trace.heading))
+    }
     val stops = speedStops(palette.speedRamp, f.miles)
     Canvas(modifier.semantics { contentDescription = description }) {
         val radius = r.toPx()

@@ -25,8 +25,13 @@ data class FusedReading(
     val gap: Boolean,
 )
 
-/** The result of a GPS fix: the reading, and the distance covered since the previous fix (NaN across a gap). */
-class FixResult(val reading: FusedReading, val sinceFixM: Float)
+/**
+ * The result of a GPS fix. [reading] is the picture at the fix's own measurement time (what to store
+ * with the fix); [live] is the picture now, after replaying the sensor samples that came after a
+ * late fix (what to show). [sinceFixM] is the distance since the previous fix: 0 for a duplicate or
+ * an older fix (nothing new), NaN across a gap (GPS lost too long to estimate).
+ */
+class FixResult(val reading: FusedReading, val live: FusedReading, val sinceFixM: Float)
 
 /**
  * Fuses GPS speed with the phone's forward acceleration into one speed, a motion state and a
@@ -59,6 +64,10 @@ class SpeedFusion {
         var gap = false
         var gapInInterval = false
         var lastFixT = 0L
+        /** When GPS last told us a speed (a position alone does not). */
+        var lastVelT = 0L
+        /** Distance driven while a stop is being confirmed: dropped if it is, added if not. */
+        var pending = 0.0
         var lastZ = Float.NaN
         var lastZSigma = Float.NaN
         var lastLat = Double.NaN
@@ -69,7 +78,10 @@ class SpeedFusion {
         var aAbsAvg = 0f
         var stopEvidenceSince = 0L
         var launchSince = 0L
+        var reverseSince = 0L
         var launchedAt = 0L
+        /** The sensors' push that started the last launch (0 if GPS started it). */
+        var launchPush = 0f
         var distrustUntil = 0L
         var rejected = 0
         var rejectedZ = Float.NaN
@@ -80,17 +92,24 @@ class SpeedFusion {
         var z0 = Float.NaN
         var z1 = Float.NaN
         var z2 = Float.NaN
+        var z2T = 0L
+        var z1T = 0L
+        var z0T = 0L
+        /** When the last stop was confirmed. */
+        var zuptAt = 0L
 
-        /** Mean of the last three precise GPS speeds; NaN until there are three. */
+        /** Mean and highest of the last three precise GPS speeds; NaN until there are three. */
         val zMean: Float get() = if (z2.isNaN()) Float.NaN else (z0 + z1 + z2) / 3
+        val zMax: Float get() = if (z2.isNaN()) Float.NaN else max(z0, max(z1, z2))
 
         fun copyFrom(o: Core) {
             t = o.t; v = o.v; b = o.b; p00 = o.p00; p01 = o.p01; p11 = o.p11; dist = o.dist; distAtFix = o.distAtFix
             state = o.state; zupt = o.zupt; gap = o.gap; gapInInterval = o.gapInInterval
-            lastFixT = o.lastFixT; lastZ = o.lastZ; lastZSigma = o.lastZSigma; lastLat = o.lastLat; lastLon = o.lastLon; lastAcc = o.lastAcc
+            lastFixT = o.lastFixT; lastVelT = o.lastVelT; pending = o.pending; lastZ = o.lastZ; lastZSigma = o.lastZSigma; lastLat = o.lastLat; lastLon = o.lastLon; lastAcc = o.lastAcc
             lastAccel = o.lastAccel; aAvg = o.aAvg; aAbsAvg = o.aAbsAvg; stopEvidenceSince = o.stopEvidenceSince
-            launchSince = o.launchSince; launchedAt = o.launchedAt; distrustUntil = o.distrustUntil
+            launchSince = o.launchSince; reverseSince = o.reverseSince; launchedAt = o.launchedAt; launchPush = o.launchPush; distrustUntil = o.distrustUntil
             rejected = o.rejected; rejectedZ = o.rejectedZ; innov0 = o.innov0; innov1 = o.innov1; innov2 = o.innov2; untrustedSinceFix = o.untrustedSinceFix; z0 = o.z0; z1 = o.z1; z2 = o.z2
+            z0T = o.z0T; z1T = o.z1T; z2T = o.z2T; zuptAt = o.zuptAt
         }
     }
 
@@ -130,13 +149,18 @@ class SpeedFusion {
      * NaN when the fix has none; [acc] is the position accuracy in metres.
      */
     fun onFix(t: Long, speed: Float, speedAcc: Float, lat: Double, lon: Double, acc: Float): FixResult {
-        if (t <= core.lastFixT) return FixResult(reading(core.t), Float.NaN) // a duplicate, or older than one already applied
+        if (t <= core.lastFixT) {
+            // A duplicate, or older than one already applied: nothing new, so no distance.
+            val now = reading(core.t)
+            return FixResult(now, now, 0f)
+        }
         if (t < core.t) {
             // Late: go back to just before the first sample after the fix, apply it, replay the rest.
             val from = firstSampleAfter(t)
             if (from >= 0) {
                 core.copyFrom(ring[from])
                 applyFix(t, speed, speedAcc, lat, lon, acc)
+                val atFix = reading(t)
                 val since = sinceFix()
                 val oldest = (ringNext - ringCount + HISTORY) % HISTORY
                 var i = from
@@ -146,18 +170,22 @@ class SpeedFusion {
                     step(ringT[k], ringA[k], ringTrusted[k])
                     i++
                 }
-                return FixResult(reading(core.t), since)
+                return FixResult(atFix, reading(core.t), since)
             }
             // Older than the history we keep: apply it as of now.
         }
         applyFix(max(t, core.t), speed, speedAcc, lat, lon, acc)
-        return FixResult(reading(core.t), sinceFix())
+        val now = reading(core.t)
+        return FixResult(now, now, sinceFix())
     }
 
     /** The current picture, with the fix age as of [now]. */
     fun reading(now: Long): FusedReading {
-        val age = if (core.lastFixT == 0L) Long.MAX_VALUE else ((now - core.lastFixT) / 1_000_000L).coerceAtLeast(0)
-        return FusedReading(core.t, max(0f, core.v), core.lastAccel, core.dist, core.state, sqrt(core.p00), age, core.gap)
+        val c = core
+        val age = if (c.lastFixT == 0L) Long.MAX_VALUE else ((now - c.lastFixT) / 1_000_000L).coerceAtLeast(0)
+        // No speed from GPS for too long (and maybe no events either): say so, whatever was last decided.
+        val lost = c.gap || (c.lastVelT != 0L && now - c.lastVelT > COAST_MAX_NS)
+        return FusedReading(c.t, max(0f, c.v), c.lastAccel, c.dist, if (lost) MotionState.UNKNOWN else c.state, sqrt(c.p00), age, lost)
     }
 
     // ---- Time passing ------------------------------------------------------------------------
@@ -196,9 +224,12 @@ class SpeedFusion {
             return
         }
         if (dt > MAX_STEP_S) {
-            // A long gap in the sensor stream: nothing to integrate; speed is simply less certain.
+            // No sensor samples in between (a phone without the sensors, or the stream paused): the
+            // speed is held, less certain, and corrected by the next fix (see applyFix). Beyond a few
+            // seconds nothing can be said about the interval.
             c.p00 += UNOBSERVED_SIGMA * UNOBSERVED_SIGMA * dt
             unobserved(c)
+            if (dt > MAX_HELD_S) c.gapInInterval = true
         } else if (usable) {
             val eff = a - c.b
             c.v += eff * dt
@@ -214,21 +245,30 @@ class SpeedFusion {
             // Smoothed over a few tenths of a second: a push to set off, and how quiet the car is.
             c.aAvg += (eff - c.aAvg) * dt / (PUSH_AVG_S + dt)
             c.aAbsAvg += (abs(eff) - c.aAbsAvg) * dt / (QUIET_AVG_S + dt)
-            if (c.aAvg > LAUNCH_ACCEL + 2 * sqrt(c.p11)) { if (c.launchSince == 0L) c.launchSince = t } else c.launchSince = 0
+            val pushNeeded = LAUNCH_ACCEL + 2 * sqrt(c.p11)
+            if (c.aAvg > pushNeeded) { if (c.launchSince == 0L) c.launchSince = t } else c.launchSince = 0
+            if (c.aAvg < -pushNeeded) { if (c.reverseSince == 0L) c.reverseSince = t } else c.reverseSince = 0
         } else {
             c.p00 += UNOBSERVED_SIGMA * UNOBSERVED_SIGMA * dt
             c.p11 += BIAS_SIGMA * BIAS_SIGMA * dt
             unobserved(c)
         }
-        if (c.zupt) update(0f, ZUPT_SIGMA * ZUPT_SIGMA, learnBias = c.aAvg <= LAUNCH_ACCEL)
-        // A confirmed stop adds no distance; a lost GPS adds none once the estimate has run out.
-        if (!c.zupt && !c.gap && dt <= MAX_STEP_S) c.dist += max(0f, c.v) * dt
-        if (!c.gap && c.lastFixT != 0L) {
-            val age = t - c.lastFixT
+        if (c.zupt) update(0f, ZUPT_SIGMA * ZUPT_SIGMA, learnBias = abs(c.aAvg) <= LAUNCH_ACCEL)
+        // GPS has given no speed for a while (lost, or positions only): after a short estimate, a gap.
+        // Positions without speed do not count: they cannot tell a stop from a crawl.
+        if (!c.gap && c.lastVelT != 0L) {
+            val age = t - c.lastVelT
             if (age > COAST_MIN_NS && (age > COAST_MAX_NS || sqrt(c.p00) > GAP_SIGMA)) {
                 c.gap = true
                 c.gapInInterval = true
+                c.pending = 0.0
             }
+        }
+        // A confirmed stop adds no distance; nor does a gap. While a stop is being confirmed the
+        // distance is held back (it is GPS noise if the stop is confirmed).
+        if (!c.zupt && !c.gap && dt <= MAX_HELD_S) {
+            val d = max(0f, c.v) * dt
+            if (c.stopEvidenceSince != 0L) c.pending += d else c.dist += d
         }
         judge(t)
     }
@@ -239,6 +279,7 @@ class SpeedFusion {
         c.aAvg = 0f
         c.aAbsAvg = 0f
         c.launchSince = 0
+        c.reverseSince = 0
     }
 
     // ---- GPS fixes ---------------------------------------------------------------------------
@@ -271,12 +312,15 @@ class SpeedFusion {
         c.lastLat = lat
         c.lastLon = lon
         c.lastAcc = acc
-        if (c.gap) {
-            // GPS is back: start from what it says.
+        if (c.gap && !r.isNaN()) {
+            // GPS speed is back: start from what it says.
             c.gap = false
-            if (!r.isNaN()) { c.v = z; c.p00 = r }
+            c.v = z
+            c.p00 = r
             c.rejected = 0
+            c.untrustedSinceFix = false
         }
+        if (!r.isNaN()) c.lastVelT = t
         if (r.isNaN()) {
             c.lastZ = Float.NaN
             c.lastZSigma = Float.NaN
@@ -285,7 +329,10 @@ class SpeedFusion {
         }
         c.lastZ = z
         c.lastZSigma = sqrt(r)
-        if (c.lastZSigma <= PRECISE_SIGMA) { c.z2 = c.z1; c.z1 = c.z0; c.z0 = z }
+        if (c.lastZSigma <= PRECISE_SIGMA) {
+            c.z2 = c.z1; c.z1 = c.z0; c.z0 = z
+            c.z2T = c.z1T; c.z1T = c.z0T; c.z0T = t
+        }
         val y = z - c.v
         val s = c.p00 + r
         val trusted = !c.lastAccel.isNaN()
@@ -297,7 +344,8 @@ class SpeedFusion {
         val oneWay = !c.innov2.isNaN() &&
             (c.innov0 > limit && c.innov1 > limit && c.innov2 > limit || c.innov0 < -limit && c.innov1 < -limit && c.innov2 < -limit)
         if (trusted && oneWay) {
-            reacquire(t, z, r)
+            // Whatever it is (reversing, a shifted phone) lasts: sensors aside until the next stop.
+            reacquire(t, z, r, untilStop = true)
         } else if (y * y > GATE * GATE * s) {
             // Implausible jump. Two such fixes that agree with each other mean the filter is wrong:
             // start again from GPS.
@@ -312,15 +360,17 @@ class SpeedFusion {
             val before = max(0f, c.v)
             val dtFix = (t - prevFixT) / 1e9f
             update(z, r)
-            if (c.untrustedSinceFix && !c.zupt && !c.gap && prevFixT != 0L && dtFix in 0.2f..MAX_HELD_S) {
-                c.dist += (max(0f, c.v) - before) * dtFix / 2
+            // The speed was held since the last fix: count the interval at the average of both ends.
+            if (c.untrustedSinceFix && !c.zupt && !c.gap && !c.gapInInterval && prevFixT != 0L && dtFix in 0.2f..MAX_HELD_S) {
+                val d = (max(0f, c.v) - before) * dtFix / 2
+                if (c.stopEvidenceSince != 0L) c.pending += d else c.dist += d
             }
         }
         c.untrustedSinceFix = false
         judge(t)
     }
 
-    private fun reacquire(t: Long, z: Float, r: Float) {
+    private fun reacquire(t: Long, z: Float, r: Float, untilStop: Boolean = false) {
         val c = core
         c.v = z
         c.p00 = r
@@ -329,7 +379,7 @@ class SpeedFusion {
         c.p11 = max(c.p11, RELEARN_BIAS_SIGMA * RELEARN_BIAS_SIGMA)
         c.rejected = 0
         c.innov0 = Float.NaN; c.innov1 = Float.NaN; c.innov2 = Float.NaN
-        c.distrustUntil = t + DISTRUST_NS
+        c.distrustUntil = t + if (untilStop) DISTRUST_UNTIL_STOP_NS else DISTRUST_NS
         unobserved(c)
     }
 
@@ -368,6 +418,7 @@ class SpeedFusion {
         if (c.gap) {
             c.state = MotionState.UNKNOWN
             c.stopEvidenceSince = 0
+            c.pending = 0.0
             return
         }
         val fixAge = if (c.lastFixT == 0L) Long.MAX_VALUE else t - c.lastFixT
@@ -375,13 +426,34 @@ class SpeedFusion {
         val trusted = !c.lastAccel.isNaN()
         if (c.zupt) {
             // A credible launch: a sustained push from the sensors, or GPS clearly seeing movement.
-            val sensorLaunch = trusted && c.launchSince != 0L && t - c.launchSince >= LAUNCH_NS && t >= c.distrustUntil + LAUNCH_HOLD_NS
+            val settledTrust = t >= c.distrustUntil + LAUNCH_HOLD_NS
+            val sensorLaunch = trusted && c.launchSince != 0L && t - c.launchSince >= LAUNCH_NS && settledTrust
+            // A sustained push backwards from rest: reversing. The sensors' sign is then the wrong way
+            // round for speed, so GPS carries the speed until the car stops again.
+            val reverseLaunch = trusted && c.reverseSince != 0L && t - c.reverseSince >= LAUNCH_NS && settledTrust
             val gpsLaunch = precise && (c.lastZ > max(CREEP_START, 1.5f * c.lastZSigma) || c.zMean > ZERO_MEAN_LOOSE)
-            if (sensorLaunch || gpsLaunch) {
-                val seen = if (c.lastZ > max(CREEP_START, 1.5f * c.lastZSigma)) c.lastZ else c.zMean
+            if (reverseLaunch || trusted && gpsLaunch && c.aAvg < -LAUNCH_ACCEL) {
+                c.distrustUntil = t + DISTRUST_UNTIL_STOP_NS
+                c.v = max(c.v, abs(c.aAvg) * LAUNCH_LAG_S)
+                c.p00 = max(c.p00, UNOBSERVED_SIGMA * UNOBSERVED_SIGMA)
+            }
+            if (sensorLaunch || reverseLaunch || gpsLaunch) {
+                val crisp = c.lastZ > max(CREEP_START, 1.5f * c.lastZSigma)
+                val seen = if (crisp) c.lastZ else c.zMean
+                if (gpsLaunch && !sensorLaunch) {
+                    // GPS saw the car moving while the stop held the speed at zero: count that stretch
+                    // (from rest to the latest reading, or the readings' average over their span), but
+                    // only the part after the stop was confirmed; before it the distance was counted.
+                    val from = max(c.zuptAt, if (crisp) c.z1T else c.z2T)
+                    val held = if (crisp) c.lastZ / 2 * ((t - from) / 1e9f).coerceIn(0f, 2f)
+                    else c.zMean * ((t - from) / 1e9f).coerceIn(0f, 3f)
+                    c.dist += held
+                }
                 c.zupt = false
                 c.launchedAt = t
+                c.launchPush = if (gpsLaunch) 0f else c.aAvg
                 c.stopEvidenceSince = 0
+                c.pending = 0.0
                 c.z0 = Float.NaN; c.z1 = Float.NaN; c.z2 = Float.NaN
                 // The push began before it was recognised: credit what was integrated away meanwhile.
                 c.v = max(0f, max(c.v, if (sensorLaunch) c.aAvg * LAUNCH_LAG_S else 0f))
@@ -399,9 +471,14 @@ class SpeedFusion {
         if (c.launchedAt != 0L) {
             if (c.lastFixT > c.launchedAt && !c.lastZ.isNaN()) {
                 if (c.lastZ <= CREEP_MIN) {
+                    // GPS saw no movement: a push from the sensors was no launch but a constant pull
+                    // (a slope, a tilt of the phone). Take it as their bias, and trust them again.
                     c.v = min(c.v, c.lastZ)
                     c.p00 = max(c.p00, c.lastZSigma * c.lastZSigma)
+                    c.b = (c.b + c.launchPush).coerceIn(-MAX_BIAS, MAX_BIAS)
+                    c.distrustUntil = min(c.distrustUntil, t)
                 }
+                c.launchPush = 0f
                 c.launchedAt = 0
             } else if (t - c.launchedAt < LAUNCH_CONFIRM_NS) {
                 c.state = MotionState.UNKNOWN
@@ -417,27 +494,42 @@ class SpeedFusion {
         val zMean = c.zMean
         val quiet = !trusted || c.aAbsAvg < QUIET_ACCEL
         val atZero = c.v < STOP_SPEED
-        val gpsStill = zMean <= ZERO_MEAN && c.v < CREEP_GPS_MIN
-        val still = zeroFix && (atZero && quiet && c.v < STOP_SPEED_LOOSE || gpsStill || quiet && c.v < STOP_SPEED_LOOSE && zMean <= ZERO_MEAN_LOOSE)
+        // Evidence of a stop is lenient (it only holds the distance back); confirming one is strict:
+        // GPS steadily at zero, low on average and not one reading of a crawl among the last three
+        // (a slow crawl's noisy readings can average low; they are rarely all low).
+        val gpsZero = zMean <= ZERO_MEAN && c.zMax <= ZERO_MAX
+        val still = zeroFix && c.v < CREEP_GPS_MIN && (zMean <= ZERO_MEAN_LOOSE || atZero && quiet)
         if (still) {
             if (c.stopEvidenceSince == 0L) c.stopEvidenceSince = t
-            if (t - c.stopEvidenceSince >= STOP_DWELL_NS && (atZero || zMean <= ZERO_MEAN)) {
+            if (t - c.stopEvidenceSince >= STOP_DWELL_NS && (gpsZero || atZero && quiet && c.zMax <= ZERO_MAX)) {
                 c.zupt = true
                 c.v = 0f
+                c.zuptAt = t
+                // A stop ends any doubt about the sensors (they are compared afresh from rest).
+                c.distrustUntil = min(c.distrustUntil, t)
+                c.pending = 0.0
                 c.state = MotionState.STOPPED
                 return
             }
-        } else {
+        } else if (c.stopEvidenceSince != 0L) {
+            // Not a stop after all: what was held back was real.
             c.stopEvidenceSince = 0
+            c.dist += c.pending
+            c.pending = 0.0
         }
         val stale = fixAge > STALE_FIX_NS
+        // Below walking pace a crawl and a stop look alike to GPS: call it a crawl only when the
+        // recent readings sit clearly above a standing car's noise (and keep it while they stay
+        // above it); otherwise say it is unclear.
+        val gpsCrawl = !zMean.isNaN() && zMean > CREEP_GPS_MEAN
+        val gpsNotZero = !zMean.isNaN() && zMean > ZERO_MEAN
         c.state = when {
             stale && !trusted -> MotionState.UNKNOWN
             c.v >= MOVING_SPEED -> MotionState.MOVING
             c.state == MotionState.MOVING && c.v >= MOVING_SPEED - MOVING_HYSTERESIS -> MotionState.MOVING
-            c.v >= CREEP_MIN && !(zMean <= ZERO_STRICT && c.v < CREEP_GPS_MIN) -> MotionState.CREEPING
-            // A crawl, once seen, holds until the car is all but stopped.
-            c.state == MotionState.CREEPING && c.v >= STOP_SPEED -> MotionState.CREEPING
+            c.v >= CREEP_GPS_MIN -> MotionState.CREEPING
+            c.v >= CREEP_MIN && gpsCrawl -> MotionState.CREEPING
+            c.state == MotionState.CREEPING && c.v >= STOP_SPEED && gpsNotZero -> MotionState.CREEPING
             // Too slow to call a crawl, yet not confirmed stopped.
             else -> MotionState.UNKNOWN
         }
@@ -447,7 +539,8 @@ class SpeedFusion {
         /** Samples kept for late fixes: 5 s at 25 Hz. */
         private const val HISTORY = 128
         private const val MAX_STEP_S = 0.5f
-        private const val MAX_HELD_S = 3f
+        /** Longest interval without sensor samples that is still counted, at the speed held from the last fix. */
+        private const val MAX_HELD_S = 6f
 
         // Noise: the filtered sensor acceleration, its bias's drift, and speed when unobserved.
         const val ACCEL_SIGMA = 0.25f
@@ -469,12 +562,15 @@ class SpeedFusion {
         private const val REACQUIRE_AGREE = 1.0f
         private const val INCONSISTENT_BASE = 0.15f
         private const val DISTRUST_NS = 5_000_000_000L
+        /** Sensors set aside "until the next stop", but not for ever if no stop comes. */
+        private const val DISTRUST_UNTIL_STOP_NS = 60_000_000_000L
 
         // Stops: near-zero, precise fixes and quiet sensors for the dwell; then zero-velocity updates.
         const val STOP_DWELL_NS = 2_500_000_000L
         private const val ZERO_SPEED = 0.3f
         private const val ZERO_STRICT = 0.2f
         private const val ZERO_MEAN = 0.15f
+        private const val ZERO_MAX = 0.25f
         private const val ZERO_MEAN_LOOSE = 0.25f
         private const val STOP_SPEED = 0.15f
         private const val STOP_SPEED_LOOSE = 0.5f
@@ -497,8 +593,10 @@ class SpeedFusion {
         const val MOVING_SPEED = 2.0f
         private const val MOVING_HYSTERESIS = 0.2f
         const val CREEP_MIN = 0.25f
-        /** With GPS reading zero, only a speed this high counts as a crawl on the sensors' word alone. */
+        /** Only a speed this high counts as a crawl on the filter's word alone; below it GPS must agree. */
         private const val CREEP_GPS_MIN = 0.8f
+        /** GPS agrees on a crawl when its last three readings average above this (a standing car's average is about 0.1). */
+        private const val CREEP_GPS_MEAN = 0.22f
 
         // GPS lost: a short estimate from the sensors, then a gap once too uncertain or too long.
         private const val STALE_FIX_NS = 3_000_000_000L

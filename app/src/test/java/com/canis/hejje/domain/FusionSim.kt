@@ -123,7 +123,7 @@ class FusionSim(seed: Int = 1) {
             truthSpeed[e.deliverT]?.let { speedNow = it }
             truthDist[e.deliverT]?.let { distNow = it }
             val r = if (e.isFix) {
-                fusion.onFix(e.t, e.speed, e.speedAcc, e.lat, e.lon, e.acc).reading
+                fusion.onFix(e.t, e.speed, e.speedAcc, e.lat, e.lon, e.acc).live
             } else {
                 fusion.onAccel(e.t, e.a, e.trusted)
                 fusion.reading(e.t)

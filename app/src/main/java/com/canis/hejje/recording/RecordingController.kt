@@ -45,6 +45,8 @@ data class LiveState(
     val motion: MotionState = MotionState.UNKNOWN,
     /** One standard deviation of [speed], m/s. */
     val speedSigma: Float = Float.NaN,
+    /** GPS has given no speed for too long to estimate one: [speed] is not to be shown. */
+    val gap: Boolean = false,
 )
 
 /**
@@ -257,7 +259,8 @@ class RecordingController(
             live.lastFixAt == 0L -> log?.add(LogKind.FIRST_FIX, ((p.t - live.startedAt) / 1000).coerceAtLeast(0).toString())
             !live.hasFix -> log?.add(LogKind.GPS_REGAINED, ((p.t - live.lastFixAt) / 1000).toString())
         }
-        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p, speed = shown)
+        val gap = p.fState >= 0 && p.fSpeed.isNaN()
+        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p, speed = shown, gap = gap)
         if (autoStartPending) {
             autoStartPending = false
             scope.launch { settings.update { it.copy(lastAutoStart = now()) } }
@@ -271,7 +274,7 @@ class RecordingController(
     /** The live fused picture between fixes (about ten times a second), from the sensor worker. */
     fun onFused(r: FusedReading) {
         val live = _live.value ?: return
-        _live.value = live.copy(speed = r.speed, accel = r.accel, motion = r.state, speedSigma = r.speedSigma)
+        _live.value = live.copy(speed = r.speed, accel = r.accel, motion = r.state, speedSigma = r.speedSigma, gap = r.gap)
     }
 
     /** Called regularly by the service: flags GPS loss (tunnel) for the notification. */
@@ -348,7 +351,7 @@ class RecordingController(
     /** Distance of the fixes so far: the fused metres where known, else the straight line while moving. */
     private fun liveDistance(points: List<RawPoint>): Double {
         var d = 0.0
-        val clean = TripProcessor.clean(points)
+        val clean = TripProcessor.cleanKeepingDistance(points)
         for (i in 1 until clean.size) {
             val p = clean[i]
             if (!p.fDist.isNaN()) d += p.fDist

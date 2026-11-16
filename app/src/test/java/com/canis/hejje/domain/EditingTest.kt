@@ -89,6 +89,53 @@ class EditingTest {
         assertEquals(1, PrivacyZones.trim(route, emptyList()).size)
     }
 
+    /** Whether any part of the drawn line of [pieces] runs inside one of [zones] (sampled every 1%). */
+    private fun leaks(pieces: List<Route>, zones: List<Zone>) = pieces.any { p ->
+        (0 until p.size - 1).any { i -> (1..99).any { k -> PrivacyZones.inside(p.latAt(i + k / 100f), p.lonAt(i + k / 100f), zones) } }
+    }
+
+    @Test fun privacyZone_straightStretchThroughAZone_isCutEvenWithBothEndsOutside() {
+        val zone = Zone(12.0, 77.0, 100.0)
+        val route = Route(doubleArrayOf(12.0, 12.0), doubleArrayOf(76.998, 77.002), intArrayOf(0, 30), floatArrayOf(15f, 15f))
+        val pieces = PrivacyZones.trim(route, listOf(zone))
+        assertEquals(2, pieces.size)
+        assertFalse(leaks(pieces, listOf(zone)))
+        for (p in pieces) for (i in 0 until p.size) assertTrue(Geo.distance(p.lat[i], p.lon[i], zone.lat, zone.lon) >= zone.radiusM)
+        // The cuts sit on the edge (within the 1 m margin and rounding).
+        assertEquals(100.0, Geo.distance(pieces[0].lat.last(), pieces[0].lon.last(), zone.lat, zone.lon), 1.5)
+        assertEquals(100.0, Geo.distance(pieces[1].lat.first(), pieces[1].lon.first(), zone.lat, zone.lon), 1.5)
+        // Time and speed run on smoothly across the cut.
+        assertTrue(pieces[0].t.last() in 1..14 && pieces[1].t.first() in 16..29)
+    }
+
+    @Test fun privacyZone_passingBesideOrTouching_hidesNothing() {
+        // 150 m north of a 100 m zone: untouched.
+        val zone = Zone(12.0, 77.0, 100.0)
+        val north = 12.0 + 150 / 110_540.0
+        val beside = Route(doubleArrayOf(north, north), doubleArrayOf(76.998, 77.002), intArrayOf(0, 30), floatArrayOf(15f, 15f))
+        val pieces = PrivacyZones.trim(beside, listOf(zone))
+        assertEquals(1, pieces.size)
+        assertEquals(2, pieces[0].size)
+    }
+
+    @Test fun privacyZone_overlappingAndSeveralZones_onOneStretch() {
+        // Two overlapping zones count as one hidden area; a third further on makes a second gap.
+        val zones = listOf(Zone(12.0, 77.0, 100.0), Zone(12.0, 77.0015, 100.0), Zone(12.0, 77.006, 100.0))
+        val route = Route(doubleArrayOf(12.0, 12.0), doubleArrayOf(76.997, 77.009), intArrayOf(0, 120), floatArrayOf(10f, 10f))
+        val pieces = PrivacyZones.trim(route, zones)
+        assertEquals(3, pieces.size)
+        assertFalse(leaks(pieces, zones))
+    }
+
+    @Test fun privacyZone_manyRealRoutes_neverDrawInside() {
+        for (seed in 1..10) {
+            val route = DriveSim(seed = seed).drive(60, 15f, turnPerSec = 1.5).drive(200, 20f).drive(60, 12f, turnPerSec = -2.0).segment().data.route
+            val mid = route.size / 2
+            val zones = listOf(Zone(route.lat[mid], route.lon[mid] + 0.0004, 120.0), Zone(route.lat[route.size / 4], route.lon[route.size / 4], 80.0))
+            assertFalse("seed $seed", leaks(PrivacyZones.trim(route, zones), zones))
+        }
+    }
+
     @Test fun gpx_roundTrip_andPrivacy() {
         val seg = DriveSim().drive(300, 15f).segment()
         val xml = Gpx.write("Test & <drive>", "Hejje", Gpx.pointsOf(listOf(seg), emptyList()))

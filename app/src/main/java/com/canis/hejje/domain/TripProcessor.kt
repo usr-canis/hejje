@@ -20,6 +20,29 @@ object TripProcessor {
     private const val STOP_MOVING = 0.6f
     private const val MAX_ROUTE_GAP_MS = 10_000L
 
+    /**
+     * [clean], keeping the fused distance of the fixes it drops: each kept fix carries the metres
+     * of every fix since the previous kept one (NaN if any of them was across a gap), so a poor
+     * position does not lose the distance driven meanwhile.
+     */
+    fun cleanKeepingDistance(raw: List<RawPoint>): List<RawPoint> {
+        val kept = clean(raw)
+        if (raw.none { !it.fDist.isNaN() }) return kept
+        val keep = java.util.IdentityHashMap<RawPoint, Boolean>(kept.size).apply { kept.forEach { put(it, true) } }
+        val out = ArrayList<RawPoint>(kept.size)
+        var sum = 0.0
+        var gap = false
+        for (p in raw.sortedBy { it.t }) {
+            if (p.fDist.isNaN()) gap = true else sum += p.fDist
+            if (keep.containsKey(p)) {
+                out += if (gap) p.copy(fDist = Float.NaN) else p.copy(fDist = sum.toFloat())
+                sum = 0.0
+                gap = false
+            }
+        }
+        return out
+    }
+
     /** Sorts, removes duplicates, poor fixes and position jumps. */
     fun clean(raw: List<RawPoint>): List<RawPoint> {
         val out = ArrayList<RawPoint>(raw.size)
@@ -39,7 +62,7 @@ object TripProcessor {
     }
 
     fun process(raw: List<RawPoint>, start: Long, end: Long, cfg: ProcessorConfig = ProcessorConfig()): Segment? {
-        val pts = clean(raw.filter { it.t in start..end })
+        val pts = cleanKeepingDistance(raw.filter { it.t in start..end })
         if (pts.isEmpty() || end <= start) return null
         val n = pts.size
 

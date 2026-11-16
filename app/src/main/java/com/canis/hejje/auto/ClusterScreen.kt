@@ -1,5 +1,6 @@
 package com.canis.hejje.auto
 
+import com.canis.hejje.ui.trips.liveUncertain
 import android.graphics.Rect
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
@@ -26,7 +27,6 @@ import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
-import com.canis.hejje.domain.MotionState
 import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
@@ -208,7 +208,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
     private fun step(): Boolean {
         val live = now.live
         val perMs = if (now.settings.miles) 2.236936f else 3.6f
-        val speed = live?.speed?.takeIf { live.hasFix }
+        val speed = live?.speed?.takeIf { live.hasFix && !live.gap }
         val target = ((speed ?: 0f) * perMs).coerceIn(0f, dialMax(now.settings.miles).toFloat())
         needle = ease(needle, target, 0.6f)
         val heading = now.trace.heading
@@ -234,7 +234,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         val f = f
         val frame = CarFrame(
             needle = needle,
-            digits = live?.speed?.takeIf { live.hasFix }?.let { f.speedValue(it) } ?: if (live == null) "0" else "–",
+            digits = live?.speed?.takeIf { live.hasFix && !live.gap }?.let { f.speedValue(it) } ?: if (live == null) "0" else "–",
             unit = f.speedUnit.uppercase(),
             turn = turn,
             heading = headingLabel(now.trace.heading),
@@ -244,7 +244,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
             distanceUnit = f.distanceUnit.uppercase(),
             miles = now.settings.miles,
             dark = carContext.isDarkMode,
-            uncertain = live != null && (live.motion == MotionState.UNKNOWN || System.currentTimeMillis() - live.lastFixAt > STALE_MS),
+            uncertain = live != null && liveUncertain(live, System.currentTimeMillis()),
         )
         val canvas = runCatching { s.lockHardwareCanvas() }.getOrNull() ?: return
         try {
@@ -256,7 +256,6 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
 
     private companion object {
         const val FRAME_MS = 33L
-        const val STALE_MS = 3_000L
         const val CARD_EVERY_MS = 5_000L
     }
 }

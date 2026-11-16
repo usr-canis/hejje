@@ -127,6 +127,8 @@
     <string name="cluster_odometer_description">This week, %1$s</string>
     <string name="cluster_trip_description">This trip, %1$s</string>
     <string name="cluster_speed_description">Speed %1$s, heading %2$s</string>
+    <string name="cluster_speed_unsure">Speed about %1$s, estimated, heading %2$s</string>
+    <string name="cluster_speed_unknown">Speed unknown, waiting for GPS, heading %1$s</string>
     <string name="cluster_next_stop">Next stop</string>
     <string name="car_start">Start</string>
     <string name="car_start_on_phone">Open Hejje on your phone to start recording</string>
@@ -338,8 +340,8 @@
     <string name="settings_gps">GPS</string>
     <string name="settings_gps_best">Best accuracy</string>
     <string name="settings_gps_saver">Battery saver</string>
-    <string name="settings_gps_best_long">Best accuracy: every second while charging, every 2 seconds on battery</string>
-    <string name="settings_gps_saver_long">Battery saver: every 2 seconds while charging, every 5 seconds on battery</string>
+    <string name="settings_gps_best_long">Best accuracy: a GPS fix every second while recording</string>
+    <string name="settings_gps_saver_long">Battery saver: a GPS fix every 5 seconds while recording</string>
     <string name="settings_sensitivity">Hard-braking sensitivity</string>
     <string name="settings_sensitivity_low">Low: only very hard braking counts</string>
     <string name="settings_sensitivity_normal">Normal</string>

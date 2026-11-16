@@ -106,15 +106,17 @@ class MotionSensors(
         h.post {
             val summary = estimator.onFix(elapsedNanos, p.speed)
             val result = fusion.onFix(elapsedNanos, p.speed, p.speedAcc, p.lat, p.lon, p.acc)
+            // Stored with the fix: the picture at its own measurement time (no speed while GPS is lost).
             val r = result.reading
             val enriched = p.copy(
                 sLon = summary?.meanLon ?: Float.NaN, sMin = summary?.minLon ?: Float.NaN,
                 sMax = summary?.maxLon ?: Float.NaN, sLat = summary?.peakLat ?: Float.NaN,
-                fSpeed = r.speed, fDist = result.sinceFixM, fState = r.state.ordinal,
+                fSpeed = if (r.gap) Float.NaN else r.speed, fDist = result.sinceFixM, fState = r.state.ordinal,
             )
+            val live = result.live
             main.post {
                 onPoint(enriched)
-                onReading(r)
+                onReading(live)
             }
         }
     }
