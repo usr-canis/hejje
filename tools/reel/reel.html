@@ -80,13 +80,94 @@ function camAt(t) {
   };
 }
 let C;
-function proj(x, y) {
+function proj(x, y) { return proj3(x, y, 0); }
+function proj3(x, y, z) {
   const dx = x - C.tx, dy = y - C.ty, a = -Math.PI / 2 - C.phi, ca = Math.cos(a), sa = Math.sin(a);
   const u = dx * ca - dy * sa, v = dx * sa + dy * ca;
-  const Z = C.D - v * Math.sin(C.th);
+  const Z = C.D - v * Math.sin(C.th) - z * Math.cos(C.th);
   if (Z < 25) return null;
-  return [W / 2 + F * u / Z, C.cy + F * v * Math.cos(C.th) / Z, F / Z, Z];
+  return [W / 2 + F * u / Z, C.cy + F * (v * Math.cos(C.th) - z * Math.sin(C.th)) / Z, F / Z, Z];
 }
+function camWorld() {
+  const a = -Math.PI / 2 - C.phi, v = C.D * Math.sin(C.th);
+  return [C.tx + v * Math.sin(a), C.ty + v * Math.cos(a), C.D * Math.cos(C.th)];
+}
+
+// ---------- the car: a small white hatchback (short bonnet, tall cabin, upright hatch), no badge ----------
+const RING = [[17, -6], [15.6, -7.9], [-15.8, -7.9], [-17, -6.4], [-17, 6.4], [-15.8, 7.9], [15.6, 7.9], [17, 6]];
+const CAR = (() => {
+  const faces = [], top = p => p[0] > 15 ? 6.4 : 7.4, add = (pts, mat, ref, win) => faces.push({ pts, mat, ref, win, grp: { tyre: 0, trim: 1, paint: 1, tail: 2, head: 2, glass: 3 }[mat] });
+  for (const sx of [10.6, -10.9]) for (const sy of [-1, 1]) {
+    const x0 = sx - 3.4, x1 = sx + 3.4, y0 = sy * 6.4, y1 = sy * 8.0, ref = [sx, sy * 7.2, 2.6];
+    add([[x0, y0, 0], [x1, y0, 0], [x1, y0, 5.4], [x0, y0, 5.4]], 'tyre', ref); add([[x0, y1, 0], [x1, y1, 0], [x1, y1, 5.4], [x0, y1, 5.4]], 'tyre', ref);
+    add([[x0, y0, 0], [x0, y1, 0], [x0, y1, 5.4], [x0, y0, 5.4]], 'tyre', ref); add([[x1, y0, 0], [x1, y1, 0], [x1, y1, 5.4], [x1, y0, 5.4]], 'tyre', ref);
+    add([[x0, y0, 5.4], [x1, y0, 5.4], [x1, y1, 5.4], [x0, y1, 5.4]], 'tyre', ref);
+  }
+  const body = [0, 0, 4.8];
+  for (let i = 0; i < RING.length; i++) {
+    const a = RING[i], b = RING[(i + 1) % RING.length];
+    add([[a[0], a[1], 2.2], [b[0], b[1], 2.2], [b[0], b[1], 3.9], [a[0], a[1], 3.9]], 'trim', body);
+    add([[a[0], a[1], 3.9], [b[0], b[1], 3.9], [b[0], b[1], top(b)], [a[0], a[1], top(a)]], 'paint', body);
+  }
+  add(RING.map(p => [p[0], p[1], top(p)]), 'paint', body);
+  const cb = [[4.6, -7.3, 7.4], [-15.2, -7.3, 7.4], [-15.2, 7.3, 7.4], [4.6, 7.3, 7.4]];
+  const ct = [[-3.6, -6.1, 13.4], [-14.3, -6.1, 13.4], [-14.3, 6.1, 13.4], [-3.6, 6.1, 13.4]], cab = [-5.5, 0, 10];
+  add([cb[3], cb[0], ct[0], ct[3]], 'glass', cab); add([cb[1], cb[2], ct[2], ct[1]], 'glass', cab);
+  add([cb[0], cb[1], ct[1], ct[0]], 'glass', cab, true); add([cb[2], cb[3], ct[3], ct[2]], 'glass', cab, true);
+  faces.push({ pts: ct, mat: 'paint', ref: cab, grp: 4 });
+  for (const sy of [-1, 1]) {
+    add([[-17.15, sy * 4.3, 5], [-17.15, sy * 6.6, 5], [-17.15, sy * 6.6, 6.8], [-17.15, sy * 4.3, 6.8]], 'tail', body);
+    add([[17.15, sy * 3.4, 4.5], [17.15, sy * 5.8, 4.5], [17.15, sy * 5.8, 5.8], [17.15, sy * 3.4, 5.8]], 'head', body);
+  }
+  return faces;
+})();
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const LIGHT = (() => { const l = [-.35, -.45, .82], n = Math.hypot(...l); return l.map(v => v / n); })();
+function drawCar(x, y, ang, alpha, beams) {
+  if (alpha <= 0) return;
+  const K = 1.55, ca = Math.cos(ang), sa = Math.sin(ang), toW = ([lx, ly, lz]) => [x + K * (lx * ca - ly * sa), y + K * (lx * sa + ly * ca), K * lz];
+  const eye = camWorld();
+  ctx.save(); ctx.globalAlpha = alpha;
+  // Headlight beams on the road, then a soft shadow.
+  if (beams) {
+    const b = [[17, -6.5, 0], [17, 6.5, 0], [150, 46, 0], [150, -46, 0]].map(p => proj3(...toW(p)));
+    if (b.every(Boolean)) {
+      const g = ctx.createLinearGradient(b[0][0], b[0][1], (b[2][0] + b[3][0]) / 2, (b[2][1] + b[3][1]) / 2);
+      g.addColorStop(0, 'rgba(255,238,205,.30)'); g.addColorStop(1, 'rgba(255,238,205,0)');
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.filter = 'blur(10px)'; ctx.fillStyle = g;
+      ctx.beginPath(); b.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.fill(); ctx.restore();
+    }
+  }
+  const sh = RING.map(p => proj3(...toW([p[0] * 1.08, p[1] * 1.18, 0])));
+  if (sh.every(Boolean)) { ctx.save(); ctx.filter = 'blur(6px)'; ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.beginPath(); sh.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.fill(); ctx.restore(); }
+  const list = [];
+  for (const f of CAR) {
+    const w = f.pts.map(toW), c = w.reduce((a, p) => [a[0] + p[0] / w.length, a[1] + p[1] / w.length, a[2] + p[2] / w.length], [0, 0, 0]);
+    let n = cross(sub(w[1], w[0]), sub(w[2], w[0])); const len = Math.hypot(...n) || 1; n = n.map(v => v / len);
+    if (dot(n, sub(c, toW(f.ref))) < 0) n = n.map(v => -v);
+    if (dot(n, sub(eye, c)) <= 0) continue;
+    const q = w.map(p => proj3(...p)); if (!q.every(Boolean)) continue;
+    list.push({ f, q, n, depth: q.reduce((a, p) => a + p[3], 0) / q.length });
+  }
+  list.sort((a, b) => a.f.grp - b.f.grp || b.depth - a.depth);
+  const poly = pts => { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); };
+  for (const { f, q, n } of list) {
+    const lit = .5 + .5 * Math.max(0, dot(n, LIGHT));
+    if (f.mat === 'paint') ctx.fillStyle = `rgb(${Math.round(150 + 98 * lit)},${Math.round(152 + 96 * lit)},${Math.round(160 + 86 * lit)})`;
+    else if (f.mat === 'glass') ctx.fillStyle = `rgb(${Math.round(16 + 30 * lit)},${Math.round(20 + 32 * lit)},${Math.round(30 + 36 * lit)})`;
+    else if (f.mat === 'tyre') ctx.fillStyle = '#121214';
+    else if (f.mat === 'trim') ctx.fillStyle = `rgb(${Math.round(34 + 22 * lit)},${Math.round(36 + 22 * lit)},${Math.round(40 + 22 * lit)})`;
+    else { ctx.save(); ctx.shadowColor = f.mat === 'tail' ? 'rgba(255,40,60,1)' : 'rgba(255,240,210,1)'; ctx.shadowBlur = 18; ctx.fillStyle = f.mat === 'tail' ? '#ff3346' : '#fff4dc'; poly(q); ctx.fill(); ctx.restore(); continue; }
+    poly(q); ctx.fill();
+    if (f.win) { // pillars: the side glass outlined in body colour
+      ctx.strokeStyle = `rgb(${Math.round(150 + 98 * lit)},${Math.round(152 + 96 * lit)},${Math.round(160 + 86 * lit)})`;
+      ctx.lineWidth = Math.max(1, 1.3 * q[0][2] * 1.55); ctx.lineJoin = 'round'; poly(q); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function carHeading(p, s) { let x = 0, y = 0; for (let d = -14; d <= 22; d += 6) { const a = dirAt(p, s + d); x += Math.cos(a); y += Math.sin(a); } return Math.atan2(y, x); }
 
 // ---------- scenery ----------
 let grid = [], stars = [], grain;
@@ -161,7 +242,7 @@ function drawTrails(t, g) {
   g.clearRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
   const heads = [];
   paths.forEach((p, i) => {
-    const s = pathS(i, t); if (s <= 0) return;
+    const s = pathS(i, t); if (s <= 0) { if (i === 0 && t > 1.3) heads.push([at(p, 0), 0]); return; }
     let prev = proj(...p.pts[0]); const [last] = idx(p, Math.min(s, p.L - .01));
     const pts = p.pts.slice(0, last + 1).concat([at(p, Math.min(s, p.L - .01))]);
     for (let k = 1; k < pts.length; k++) {
@@ -173,11 +254,13 @@ function drawTrails(t, g) {
     }
     if (s < p.L - 1) heads.push([at(p, s), i]);
   });
-  for (const [[x, y]] of heads) {
-    const q = proj(x, y); if (!q) continue; const r = clamp(7 * q[2], 4, 13);
-    const rg = g.createRadialGradient(q[0], q[1], 0, q[0], q[1], r * 2.6);
-    rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(.25, 'rgba(255,214,170,.9)'); rg.addColorStop(1, 'rgba(255,122,26,0)');
-    g.fillStyle = rg; g.beginPath(); g.arc(q[0], q[1], r * 2.6, 0, 7); g.fill();
+  return heads;
+}
+function cars(t, heads) {
+  for (const [[x, y], i] of heads) {
+    const p = paths[i], s = pathS(i, t);
+    const a = clamp((p.L - s) / (p.L * .03)) * (i === 0 ? clamp((t - 1.3) / .4) : clamp(s / 40));
+    drawCar(x, y, carHeading(p, s), a, i === 0 && t < T_PULL + 2.5);
   }
 }
 // A warm pool of light on the road around each moving car.
@@ -207,7 +290,7 @@ function wordFill(t) {
 }
 function stopPin(t, p, s, t0, h, label) {
   const k = clamp((t - t0) / .45); if (k <= 0) return;
-  const [x, y] = at(p, s), q = proj(x, y); if (!q) return;
+  const [x0, y0] = at(p, s), d = dirAt(p, s), x = x0 - Math.sin(d) * 58, y = y0 + Math.cos(d) * 58, q = proj(x, y); if (!q) return;
   const pop = k < 1 ? 1 + Math.sin(k * Math.PI) * .25 : 1, size = h * q[2] * pop * easeOut(k);
   const fadeOut = 1 - clamp((t - 10.3) / .6);
   ctx.save(); ctx.shadowColor = 'rgba(232,89,12,.9)'; ctx.shadowBlur = 30;
@@ -268,8 +351,8 @@ function lockup(t) {
   ctx.save(); ctx.shadowColor = 'rgba(232,89,12,.9)'; ctx.shadowBlur = 50;
   feet(ctx, q[0], q[1], h, ACCENT, 1, [clamp((t - 10.75) / .45), clamp((t - 11.05) / .45)]); ctx.restore();
   words(t, 'Hejje Guruthu', 1255, 70, 600, 11.7, 99, INK, 1);
-  words(t, 'Every drive, recorded on its own.', 1335, 42, 300, 12.2, 99, 'rgba(245,242,239,.72)', 1, 'Inter Display');
-  words(t, 'COMING SOON ON GOOGLE PLAY', 1760, 26, 500, 12.9, 99, 'rgba(255,138,61,.9)', 7, 'Inter');
+  words(t, 'Just drive. Hejje keeps the footprints.', 1335, 42, 300, 12.2, 99, 'rgba(245,242,239,.72)', 1, 'Inter Display');
+  words(t, 'SOON ON GOOGLE PLAY STORE', 1760, 26, 500, 12.9, 99, 'rgba(255,138,61,.9)', 7, 'Inter');
 }
 function finish(t) {
   const v = ctx.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, H * .78);
@@ -280,7 +363,7 @@ function finish(t) {
 }
 function render(t) {
   C = camAt(t);
-  background(t); drawGrid(t); carLight(t); drawTrails(t, lc); composite(t); wordFill(t);
+  background(t); drawGrid(t); carLight(t); const heads = drawTrails(t, lc); composite(t); wordFill(t); cars(t, heads);
   stopPin(t, paths[0], S_STOP, T_STOP - .05, 46, 'COFFEE · 12 MIN');
   stopPin(t, paths[1], paths[1].L * .45, 7.6, 46); stopPin(t, paths[2], paths[2].L * .6, 8.3, 46);
   intro(t); hud(t);
