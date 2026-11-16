@@ -203,7 +203,7 @@ function wordFill(t) {
   const path = new Path2D();
   for (const p of paths) { p.pts.forEach((pt, k) => { const q = proj(...pt); if (q) k ? path.lineTo(q[0], q[1]) : path.moveTo(q[0], q[1]); }); path.closePath(); }
   ctx.save(); ctx.globalAlpha = a; ctx.shadowColor = 'rgba(255,120,60,.55)'; ctx.shadowBlur = 40;
-  ctx.fillStyle = INK; ctx.fill(path, 'nonzero'); ctx.restore();
+  ctx.fillStyle = INK; ctx.fill(path, 'evenodd'); ctx.restore();
 }
 function stopPin(t, p, s, t0, h, label) {
   const k = clamp((t - t0) / .45); if (k <= 0) return;

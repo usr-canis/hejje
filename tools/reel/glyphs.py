@@ -26,9 +26,25 @@ class Flat(BasePen):
     def _closePath(s):
         if s.cur: s.cur.append(s.cur[0]); s.c.append(s.cur); s.cur=None
     _endPath=_closePath
-x=0; contours=[]
+# Glyphs overlap (the vowel sign sits on the letter), so merge them into one clean outline:
+# each glyph's contours even-odd into a shape, then the union of all glyphs.
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+x=0; shapes=[]
 for info,pos in zip(buf.glyph_infos, buf.glyph_positions):
-    pen=Flat(gs, x+pos.x_offset, pos.y_offset); gs[order[info.codepoint]].draw(pen); contours+=pen.c; x+=pos.x_advance
+    pen=Flat(gs, x+pos.x_offset, pos.y_offset); gs[order[info.codepoint]].draw(pen); x+=pos.x_advance
+    g=None
+    for c in pen.c:
+        if len(c)<4: continue
+        poly=Polygon(c).buffer(0)
+        g=poly if g is None else g.symmetric_difference(poly)
+    if g is not None: shapes.append(g)
+union=unary_union(shapes)
+polys=list(union.geoms) if hasattr(union,'geoms') else [union]
+contours=[]
+for poly in polys:
+    contours.append(list(poly.exterior.coords))
+    for ring in poly.interiors: contours.append(list(ring.coords))
 xs=[p[0] for c in contours for p in c]; ys=[p[1] for c in contours for p in c]
 minx,maxx,miny,maxy=min(xs),max(xs),min(ys),max(ys)
 def L(c): return sum(math.dist(c[i],c[i+1]) for i in range(len(c)-1))
