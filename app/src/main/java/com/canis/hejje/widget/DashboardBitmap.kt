@@ -12,8 +12,8 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
 import com.canis.hejje.R
-import com.canis.hejje.ui.theme.FOOTSTEPS_ASPECT
-import com.canis.hejje.ui.theme.drawFootsteps
+import com.canis.hejje.ui.theme.drawWordmark
+import com.canis.hejje.ui.theme.wordmarkWidth
 import com.canis.hejje.ui.trips.drawDrumDigits
 import com.canis.hejje.ui.trips.odometerPositions
 import kotlin.math.min
@@ -69,15 +69,13 @@ object DashboardBitmap {
         val name = context.getString(R.string.brand_name)
         p.textSize = 100f
         val bounds = android.graphics.Rect().also { p.getTextBounds(name, 0, name.length, it) }
-        // The name and its footstep marks (a third of its height) fill 70% of the left part, centred.
-        val marksPer = bounds.height() * 0.42f
-        val fit = min(140f / (bounds.width() + marksPer * FOOTSTEPS_ASPECT + 6f), 100f / bounds.height()) * 0.7f
+        // The name and its footstep mark fill 70% of the left part, centred.
+        val width = wordmarkWidth(p, name)
+        val fit = min(140f / width, 100f / bounds.height()) * 0.7f
         p.textSize = 100f * fit
-        val total = (bounds.width() + marksPer * FOOTSTEPS_ASPECT + 6f) * fit
-        val nameX = 18f + (140f - total) / 2f
+        val nameX = 18f + (140f - width * fit) / 2f
         val nameY = 80f - (bounds.top + bounds.bottom) / 2f * fit
-        cv.drawText(name, nameX - bounds.left * fit, nameY, p)
-        cv.drawFootsteps(context, nameX + (bounds.width() + 6f) * fit, 80f - bounds.height() * fit * 0.12f, marksPer * fit, c.accent)
+        cv.drawWordmark(context, name, nameX, nameY, p, c.accent)
 
         // Label.
         val x0 = 172f

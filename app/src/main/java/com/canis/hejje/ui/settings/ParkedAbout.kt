@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,9 +49,8 @@ import com.canis.hejje.ui.components.rememberHaptics
 import com.canis.hejje.ui.map.MapMarker
 import com.canis.hejje.ui.map.TripMap
 import com.canis.hejje.ui.rememberFormatter
-import com.canis.hejje.ui.theme.Footsteps
+import com.canis.hejje.ui.theme.Wordmark
 import com.canis.hejje.ui.theme.LocalPalette
-import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -121,10 +118,7 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.ic_mark), null, Modifier.size(96.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
-                    Footsteps(26.dp, LocalPalette.current.accent, Modifier.padding(start = 2.dp, bottom = 16.dp))
-                }
+                Wordmark(MaterialTheme.typography.displaySmall, LocalPalette.current.accent)
                 Text(stringResource(R.string.about_meaning), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     stringResource(R.string.settings_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium,

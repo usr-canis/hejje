@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,10 +70,9 @@ import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.PulsingDot
-import com.canis.hejje.ui.theme.Footsteps
+import com.canis.hejje.ui.theme.Wordmark
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
-import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.cos
@@ -166,13 +164,7 @@ internal fun elapsed(ms: Long): String {
 private fun Header(live: LiveState, now: Long, f: Formatter, onStop: () -> Unit) {
     val dash = Dash
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(
-            stringResource(R.string.brand_name),
-            style = TextStyle(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, color = dash.text, shadow = dash.wordShadow),
-            maxLines = 1,
-            modifier = Modifier.semantics { heading() },
-        )
-        Footsteps(17.dp, dash.accent, Modifier.padding(start = 2.dp, bottom = 10.dp))
+        Wordmark(TextStyle(fontSize = 26.sp, color = dash.text, shadow = dash.wordShadow), dash.accent, Modifier.semantics { heading() })
         Spacer(Modifier.weight(1f))
         PulsingDot(size = 7.dp)
         Text(

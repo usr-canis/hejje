@@ -1,25 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Footstep marks beside the wordmark: a short trail of prints, left-right-left, the oldest faintest. Tinted where drawn. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="60dp" android:height="40dp" android:viewportWidth="60" android:viewportHeight="40">
-    <group android:pivotX="54" android:pivotY="49" android:rotation="50.5" android:scaleX="-0.3" android:scaleY="0.3" android:translateX="-43" android:translateY="-19">
-        <path android:fillColor="#E8590C" android:fillAlpha="0.45" android:pathData="M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.45" android:pathData="M44.5,27.5 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.45" android:pathData="M54,25 m-3.9,0 a3.9,3.9 0 1,0 7.8,0 a3.9,3.9 0 1,0 -7.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.45" android:pathData="M62,27.5 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.45" android:pathData="M68,33 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+<!-- The footstep mark beside the wordmark: one pair of bare feet, five toes each, the right a little ahead. Tinted where drawn. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="38dp" android:height="36dp" android:viewportWidth="38" android:viewportHeight="36">
+    <group android:pivotX="54.5" android:pivotY="49.5" android:rotation="4" android:scaleX="-0.5" android:scaleY="0.5" android:translateX="-44.5" android:translateY="-28.5">
+        <path android:fillColor="#E8590C" android:pathData="M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z" />
+        <path android:fillColor="#E8590C" android:pathData="M44,27.5 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
+        <path android:fillColor="#E8590C" android:pathData="M52.8,23.6 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+        <path android:fillColor="#E8590C" android:pathData="M60,24.2 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+        <path android:fillColor="#E8590C" android:pathData="M66.2,27 m-2.6,0 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+        <path android:fillColor="#E8590C" android:pathData="M70.6,31.6 m-2.2,0 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0" />
     </group>
-    <group android:pivotX="54" android:pivotY="49" android:rotation="25.5" android:scaleX="0.3" android:scaleY="0.3" android:translateX="-25" android:translateY="-29">
-        <path android:fillColor="#E8590C" android:fillAlpha="0.7" android:pathData="M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.7" android:pathData="M44.5,27.5 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.7" android:pathData="M54,25 m-3.9,0 a3.9,3.9 0 1,0 7.8,0 a3.9,3.9 0 1,0 -7.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.7" android:pathData="M62,27.5 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="0.7" android:pathData="M68,33 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
-    </group>
-    <group android:pivotX="54" android:pivotY="49" android:rotation="50.5" android:scaleX="-0.3" android:scaleY="0.3" android:translateX="-7" android:translateY="-39">
-        <path android:fillColor="#E8590C" android:fillAlpha="1.0" android:pathData="M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z" />
-        <path android:fillColor="#E8590C" android:fillAlpha="1.0" android:pathData="M44.5,27.5 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="1.0" android:pathData="M54,25 m-3.9,0 a3.9,3.9 0 1,0 7.8,0 a3.9,3.9 0 1,0 -7.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="1.0" android:pathData="M62,27.5 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
-        <path android:fillColor="#E8590C" android:fillAlpha="1.0" android:pathData="M68,33 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <group android:pivotX="54.5" android:pivotY="49.5" android:rotation="-4" android:scaleX="0.5" android:scaleY="0.5" android:translateX="-26" android:translateY="-33">
+        <path android:fillColor="#E8590C" android:pathData="M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z" />
+        <path android:fillColor="#E8590C" android:pathData="M44,27.5 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
+        <path android:fillColor="#E8590C" android:pathData="M52.8,23.6 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+        <path android:fillColor="#E8590C" android:pathData="M60,24.2 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+        <path android:fillColor="#E8590C" android:pathData="M66.2,27 m-2.6,0 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+        <path android:fillColor="#E8590C" android:pathData="M70.6,31.6 m-2.2,0 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0" />
     </group>
 </vector>

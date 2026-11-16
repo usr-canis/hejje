@@ -23,7 +23,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -67,7 +66,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -102,11 +100,10 @@ import com.canis.hejje.ui.settings.SettingsScreen
 import com.canis.hejje.ui.settings.ZonesScreen
 import com.canis.hejje.ui.stretch.SectionScreen
 import com.canis.hejje.ui.stretch.StretchScreen
-import com.canis.hejje.ui.theme.Footsteps
+import com.canis.hejje.ui.theme.Wordmark
 import com.canis.hejje.ui.theme.HejjeTheme
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
-import com.canis.hejje.ui.theme.WordmarkFont
 import com.canis.hejje.ui.trips.TripsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -241,14 +238,10 @@ private fun BrandSplash() {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
             // Same drawable and size as the system splash, so the icon does not move.
             Image(painterResource(R.drawable.ic_splash), null, Modifier.size(288.dp))
-            Row(Modifier.offset(y = 84.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.brand_name),
-                    style = MaterialTheme.typography.titleLarge.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Footsteps(17.dp, LocalPalette.current.accent, Modifier.padding(start = 2.dp, bottom = 10.dp))
-            }
+            Wordmark(
+                MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onBackground), LocalPalette.current.accent,
+                Modifier.offset(y = 84.dp),
+            )
         }
     }
 }

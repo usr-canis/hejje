@@ -14,7 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.test.core.app.ApplicationProvider
 import com.canis.hejje.R
-import com.canis.hejje.ui.theme.drawFootsteps
+import com.canis.hejje.ui.theme.drawWordmark
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,8 +77,7 @@ class StoreGraphicsTest {
         // The joined letter hangs well below the baseline, so place the word by its drawn bounds.
         val bounds = Rect().also { word.getTextBounds(name, 0, name.length, it) }
         val baseline = 100f - bounds.top
-        c.drawText(name, 70f, baseline, word)
-        c.drawFootsteps(context, 70f + word.measureText(name) + 8f, baseline - 40f, 72f, accent)
+        c.drawWordmark(context, name, 70f, baseline, word, accent)
 
         val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); textSize = 36f; color = 0xFFB9B4AF.toInt()

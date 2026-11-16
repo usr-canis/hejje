@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -75,10 +74,9 @@ import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.components.HejjeIcons
-import com.canis.hejje.ui.theme.Footsteps
+import com.canis.hejje.ui.theme.Wordmark
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
-import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.floor
@@ -190,18 +188,11 @@ fun InstrumentCluster(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        BasicText(
-                            stringResource(R.string.brand_name),
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontFamily = WordmarkFont, fontWeight = FontWeight.Bold, color = dash.text, shadow = dash.wordShadow,
-                            ),
-                            maxLines = 1,
-                            autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
-                            modifier = Modifier.weight(1f, fill = false).semantics { heading() },
-                        )
-                        Footsteps(30.dp, dash.accent, Modifier.padding(start = 2.dp, bottom = 22.dp))
-                    }
+                    Wordmark(
+                        MaterialTheme.typography.displaySmall.copy(color = dash.text, shadow = dash.wordShadow), dash.accent,
+                        Modifier.weight(1f).semantics { heading() },
+                        autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
+                    )
                     // The odometer keeps its full width; the wordmark shrinks to make room on small screens.
                     Column(Modifier.width(IntrinsicSize.Min), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(

@@ -45,7 +45,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,9 +56,8 @@ import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalContainer
 import com.canis.hejje.ui.settings.rememberFixer
 import com.canis.hejje.ui.settings.rememberResumeTick
-import com.canis.hejje.ui.theme.Footsteps
+import com.canis.hejje.ui.theme.Wordmark
 import com.canis.hejje.ui.theme.LocalPalette
-import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.launch
 
 private class Step(
@@ -115,10 +113,7 @@ fun OnboardingScreen() {
             ) {
                 if (st.icon == null) {
                     Image(painterResource(R.drawable.ic_mark), null, Modifier.size(120.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
-                        Footsteps(26.dp, palette.accent, Modifier.padding(start = 2.dp, bottom = 16.dp))
-                    }
+                    Wordmark(MaterialTheme.typography.displaySmall, palette.accent)
                     Spacer(Modifier.height(20.dp))
                 } else {
                     Icon(st.icon, null, Modifier.size(56.dp), tint = palette.accent)
