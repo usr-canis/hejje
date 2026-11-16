@@ -17,8 +17,9 @@ class TraceState(val lat: DoubleArray, val lon: DoubleArray, val heading: Float?
 
 /**
  * Keeps the drive being recorded as a light line for the live card: a point every [STEP_M] metres
- * (twice as far apart each time it grows past [MAX_POINTS]), and the heading over the last
- * [HEADING_M] metres, so standing still does not spin the compass. Main thread only.
+ * (twice as far apart each time it grows past [MAX_POINTS]), and the heading: GPS's direction of
+ * travel with every fix while moving (or the direction over the last [HEADING_M] metres when GPS
+ * gives none). Standing still, the heading holds. Main thread only.
  */
 class LiveTrace {
     private val lat = ArrayList<Double>()
@@ -43,22 +44,32 @@ class LiveTrace {
     /** The points already recorded, after the app was restarted mid-drive. */
     fun load(points: List<RawPoint>) {
         reset()
-        points.forEach { add(it, publish = false) }
+        points.forEach { add(it, moving = !it.speed.isNaN() && it.speed > 1.4f, publish = false) }
         publish()
     }
 
-    fun add(p: RawPoint) = add(p, publish = true)
+    /** Adds a fix; [moving] says whether the car is taken to be moving (see LiveSpeed). */
+    fun add(p: RawPoint, moving: Boolean = true) = add(p, moving, publish = true)
 
-    private fun add(p: RawPoint, publish: Boolean) {
+    private fun add(p: RawPoint, moving: Boolean, publish: Boolean) {
         var changed = false
         if (anchorLat.isNaN()) {
             anchorLat = p.lat
             anchorLon = p.lon
-        } else if (Geo.distance(anchorLat, anchorLon, p.lat, p.lon) >= HEADING_M) {
+        } else if (moving && !p.bearing.isNaN()) {
+            if (heading != p.bearing) changed = true
+            heading = p.bearing
+            anchorLat = p.lat
+            anchorLon = p.lon
+        } else if (moving && Geo.distance(anchorLat, anchorLon, p.lat, p.lon) >= HEADING_M) {
             heading = Geo.bearing(anchorLat, anchorLon, p.lat, p.lon)
             anchorLat = p.lat
             anchorLon = p.lon
             changed = true
+        } else if (!moving) {
+            // Standing still: GPS wander must not count towards the next heading.
+            anchorLat = p.lat
+            anchorLon = p.lon
         }
         val n = lat.size
         if (n == 0 || Geo.distance(lat[n - 1], lon[n - 1], p.lat, p.lon) >= step) {

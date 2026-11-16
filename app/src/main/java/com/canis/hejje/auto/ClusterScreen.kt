@@ -33,6 +33,7 @@ import com.canis.hejje.ui.formatter
 import com.canis.hejje.ui.trips.dialMax
 import com.canis.hejje.ui.trips.headingLabel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
@@ -96,6 +97,15 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
                     }
                 }
                 launch { drawLoop() }
+                // GPS every second while the cluster is on the car screen.
+                launch {
+                    container.controller.watchStart()
+                    try {
+                        awaitCancellation()
+                    } finally {
+                        container.controller.watchEnd()
+                    }
+                }
             }
         }
     }
@@ -207,7 +217,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
     private fun step(): Boolean {
         val live = now.live
         val perMs = if (now.settings.miles) 2.236936f else 3.6f
-        val speed = live?.last?.speed?.takeIf { live.hasFix && !it.isNaN() }
+        val speed = live?.speed?.takeIf { live.hasFix }
         val target = ((speed ?: 0f) * perMs).coerceIn(0f, dialMax(now.settings.miles).toFloat())
         needle = ease(needle, target, 0.6f)
         val heading = now.trace.heading
@@ -233,7 +243,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         val f = f
         val frame = CarFrame(
             needle = needle,
-            digits = live?.last?.speed?.takeIf { live.hasFix && !it.isNaN() }?.let { f.speedValue(it) } ?: if (live == null) "0" else "–",
+            digits = live?.speed?.takeIf { live.hasFix }?.let { f.speedValue(it) } ?: if (live == null) "0" else "–",
             unit = f.speedUnit.uppercase(),
             turn = turn,
             heading = headingLabel(now.trace.heading),

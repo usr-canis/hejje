@@ -13,14 +13,19 @@ import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.db.RawDao
 import com.canis.hejje.domain.Geo
+import com.canis.hejje.domain.LiveSpeed
 import com.canis.hejje.domain.RawPoint
 import com.canis.hejje.domain.RecordingStateMachine
 import com.canis.hejje.domain.RecordingStateMachine.Effect
 import com.canis.hejje.domain.TripProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,6 +42,8 @@ data class LiveState(
     val lastFixAt: Long = 0,
     /** The latest GPS fix, for the car display. */
     val last: RawPoint? = null,
+    /** The speed to show, m/s: 0 while standing still (GPS noise filtered out, see [LiveSpeed]). */
+    val speed: Float = 0f,
 )
 
 /**
@@ -71,6 +78,16 @@ class RecordingController(
 
     /** The line driven so far and the heading, for the live card on the Trips tab. */
     val trace = LiveTrace()
+
+    private val speedFilter = LiveSpeed()
+    private val watchers = MutableStateFlow(0)
+
+    /** True while the live cluster is on screen (phone or car); GPS then updates every second. */
+    val watched: StateFlow<Boolean> = watchers.map { it > 0 }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    fun watchStart() = watchers.update { it + 1 }
+
+    fun watchEnd() = watchers.update { (it - 1).coerceAtLeast(0) }
 
     /** True while the service has work: recording, or saving a drive that just ended. */
     private val _active = MutableStateFlow(machine.state.recording)
@@ -159,6 +176,7 @@ class RecordingController(
         session = UUID.randomUUID().toString()
         lastPoint = null
         trace.reset()
+        speedFilter.reset()
         autoStartPending = !e.manual
         _live.value = LiveState(e.at, e.manual)
         log?.add(LogKind.REC_STARTED, if (e.manual) DriveLog.MANUAL else DriveLog.AUTO)
@@ -225,22 +243,24 @@ class RecordingController(
         locationPrompt.onFix()
         buffer.append(id, p)
         var distance = live.distanceM
+        val shown = speedFilter.update(p)
         if (p.acc.isNaN() || p.acc <= TripProcessor.MAX_ACCURACY_M) {
             val last = lastPoint
             if (last != null && p.t > last.t) {
                 val d = Geo.distance(last.lat, last.lon, p.lat, p.lon)
                 val speed = d / ((p.t - last.t) / 1000.0)
-                val moving = if (p.speed.isNaN()) speed > 1.0 else p.speed > 1.0f
+                // GPS noise while standing still does not add distance.
+                val moving = if (p.speed.isNaN()) speed > 1.0 else shown > 0f
                 if (moving && speed < 70) distance += d
             }
             lastPoint = p
-            trace.add(p)
+            trace.add(p, moving = speedFilter.isMoving)
         }
         when {
             live.lastFixAt == 0L -> log?.add(LogKind.FIRST_FIX, ((p.t - live.startedAt) / 1000).coerceAtLeast(0).toString())
             !live.hasFix -> log?.add(LogKind.GPS_REGAINED, ((p.t - live.lastFixAt) / 1000).toString())
         }
-        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p)
+        _live.value = live.copy(distanceM = distance, hasFix = true, lastFixAt = p.t, last = p, speed = shown)
         if (autoStartPending) {
             autoStartPending = false
             scope.launch { settings.update { it.copy(lastAutoStart = now()) } }

@@ -1,12 +1,10 @@
 package com.canis.hejje.ui.trips
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -108,7 +107,7 @@ internal fun LiveCluster(live: LiveState, trace: TraceState, next: NextStop?, f:
             val speedoCx = r * 1.035f
             val rc = minOf(r * 0.76f, (maxWidth - speedoCx * 2 - 14.dp) / 2)
             Column {
-                val speed = live.last?.speed?.takeIf { live.hasFix && !it.isNaN() }
+                val speed = live.speed.takeIf { live.hasFix }
                 Dials(speed, trace, live.last, f, r, rc, Modifier.fillMaxWidth().height(r * DIAL_HEIGHT))
                 Spacer(Modifier.height(ROW_GAP))
                 Box(Modifier.fillMaxWidth().height(ODO_ROW)) {
@@ -182,7 +181,7 @@ private fun rememberTurn(target: Float?): Float {
     LaunchedEffect(target) {
         if (target == null) return@LaunchedEffect
         val delta = ((target - anim.value) % 360f + 540f) % 360f - 180f
-        if (reduceMotion) anim.snapTo(anim.value + delta) else anim.animateTo(anim.value + delta, tween(700, easing = FastOutSlowInEasing))
+        if (reduceMotion) anim.snapTo(anim.value + delta) else anim.animateTo(anim.value + delta, spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow))
     }
     return anim.value
 }
@@ -195,8 +194,9 @@ private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Format
     val perMs = if (f.miles) 2.236936f else 3.6f
     val max = dialMax(f.miles)
     val shown = ((speedMs ?: 0f) * perMs).coerceIn(0f, max.toFloat())
+    // A quick, smooth glide to each new reading, like a real needle.
     val needle by animateFloatAsState(
-        shown, if (LocalReduceMotion.current) snap() else tween(900, easing = LinearEasing), label = "speed",
+        shown, if (LocalReduceMotion.current) snap() else spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow), label = "speed",
     )
     val turn = rememberTurn(trace.heading)
     val unit = f.speedUnit.uppercase(LocalConfiguration.current.locales[0])

@@ -17,6 +17,8 @@ data class RawPoint(
     val sMin: Float = Float.NaN,
     val sMax: Float = Float.NaN,
     val sLat: Float = Float.NaN,
+    /** Direction of travel from GPS, degrees from north (live only; not stored). */
+    val bearing: Float = Float.NaN,
 )
 
 /** Simplified route line. [t] is seconds from the segment start, [v] is speed in m/s. */

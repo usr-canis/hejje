@@ -103,6 +103,8 @@ class RecordingService : Service() {
         super.onCreate()
         val container = (application as HejjeApp).container
         controller = container.controller
+        // Someone opened (or closed) the live cluster: switch the GPS rate.
+        scope.launch { controller.watched.collect { if (updating) requestUpdates() } }
         notifier = container.notifier
         fused = LocationServices.getFusedLocationProviderClient(this)
         motion = MotionSensors(this)
@@ -194,10 +196,14 @@ class RecordingService : Service() {
         handler.postDelayed(watchdog, 10_000)
     }
 
-    /** 1 s while charging and 2 s on battery by default; slower in battery-saver mode. */
+    /**
+     * 1 s while charging or while the live cluster is on screen (phone or car), 2 s on battery
+     * otherwise; slower in battery-saver mode.
+     */
     @SuppressLint("MissingPermission") // checked in startUpdates()
     private fun requestUpdates() {
-        val charging = getSystemService(BatteryManager::class.java)?.isCharging == true
+        // Someone watching the live cluster gets the same 1 s rate as when charging.
+        val charging = getSystemService(BatteryManager::class.java)?.isCharging == true || controller.watched.value
         val saver = (application as HejjeApp).container.settings.current.gpsMode == 1
         val wanted = when {
             charging && !saver -> 1_000L
@@ -263,6 +269,7 @@ class RecordingService : Service() {
             sMin = sensed?.minLon ?: Float.NaN,
             sMax = sensed?.maxLon ?: Float.NaN,
             sLat = sensed?.peakLat ?: Float.NaN,
+            bearing = if (l.hasBearing()) l.bearing else Float.NaN,
         )
     }
 

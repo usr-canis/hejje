@@ -50,6 +50,9 @@ class TripsViewModel(private val container: AppContainer) : ViewModel() {
     val trace: StateFlow<TraceState> = container.controller.trace.state
     val next: StateFlow<NextStop?> = container.food.next
 
+    /** The live cluster is on screen (or not): GPS updates every second while it is. */
+    fun watching(on: Boolean) = if (on) container.controller.watchStart() else container.controller.watchEnd()
+
     /** Today's date, which changes at midnight, so the week total and "Today" move on while the app is open. */
     private val today = flow {
         while (true) {

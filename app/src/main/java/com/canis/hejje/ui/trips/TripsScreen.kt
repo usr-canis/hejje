@@ -5,8 +5,10 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,16 +16,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -32,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,50 +53,41 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import java.time.DayOfWeek
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
-import com.canis.hejje.ui.components.CardShape
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.data.db.TripEntity
 import com.canis.hejje.data.db.TripWithTags
 import com.canis.hejje.domain.Formatter
-import com.canis.hejje.domain.Totals
-import com.canis.hejje.recording.LiveState
 import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.domain.Places
+import com.canis.hejje.domain.Totals
+import com.canis.hejje.recording.LiveState
 import com.canis.hejje.ui.LocalPlaces
+import com.canis.hejje.ui.components.CardShape
 import com.canis.hejje.ui.components.EmptyState
 import com.canis.hejje.ui.components.HejjeCard
 import com.canis.hejje.ui.components.HejjeIcons
@@ -103,6 +103,7 @@ import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.update.UpdateError
 import com.canis.hejje.update.UpdateState
 import kotlinx.coroutines.delay
+import java.time.DayOfWeek
 import java.time.LocalDate
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -115,6 +116,12 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     val live by vm.live.collectAsStateWithLifecycle()
     val trace by vm.trace.collectAsStateWithLifecycle()
     val next by vm.next.collectAsStateWithLifecycle()
+    if (live != null) {
+        LifecycleStartEffect(vm) {
+            vm.watching(true)
+            onStopOrDispose { vm.watching(false) }
+        }
+    }
     val update by container.updater.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
     val haptics = rememberHaptics()
