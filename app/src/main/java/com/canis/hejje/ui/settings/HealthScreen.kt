@@ -40,7 +40,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -133,7 +132,8 @@ fun rememberFixer(onCar: () -> Unit, onDone: () -> Unit = {}): (HealthId) -> Uni
             HealthId.BLUETOOTH_PERMISSION -> if (Build.VERSION.SDK_INT >= 31) permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT)) else onDone()
             HealthId.BLUETOOTH_ON -> open(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             HealthId.CAR, HealthId.LINK -> onCar()
-            HealthId.BATTERY -> open(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, "package:${context.packageName}".toUri()))
+            // Android's list of apps (no special permission needed): the user picks Hejje there.
+            HealthId.BATTERY -> open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             HealthId.AUTO_RECORD -> scope.launch {
                 container.settings.update { it.copy(autoRecord = true) }
                 onDone()

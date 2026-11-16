@@ -21,6 +21,7 @@ fun Context.formatter(miles: Boolean = (applicationContext as HejjeApp).containe
         justNow = getString(R.string.time_just_now), minutesAgo = getString(R.string.time_minutes_ago),
         hoursAgo = getString(R.string.time_hours_ago), today = getString(R.string.time_today),
         yesterday = getString(R.string.time_yesterday),
+        tripFrom = getString(R.string.trip_from), tripTo = getString(R.string.trip_to), tripUntitled = getString(R.string.trip_untitled),
     ),
 )
 

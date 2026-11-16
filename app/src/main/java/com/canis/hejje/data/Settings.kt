@@ -42,13 +42,6 @@ data class SettingsData(
     val backupUri: String? = null,
     val lastBackup: Long = 0,
     val backupKeep: Int = 4,
-    val updateAutoCheck: Boolean = true,
-    val updateWifiOnly: Boolean = false,
-    val updateNotify: Boolean = true,
-    val skippedVersion: String? = null,
-    val lastUpdateCheck: Long = 0,
-    /** The newest release found by the last check, as JSON, so it can be shown again without asking GitHub. */
-    val pendingUpdate: String? = null,
     val zonesInApp: Boolean = false,
     val routeBySpeed: Boolean = true,
     val onboardingDone: Boolean = false,
@@ -93,12 +86,6 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val backupUri = stringPreferencesKey("backupUri")
         val lastBackup = longPreferencesKey("lastBackup")
         val backupKeep = intPreferencesKey("backupKeep")
-        val updateAutoCheck = booleanPreferencesKey("updateAutoCheck")
-        val updateWifiOnly = booleanPreferencesKey("updateWifiOnly")
-        val updateNotify = booleanPreferencesKey("updateNotify")
-        val skippedVersion = stringPreferencesKey("skippedVersion")
-        val lastUpdateCheck = longPreferencesKey("lastUpdateCheck")
-        val pendingUpdate = stringPreferencesKey("pendingUpdate")
         val zonesInApp = booleanPreferencesKey("zonesInApp")
         val routeBySpeed = booleanPreferencesKey("routeBySpeed")
         val onboardingDone = booleanPreferencesKey("onboardingDone")
@@ -132,11 +119,6 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             theme = p[K.theme] ?: d.theme,
             backupUri = p[K.backupUri], lastBackup = p[K.lastBackup] ?: 0,
             backupKeep = p[K.backupKeep] ?: d.backupKeep,
-            updateAutoCheck = p[K.updateAutoCheck] ?: d.updateAutoCheck,
-            updateWifiOnly = p[K.updateWifiOnly] ?: d.updateWifiOnly,
-            updateNotify = p[K.updateNotify] ?: d.updateNotify,
-            skippedVersion = p[K.skippedVersion], lastUpdateCheck = p[K.lastUpdateCheck] ?: 0,
-            pendingUpdate = p[K.pendingUpdate],
             zonesInApp = p[K.zonesInApp] ?: d.zonesInApp,
             routeBySpeed = p[K.routeBySpeed] ?: d.routeBySpeed,
             onboardingDone = p[K.onboardingDone] ?: d.onboardingDone,
@@ -155,8 +137,6 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         set(K.tileCacheMb, s.tileCacheMb); set(K.summaryTiming, s.summaryTiming); set(K.widgetLastTrip, s.widgetLastTrip)
         set(K.locationPrompts, s.locationPrompts)
         set(K.theme, s.theme); set(K.backupUri, s.backupUri); set(K.lastBackup, s.lastBackup); set(K.backupKeep, s.backupKeep)
-        set(K.updateAutoCheck, s.updateAutoCheck); set(K.updateWifiOnly, s.updateWifiOnly); set(K.updateNotify, s.updateNotify)
-        set(K.skippedVersion, s.skippedVersion); set(K.lastUpdateCheck, s.lastUpdateCheck); set(K.pendingUpdate, s.pendingUpdate)
         set(K.zonesInApp, s.zonesInApp)
         set(K.routeBySpeed, s.routeBySpeed); set(K.onboardingDone, s.onboardingDone); set(K.lastAutoStart, s.lastAutoStart)
         set(K.lastProblem, s.lastProblem); set(K.lastProblemAt, s.lastProblemAt)
@@ -189,8 +169,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         "tileCacheMb" to s.tileCacheMb.toString(), "summaryTiming" to s.summaryTiming.toString(),
         "widgetLastTrip" to s.widgetLastTrip.toString(), "theme" to s.theme.toString(),
         "locationPrompts" to s.locationPrompts.toString(),
-        "updateAutoCheck" to s.updateAutoCheck.toString(), "updateWifiOnly" to s.updateWifiOnly.toString(),
-        "updateNotify" to s.updateNotify.toString(), "zonesInApp" to s.zonesInApp.toString(),
+        "zonesInApp" to s.zonesInApp.toString(),
         "routeBySpeed" to s.routeBySpeed.toString(), "backupKeep" to s.backupKeep.toString(),
     )
 
@@ -204,8 +183,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             tileCacheMb = i("tileCacheMb", s.tileCacheMb), summaryTiming = i("summaryTiming", s.summaryTiming),
             widgetLastTrip = b("widgetLastTrip", s.widgetLastTrip), theme = i("theme", s.theme),
             locationPrompts = b("locationPrompts", s.locationPrompts),
-            updateAutoCheck = b("updateAutoCheck", s.updateAutoCheck), updateWifiOnly = b("updateWifiOnly", s.updateWifiOnly),
-            updateNotify = b("updateNotify", s.updateNotify), zonesInApp = b("zonesInApp", s.zonesInApp),
+            zonesInApp = b("zonesInApp", s.zonesInApp),
             routeBySpeed = b("routeBySpeed", s.routeBySpeed), backupKeep = i("backupKeep", s.backupKeep),
         )
     }

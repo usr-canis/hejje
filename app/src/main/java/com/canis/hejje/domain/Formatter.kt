@@ -17,16 +17,20 @@ data class Labels(
     val metres: String = "m",
     val feet: String = "ft",
     val hours: String = "h",
-    val minutes: String = "m",
+    val minutes: String = "min",
     val seconds: String = "s",
     val justNow: String = "Just now",
     val minutesAgo: String = "%d min ago",
     val hoursAgo: String = "%d h ago",
     val today: String = "Today",
     val yesterday: String = "Yesterday",
+    /** Trip titles when only one end, or neither, has a name yet. */
+    val tripFrom: String = "From %s",
+    val tripTo: String = "To %s",
+    val tripUntitled: String = "Drive",
 )
 
-/** Friendly numbers: "42.6 km", "1 h 24 m", "2 h ago". */
+/** Friendly numbers: "42.6 km", "1 h 24 min", "2 h ago". */
 class Formatter(val miles: Boolean = false, val labels: Labels = Labels(), private val locale: Locale = Locale.getDefault()) {
     val distanceUnit: String get() = if (miles) labels.mi else labels.km
     val speedUnit: String get() = if (miles) labels.mph else labels.kmh

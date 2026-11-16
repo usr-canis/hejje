@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,6 +75,7 @@ import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.components.HejjeIcons
+import com.canis.hejje.ui.theme.Footsteps
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
 import com.canis.hejje.ui.theme.WordmarkFont
@@ -187,7 +190,7 @@ fun InstrumentCluster(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         BasicText(
                             stringResource(R.string.brand_name),
                             style = MaterialTheme.typography.displaySmall.copy(
@@ -195,10 +198,12 @@ fun InstrumentCluster(
                             ),
                             maxLines = 1,
                             autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 72.sp, stepSize = 2.sp),
-                            modifier = Modifier.fillMaxWidth(0.92f).semantics { heading() },
+                            modifier = Modifier.weight(1f, fill = false).semantics { heading() },
                         )
+                        Footsteps(30.dp, dash.accent, Modifier.padding(start = 2.dp, bottom = 22.dp))
                     }
-                    Column(Modifier.weight(1.3f, fill = false), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // The odometer keeps its full width; the wordmark shrinks to make room on small screens.
+                    Column(Modifier.width(IntrinsicSize.Min), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             stringResource(R.string.this_week).uppercase(locale),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.6.sp),
@@ -340,6 +345,7 @@ internal fun Odometer(distanceM: Double, f: Formatter, rolling: Boolean, label: 
         Drum(positions[0], small, tenths = true)
         Text(
             unit, style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp), color = Dash.muted,
+            maxLines = 1, softWrap = false,
             modifier = Modifier.align(Alignment.Bottom).padding(start = 3.dp, bottom = 3.dp),
         )
     }

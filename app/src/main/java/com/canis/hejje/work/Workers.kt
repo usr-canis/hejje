@@ -80,20 +80,6 @@ class SummaryWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     }
 }
 
-/** Daily background check for a new release; shows a notification if the user wants one. */
-class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val c = applicationContext.container
-        val s = c.settings.current
-        if (!s.updateAutoCheck || !s.updateNotify) return Result.success()
-        val before = s.lastUpdateCheck
-        val info = runCatching { c.updater.check(manual = false) }.getOrNull()
-        // Notify only for a fresh result, not for one the app has already shown.
-        if (info != null && c.settings.current.lastUpdateCheck != before) c.notifier.updateAvailable(info.version)
-        return Result.success()
-    }
-}
-
 /** Weekly backup into the folder chosen in Settings. */
 class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -105,10 +91,8 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 object Work {
     fun schedule(context: Context) {
         val wm = WorkManager.getInstance(context)
-        wm.enqueueUniquePeriodicWork(
-            "update-check", ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS).setConstraints(online).build(),
-        )
+        // Updates come from the Play Store: stop the check that earlier (GitHub) versions scheduled.
+        wm.cancelUniqueWork("update-check")
         wm.enqueueUniquePeriodicWork(
             "auto-backup", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<BackupWorker>(7, TimeUnit.DAYS).setInitialDelay(1, TimeUnit.HOURS).build(),

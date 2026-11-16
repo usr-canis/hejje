@@ -19,11 +19,13 @@ class TripTitleTest {
         endLon = end.second, startPlace = from, endPlace = to, thumb = ByteArray(0), segmentCount = 1, baro = false,
     )
 
-    @Test fun namedPlacesWin_streetNamesLoseTheirCity_coordinatesStayWhole() {
+    @Test fun namedPlacesWin_streetNamesLoseTheirCity_unnamedEndsSayFromOrTo() {
         val elsewhere = 12.8967 to 77.6627
         assertEquals("Home → Work", tripTitle(trip(12.9716 to 77.5946, 12.9352 to 77.6245, "Indiranagar, Bengaluru", "HSR, Bengaluru"), f, listOf(home, work)))
         assertEquals("Home → Koramangala", tripTitle(trip(12.9716 to 77.5946, elsewhere, null, "Koramangala, Bengaluru"), f, listOf(home)))
-        assertEquals("Home → 12.8967, 77.6627", tripTitle(trip(12.9716 to 77.5946, elsewhere, null, null), f, listOf(home)))
+        assertEquals("From Home", tripTitle(trip(12.9716 to 77.5946, elsewhere, null, null), f, listOf(home)))
+        assertEquals("To Home", tripTitle(trip(elsewhere, 12.9716 to 77.5946, null, null), f, listOf(home)))
+        assertEquals("Drive", tripTitle(trip(elsewhere, elsewhere, null, null), f, emptyList()))
         assertEquals("Indiranagar → Koramangala", tripTitle(trip(12.97 to 77.64, elsewhere, "Indiranagar, Bengaluru", "Koramangala, Bengaluru"), f))
     }
 }

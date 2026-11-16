@@ -9,8 +9,6 @@ import com.canis.hejje.domain.DriveSim
 import com.canis.hejje.domain.Gpx
 import com.canis.hejje.domain.RawPoint
 import com.canis.hejje.domain.StatsCalculator
-import com.canis.hejje.update.GhRelease
-import com.canis.hejje.update.Updater
 import com.canis.hejje.domain.HejjeJson
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -233,22 +231,6 @@ class DataTest {
         db.raw().insert(listOf(RawBuffer.toEntity("s", RawPoint(5, 1.0, 2.0))))
         val p = RawBuffer.toRaw(db.raw().points("s").single())
         assertTrue(p.alt.isNaN() && p.speed.isNaN() && p.acc.isNaN())
-    }
-
-    @Test fun githubRelease_isParsedIntoAnUpdate() {
-        val json = """{"tag_name":"v1.4.0","body":"- Faster maps\n- Fixes","draft":false,"prerelease":false,"html_url":"x",
-            "assets":[{"name":"notes.txt","size":3,"browser_download_url":"https://e/x.txt"},
-            {"name":"hejje-1.4.0.apk","size":26000000,"browser_download_url":"https://e/hejje-1.4.0.apk","digest":"sha256:abc123"}]}"""
-        val info = Updater.toInfo(HejjeJson.decodeFromString(GhRelease.serializer(), json))!!
-        assertEquals("1.4.0", info.version)
-        assertEquals("https://e/hejje-1.4.0.apk", info.url)
-        assertEquals(26_000_000L, info.size)
-        assertEquals("abc123", info.sha256)
-        assertTrue(info.notes.startsWith("- Faster maps"))
-        // Drafts, pre-releases and releases without an APK are ignored.
-        assertNull(Updater.toInfo(GhRelease(tag = "v2.0.0", prerelease = true)))
-        assertNull(Updater.toInfo(GhRelease(tag = "v2.0.0")))
-        assertFalse(com.canis.hejje.domain.Version.isNewer(info.version, "1.4.0"))
     }
 
     @Test fun placeNames_areBuiltFromNominatimAnswers() {

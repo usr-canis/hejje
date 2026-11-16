@@ -1,8 +1,8 @@
 package com.canis.hejje.ui.settings
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,8 +39,6 @@ import com.canis.hejje.ui.components.SectionTitle
 import com.canis.hejje.ui.components.rememberHaptics
 import com.canis.hejje.ui.map.MapEngine
 import com.canis.hejje.ui.rememberFormatter
-import com.canis.hejje.ui.trips.updateErrorText
-import com.canis.hejje.update.UpdateState
 import com.canis.hejje.widget.HejjeWidget
 import kotlinx.coroutines.launch
 
@@ -51,7 +49,6 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val s by container.settings.data.collectAsStateWithLifecycle()
-    val update by container.updater.state.collectAsStateWithLifecycle()
     val zones by container.db.zones().observe().collectAsStateWithLifecycle(emptyList())
     val f = rememberFormatter(s.miles)
     val scope = rememberCoroutineScope()
@@ -156,29 +153,6 @@ fun SettingsScreen(onOpen: (String) -> Unit) {
                 if (s.backupUri != null) {
                     SettingRow(stringResource(R.string.settings_backup_keep), pluralStringResource(R.plurals.backup_count, s.backupKeep, s.backupKeep)) { picker = Picker.KEEP }
                     SettingRow(stringResource(R.string.settings_auto_backup_stop)) { set { it.copy(backupUri = null) } }
-                }
-            }
-            item {
-                Header(R.string.settings_updates)
-                SwitchRow(stringResource(R.string.settings_update_auto), stringResource(R.string.settings_update_auto_summary), s.updateAutoCheck) { v -> set { it.copy(updateAutoCheck = v) } }
-                SwitchRow(stringResource(R.string.settings_update_notify), null, s.updateNotify) { v -> set { it.copy(updateNotify = v) } }
-                SwitchRow(stringResource(R.string.settings_update_wifi), null, s.updateWifiOnly) { v -> set { it.copy(updateWifiOnly = v) } }
-                SettingRow(
-                    stringResource(R.string.settings_update_check),
-                    when (val u = update) {
-                        UpdateState.Checking -> stringResource(R.string.settings_update_checking)
-                        UpdateState.UpToDate -> stringResource(R.string.settings_update_latest, BuildConfig.VERSION_NAME)
-                        UpdateState.NoRelease -> stringResource(R.string.settings_update_no_release)
-                        is UpdateState.Available -> stringResource(R.string.settings_update_found, u.info.version)
-                        is UpdateState.Downloading -> stringResource(R.string.update_downloading, (u.progress * 100).toInt())
-                        is UpdateState.Installing -> stringResource(R.string.update_confirm_hint)
-                        is UpdateState.Failed -> stringResource(updateErrorText(u.error))
-                        UpdateState.Idle -> stringResource(R.string.settings_update_current, BuildConfig.VERSION_NAME)
-                    },
-                ) {
-                    haptics.tick()
-                    val available = (update as? UpdateState.Available)?.info
-                    if (available != null) container.updater.download(available) else scope.launch { container.updater.check(manual = true) }
                 }
             }
             item {

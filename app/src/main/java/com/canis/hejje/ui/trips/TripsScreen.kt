@@ -99,8 +99,6 @@ import com.canis.hejje.ui.components.rememberHaptics
 import com.canis.hejje.ui.hejjeViewModel
 import com.canis.hejje.ui.rememberFormatter
 import com.canis.hejje.ui.theme.LocalPalette
-import com.canis.hejje.update.UpdateError
-import com.canis.hejje.update.UpdateState
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -115,7 +113,6 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     val live by vm.live.collectAsStateWithLifecycle()
     val trace by vm.trace.collectAsStateWithLifecycle()
     val next by vm.next.collectAsStateWithLifecycle()
-    val update by container.updater.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
     val haptics = rememberHaptics()
     val undo = LocalUndo.current
@@ -160,13 +157,6 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
         }
         val today = LocalDate.now()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-            item(key = "update") {
-                UpdateCard(
-                    update, Modifier.padding(horizontal = ScreenPadding).padding(bottom = 16.dp),
-                    onUpdate = { haptics.confirm(); container.updater.download(it) },
-                    onSkip = container.updater::skip, onDismiss = container.updater::dismiss,
-                )
-            }
             item(key = "summary") {
                 InstrumentCluster(
                     weekDistanceM = state.week.distanceM, weekTrips = state.week.trips, settings = state.settings, live = live, f = f,
@@ -225,19 +215,27 @@ private fun short(name: String): String = name.substringBefore(", ")
 
 /**
  * "Indiranagar → MG Road": when both ends are in the same city the city is left out, so most
- * titles fit on one line. Coordinates stand in until a place name is known.
+ * titles fit on one line. Until a place has a name: "From Home", "To MG Road", or just "Drive".
  */
 fun tripTitle(trip: TripEntity, f: Formatter, places: List<NamedPlace> = emptyList()): String {
     val mineFrom = Places.placeAt(trip.startLat, trip.startLon, places)?.name
     val mineTo = Places.placeAt(trip.endLat, trip.endLon, places)?.name
+    fun oneEnd(from: String?, to: String?): String? = when {
+        from == null && to == null -> f.labels.tripUntitled
+        to == null -> String.format(f.labels.tripFrom, from)
+        from == null -> String.format(f.labels.tripTo, to)
+        else -> null
+    }
     if (mineFrom != null || mineTo != null) {
         // Next to a named place, a street name reads better without its city ("Indiranagar").
-        val from = mineFrom ?: trip.startPlace?.let(::short) ?: f.coordinates(trip.startLat, trip.startLon)
-        val to = mineTo ?: trip.endPlace?.let(::short) ?: f.coordinates(trip.endLat, trip.endLon)
-        return if (from == to) from else "$from \u2192 $to"
+        val from = mineFrom ?: trip.startPlace?.let(::short)
+        val to = mineTo ?: trip.endPlace?.let(::short)
+        oneEnd(from, to)?.let { return it }
+        return if (from == to) from!! else "$from \u2192 $to"
     }
-    val from = trip.startPlace ?: f.coordinates(trip.startLat, trip.startLon)
-    val to = trip.endPlace ?: f.coordinates(trip.endLat, trip.endLon)
+    oneEnd(trip.startPlace, trip.endPlace)?.let { return it }
+    val from = trip.startPlace!!
+    val to = trip.endPlace!!
     if (from == to) return from
     val a = trip.startPlace?.split(", ")
     val b = trip.endPlace?.split(", ")
@@ -254,7 +252,9 @@ fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, on
     val trip = item.trip
     val title = tripTitle(trip, f, LocalPlaces.current)
     val time = "${f.time(trip.startTime)} – ${f.time(trip.endTime)}"
-    val stats = listOf(f.distance(trip.distanceM), f.duration(trip.totalMs), f.speed(trip.avgMovingSpeed)).joinToString("  ·  ")
+    // No-break spaces keep "69 km/h" together when the line wraps.
+    val stats = listOf(f.distance(trip.distanceM), f.duration(trip.totalMs), f.speed(trip.avgMovingSpeed))
+        .joinToString("  ·  ") { it.replace(' ', '\u00A0') }
     HejjeCard(modifier, onClick = onClick, padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RouteThumb(trip.thumb, Modifier.size(64.dp))
@@ -273,80 +273,5 @@ fun TripCard(item: TripWithTags, f: Formatter, modifier: Modifier = Modifier, on
             }
         }
     }
-}
-
-/** Clean, dismissable card that appears when a newer release exists. */
-@Composable
-fun UpdateCard(
-    state: UpdateState, modifier: Modifier = Modifier,
-    onUpdate: (com.canis.hejje.update.UpdateInfo) -> Unit, onSkip: (com.canis.hejje.update.UpdateInfo) -> Unit, onDismiss: () -> Unit,
-) {
-    val info = when (state) {
-        is UpdateState.Available -> state.info
-        is UpdateState.Downloading -> state.info
-        is UpdateState.Installing -> state.info
-        is UpdateState.Failed -> state.info
-        else -> null
-    }
-    AnimatedVisibility(info != null) {
-        if (info == null) return@AnimatedVisibility
-        HejjeCard(modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(HejjeIcons.Download, null, tint = LocalPalette.current.accent, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.update_available, info.version), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                if (state is UpdateState.Available || state is UpdateState.Failed) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(HejjeIcons.Close, stringResource(R.string.action_dismiss), Modifier.size(18.dp))
-                    }
-                }
-            }
-            if (info.notes.isNotBlank()) {
-                Text(
-                    info.notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            when (state) {
-                is UpdateState.Downloading -> {
-                    Spacer(Modifier.height(14.dp))
-                    LinearProgressIndicator(
-                        progress = { state.progress }, modifier = Modifier.fillMaxWidth(),
-                        color = LocalPalette.current.accent, trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    )
-                    Text(
-                        stringResource(R.string.update_downloading, (state.progress * 100).toInt()),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                is UpdateState.Installing -> Text(
-                    stringResource(R.string.update_confirm_hint), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp),
-                )
-                else -> {
-                    if (state is UpdateState.Failed) {
-                        Text(
-                            stringResource(updateErrorText(state.error)), style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { onSkip(info) }) { Text(stringResource(R.string.update_skip), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        Spacer(Modifier.width(4.dp))
-                        TextButton(onClick = { onUpdate(info) }) {
-                            Text(stringResource(if (state is UpdateState.Failed) R.string.action_retry else R.string.update_now), color = LocalPalette.current.accentText)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun updateErrorText(error: UpdateError): Int = when (error) {
-    UpdateError.NETWORK -> R.string.update_error_network
-    UpdateError.WIFI_ONLY -> R.string.update_error_wifi
-    UpdateError.VERIFY -> R.string.update_error_verify
-    UpdateError.INSTALL -> R.string.update_error_install
 }
 

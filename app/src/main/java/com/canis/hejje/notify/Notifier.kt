@@ -33,9 +33,8 @@ class Notifier(private val context: Context) {
         nm.createNotificationChannel(
             NotificationChannel(CH_SUMMARY, context.getString(R.string.channel_summary), NotificationManager.IMPORTANCE_DEFAULT),
         )
-        nm.createNotificationChannel(
-            NotificationChannel(CH_UPDATES, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_LOW),
-        )
+        // Updates come from the Play Store now; remove the channel earlier versions created.
+        nm.deleteNotificationChannel(CH_UPDATES_OLD)
         nm.createNotificationChannel(
             NotificationChannel(CH_LOCATION, context.getString(R.string.channel_location), NotificationManager.IMPORTANCE_HIGH),
         )
@@ -168,19 +167,6 @@ class Notifier(private val context: Context) {
         notify(ID_SUMMARY, n)
     }
 
-    fun updateAvailable(version: String) {
-        if (!canPost()) return
-        val n = NotificationCompat.Builder(context, CH_UPDATES)
-            .setSmallIcon(R.drawable.ic_stat_hejje)
-            .setColor(ContextCompat.getColor(context, R.color.accent))
-            .setContentTitle(context.getString(R.string.notif_update_title, version))
-            .setContentText(context.getString(R.string.notif_update_text))
-            .setContentIntent(open({ putExtra(EXTRA_SHOW_UPDATE, true) }, requestCode = 3))
-            .setAutoCancel(true)
-            .build()
-        notify(ID_UPDATE, n)
-    }
-
     /** Location is off as a drive starts: one tap shows Android's "Turn on location?" dialog. */
     fun locationTurnOn() {
         val intent = Intent(context, com.canis.hejje.recording.LocationPromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -236,17 +222,15 @@ class Notifier(private val context: Context) {
     companion object {
         const val CH_RECORDING = "recording"
         const val CH_SUMMARY = "summary"
-        const val CH_UPDATES = "updates"
+        private const val CH_UPDATES_OLD = "updates"
         const val CH_LOCATION = "location"
         const val CH_FOOD = "food"
         const val CH_FOOD_FEEDBACK = "food-feedback"
         const val ID_RECORDING = 1
         const val ID_SUMMARY = 2
-        const val ID_UPDATE = 3
         const val ID_LOCATION = 4
         private const val ID_FOOD = 1_000
         private const val ID_FOOD_FEEDBACK = 500_000
         const val EXTRA_TRIP_ID = "trip_id"
-        const val EXTRA_SHOW_UPDATE = "show_update"
     }
 }

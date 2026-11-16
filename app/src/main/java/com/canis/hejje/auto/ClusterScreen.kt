@@ -1,7 +1,8 @@
 package com.canis.hejje.auto
 
-import com.canis.hejje.ui.trips.liveUncertain
+import android.content.Intent
 import android.graphics.Rect
+import android.net.Uri
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
@@ -10,45 +11,51 @@ import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarLocation
 import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
-import androidx.car.app.model.Pane
-import androidx.car.app.model.PaneTemplate
+import androidx.car.app.model.Metadata
+import androidx.car.app.model.Place
+import androidx.car.app.model.PlaceListMapTemplate
+import androidx.car.app.model.PlaceMarker
 import androidx.car.app.model.Row
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.MapWithContentTemplate
 import androidx.car.app.versioning.CarAppApiLevels
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.canis.hejje.HejjeApp
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
+import com.canis.hejje.data.db.ZoneEntity
 import com.canis.hejje.domain.Formatter
-import com.canis.hejje.domain.Insights
+import com.canis.hejje.domain.Geo
+import com.canis.hejje.domain.Meal
 import com.canis.hejje.food.NextStop
+import com.canis.hejje.food.stopPurpose
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.formatter
-import com.canis.hejje.ui.trips.dialMax
+import com.canis.hejje.ui.trips.elapsed
 import com.canis.hejje.ui.trips.headingLabel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.ZoneId
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
-import kotlin.math.roundToInt
 
 /**
- * The one Android Auto screen. Android Auto draws a small card (next stop, this trip, or this week
- * when not recording) and a Start/Stop button; Hejje draws the cluster in the rest of the screen.
- * Older Android Auto versions that cannot show app-drawn screens get the card as a plain pane.
+ * The one Android Auto screen: a places app for your own stops. Android Auto's card lists the next
+ * saved stop on your road first, then your other saved stops by distance; tapping one starts
+ * navigation there. Beside it Hejje draws the compass around the line driven so far, the driving
+ * time and the trip odometer. Older Android Auto versions that cannot show app-drawn screens get
+ * the stops on Android Auto's own map instead.
  */
 internal class ClusterScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback {
     private val container = (carContext.applicationContext as HejjeApp).container
@@ -61,8 +68,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
     private var cardJob: Job? = null
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
-    // What the dials show, eased towards the latest values a little every frame.
-    private var needle = 0f
+    // What the drawing shows, eased towards the latest values a little every frame.
     private var turn = 0f
     private var turnKnown = false
     private var odometer = 0f
@@ -72,29 +78,30 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         val trace: TraceState = TraceState.EMPTY,
         val next: NextStop? = null,
         val settings: SettingsData = SettingsData(),
-        val weekM: Double = 0.0,
-        val weekTrips: Int = 0,
+        val zones: List<ZoneEntity> = emptyList(),
     )
 
-    private data class Card(val recording: Boolean, val rows: List<Pair<String, String>>)
+    /** One line of the card: a stop to navigate to ([lat], [lon]), or a note (NaN). */
+    private data class StopRow(val title: String, val text: String, val lat: Double = Double.NaN, val lon: Double = Double.NaN) {
+        val place: Boolean get() = !lat.isNaN() && !lon.isNaN()
+    }
+
+    private data class Card(val recording: Boolean, val rows: List<StopRow>)
 
     init {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    val week = container.trips.trips.map { trips ->
-                        val zone = ZoneId.systemDefault()
-                        val monday = Insights.weekStart(LocalDate.now(zone))
-                        trips.filter { Insights.dayOf(it.trip.startTime, zone) >= monday }.let { w -> w.sumOf { it.trip.distanceM } to w.size }
-                    }
-                    combine(container.controller.live, container.controller.trace.state, container.food.next, container.settings.data, week) { live, trace, next, s, w ->
-                        Snapshot(live, trace, next, s, w.first, w.second)
-                    }.collect {
-                        now = it
-                        wake.trySend(Unit)
-                        updateCard()
-                    }
+                    combine(
+                        container.controller.live, container.controller.trace.state, container.food.next,
+                        container.settings.data, container.db.zones().observe(),
+                    ) { live, trace, next, s, zones -> Snapshot(live, trace, next, s, zones) }
+                        .collect {
+                            now = it
+                            wake.trySend(Unit)
+                            updateCard()
+                        }
                 }
                 launch { drawLoop() }
             }
@@ -103,27 +110,38 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
 
     private val f: Formatter get() = carContext.formatter(now.settings.miles)
 
+    private fun purposeLabel(purpose: String): String = when (Meal.of(purpose)) {
+        Meal.FOOD -> carContext.getString(R.string.food_action_food)
+        Meal.COFFEE -> carContext.getString(R.string.food_action_coffee)
+        null -> purpose.replaceFirstChar { it.titlecase(Locale.getDefault()) }
+    }
+
     private fun cardFor(s: Snapshot): Card {
         val f = f
-        val live = s.live ?: return Card(
-            recording = false,
-            rows = listOf(
-                carContext.getString(R.string.this_week) to
-                    "${f.distance(s.weekM)} · ${carContext.resources.getQuantityString(R.plurals.trip_count, s.weekTrips, s.weekTrips)}",
-                carContext.getString(R.string.car_not_recording) to carContext.getString(
-                    if (s.settings.carAddress != null && s.settings.autoRecord) R.string.summary_idle_auto else R.string.summary_idle_setup,
-                ),
-            ),
-        )
-        val rows = ArrayList<Pair<String, String>>()
-        s.next?.let { next ->
+        val live = s.live
+        val rows = ArrayList<StopRow>()
+        // The next stop on this road, as the voice reminder finds it.
+        val next = s.next?.takeIf { live != null && !it.lat.isNaN() }
+        if (next != null && live != null) {
             val left = (next.aheadM - (live.distanceM - next.atDriveM)).coerceAtLeast(0.0)
-            rows += next.name to carContext.getString(R.string.car_next_stop, f.distance(left))
+            rows += StopRow(next.name, carContext.getString(R.string.car_next_stop, f.distance(left)), next.lat, next.lon)
         }
-        rows += carContext.getString(R.string.car_this_trip) to
-            if (live.hasFix) "${f.distance(live.distanceM)} · ${f.duration(System.currentTimeMillis() - live.startedAt)}"
-            else carContext.getString(R.string.notif_waiting_gps)
-        return Card(recording = true, rows = rows)
+        // Then the other saved stops you want reminders for, nearest first.
+        val hereLat = live?.last?.lat ?: s.settings.parkedLat
+        val hereLon = live?.last?.lon ?: s.settings.parkedLon
+        val stops = s.zones.mapNotNull { z -> z.stopPurpose()?.takeIf { z.rating >= 0 }?.let { z to it } }
+            .filterNot { (z, _) -> next != null && Geo.distance(z.lat, z.lon, next.lat, next.lon) < 1.0 }
+            .map { (z, purpose) ->
+                val d = if (hereLat != null && hereLon != null) Geo.distance(hereLat, hereLon, z.lat, z.lon) else Double.NaN
+                Triple(z, purpose, d)
+            }
+            .sortedWith(compareBy({ it.third.isNaN() }, { it.third }, { it.first.name }))
+        for ((z, purpose, d) in stops.take(MAX_ROWS - rows.size)) {
+            val what = purposeLabel(purpose)
+            rows += StopRow(z.name, if (d.isNaN()) what else carContext.getString(R.string.car_stop_away, what, f.distance(d)), z.lat, z.lon)
+        }
+        if (rows.isEmpty()) rows += StopRow(carContext.getString(R.string.car_no_stops), carContext.getString(R.string.car_no_stops_text))
+        return Card(recording = live != null, rows = rows)
     }
 
     /** Refreshes Android Auto's card when its text changes: at once for start/stop, else at most every few seconds. */
@@ -152,25 +170,50 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
             .setTitle(carContext.getString(if (c.recording) R.string.action_stop else R.string.car_start))
             .setOnClickListener { toggle(c.recording) }
             .build()
-        val title = carContext.getString(R.string.app_name)
-        if (carContext.carAppApiLevel >= CarAppApiLevels.LEVEL_7) {
-            val list = ItemList.Builder().apply { c.rows.forEach { (t, text) -> addItem(Row.Builder().setTitle(t).addText(text).build()) } }.build()
+        val strip = ActionStrip.Builder().addAction(action).build()
+        val title = carContext.getString(R.string.car_title)
+        val withMap = carContext.carAppApiLevel >= CarAppApiLevels.LEVEL_7
+        val list = ItemList.Builder().apply {
+            c.rows.forEach { r ->
+                addItem(
+                    Row.Builder().setTitle(r.title).addText(r.text).apply {
+                        if (r.place) {
+                            setOnClickListener { navigate(r) }
+                            // On Android Auto's own map (older versions), each stop gets a marker.
+                            if (!withMap) {
+                                setMetadata(
+                                    Metadata.Builder().setPlace(
+                                        Place.Builder(CarLocation.create(r.lat, r.lon)).setMarker(PlaceMarker.Builder().build()).build(),
+                                    ).build(),
+                                )
+                            }
+                        }
+                    }.build(),
+                )
+            }
+        }.build()
+        if (withMap) {
             val content = ListTemplate.Builder()
                 .setHeader(Header.Builder().setTitle(title).setStartHeaderAction(Action.APP_ICON).build())
                 .setSingleList(list)
                 .build()
-            return MapWithContentTemplate.Builder()
-                .setContentTemplate(content)
-                .setActionStrip(ActionStrip.Builder().addAction(action).build())
-                .build()
+            return MapWithContentTemplate.Builder().setContentTemplate(content).setActionStrip(strip).build()
         }
-        // Older Android Auto: the same information as text, without the drawn cluster.
-        val pane = Pane.Builder().apply {
-            c.rows.forEach { (t, text) -> addRow(Row.Builder().setTitle(t).addText(text).build()) }
-            addAction(action)
-        }.build()
+        // Older Android Auto: the stops on its own map, no drawing of ours.
         @Suppress("DEPRECATION")
-        return PaneTemplate.Builder(pane).setTitle(title).setHeaderAction(Action.APP_ICON).build()
+        return PlaceListMapTemplate.Builder()
+            .setTitle(title)
+            .setHeaderAction(Action.APP_ICON)
+            .setItemList(list)
+            .setActionStrip(strip)
+            .build()
+    }
+
+    /** Hands the stop to the car's navigation app. */
+    private fun navigate(r: StopRow) {
+        val uri = "geo:${r.lat},${r.lon}?q=${r.lat},${r.lon}(${Uri.encode(r.title)})".toUri()
+        runCatching { carContext.startCarApp(Intent(CarContext.ACTION_NAVIGATE, uri)) }
+            .onFailure { CarToast.makeText(carContext, R.string.car_navigate_failed, CarToast.LENGTH_LONG).show() }
     }
 
     private fun toggle(recording: Boolean) {
@@ -179,7 +222,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         else if (!controller.tryManualStart()) CarToast.makeText(carContext, R.string.car_start_on_phone, CarToast.LENGTH_LONG).show()
     }
 
-    // ---- The drawn cluster -------------------------------------------------------------------
+    // ---- The drawn part -----------------------------------------------------------------------
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         surface = surfaceContainer
@@ -195,7 +238,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         surface = null
     }
 
-    /** Draws a frame whenever something changes, and keeps drawing (about 30 a second) while the dials move. */
+    /** Draws a frame whenever something changes, and keeps drawing (about 30 a second) while the compass or odometer moves. */
     private suspend fun drawLoop() {
         while (true) {
             val moving = step()
@@ -204,13 +247,9 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         }
     }
 
-    /** Eases the needle, compass and odometer towards the latest values; true while still moving. */
+    /** Eases the compass and odometer towards the latest values; true while still moving. */
     private fun step(): Boolean {
         val live = now.live
-        val perMs = if (now.settings.miles) 2.236936f else 3.6f
-        val speed = live?.speed?.takeIf { live.hasFix && !live.gap }
-        val target = ((speed ?: 0f) * perMs).coerceIn(0f, dialMax(now.settings.miles).toFloat())
-        needle = ease(needle, target, 0.6f)
         val heading = now.trace.heading
         if (heading != null) {
             if (!turnKnown) { turn = heading; turnKnown = true }
@@ -219,7 +258,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         } else turnKnown = false
         val km = (floor((live?.distanceM ?: 0.0) / (if (now.settings.miles) 1609.344 else 1000.0) * 10) / 10).toFloat()
         odometer = if (km < odometer) km else ease(odometer, km, 0.002f)
-        return needle != target || (heading != null && turn != heading) || odometer != km
+        return (heading != null && turn != heading) || odometer != km
     }
 
     private fun ease(value: Float, target: Float, snap: Float): Float =
@@ -232,19 +271,18 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
         if (area.width() <= 0 || area.height() <= 0) return
         val live = now.live
         val f = f
+        val locale = Locale.getDefault()
         val frame = CarFrame(
-            needle = needle,
-            digits = live?.speed?.takeIf { live.hasFix && !live.gap }?.let { f.speedValue(it) } ?: if (live == null) "0" else "–",
-            unit = f.speedUnit.uppercase(),
             turn = turn,
             heading = headingLabel(now.trace.heading),
             trace = now.trace,
             here = live?.last,
             odometer = odometer,
-            distanceUnit = f.distanceUnit.uppercase(),
-            miles = now.settings.miles,
+            distanceUnit = f.distanceUnit.uppercase(locale),
+            elapsed = live?.let { elapsed(System.currentTimeMillis() - it.startedAt) } ?: "–",
+            timeLabel = carContext.getString(R.string.car_time).uppercase(locale),
+            tripLabel = carContext.getString(R.string.cluster_trip).uppercase(locale),
             dark = carContext.isDarkMode,
-            uncertain = live != null && liveUncertain(live, System.currentTimeMillis()),
         )
         val canvas = runCatching { s.lockHardwareCanvas() }.getOrNull() ?: return
         try {
@@ -257,5 +295,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
     private companion object {
         const val FRAME_MS = 33L
         const val CARD_EVERY_MS = 5_000L
+        /** Android Auto shows up to six rows in a list; five keeps it short. */
+        const val MAX_ROWS = 5
     }
 }

@@ -1,13 +1,12 @@
 package com.canis.hejje.ui.settings
 
-import androidx.compose.ui.text.font.FontWeight
-import com.canis.hejje.ui.theme.WordmarkFont
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,7 +51,9 @@ import com.canis.hejje.ui.components.rememberHaptics
 import com.canis.hejje.ui.map.MapMarker
 import com.canis.hejje.ui.map.TripMap
 import com.canis.hejje.ui.rememberFormatter
+import com.canis.hejje.ui.theme.Footsteps
 import com.canis.hejje.ui.theme.LocalPalette
+import com.canis.hejje.ui.theme.WordmarkFont
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -119,7 +121,10 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.ic_mark), null, Modifier.size(96.dp))
-                Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.brand_name), style = MaterialTheme.typography.displaySmall.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold))
+                    Footsteps(26.dp, LocalPalette.current.accent, Modifier.padding(start = 2.dp, bottom = 16.dp))
+                }
                 Text(stringResource(R.string.about_meaning), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     stringResource(R.string.settings_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium,
@@ -135,7 +140,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 R.string.about_link_osm to "https://www.openstreetmap.org/copyright",
                 R.string.about_link_ofm to "https://openfreemap.org",
                 R.string.about_link_font to "https://brahmi.sourceforge.net",
-                R.string.about_link_source to "https://github.com/${BuildConfig.UPDATE_REPO}",
+                R.string.about_link_source to "https://github.com/${BuildConfig.SOURCE_REPO}",
+                R.string.about_link_privacy to "https://github.com/${BuildConfig.SOURCE_REPO}/blob/HEAD/PRIVACY.md",
             ).forEach { (text, url) ->
                 TextButton(
                     onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) } },

@@ -19,38 +19,33 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.canis.hejje.domain.RawPoint
 import com.canis.hejje.recording.TraceState
-import com.canis.hejje.ui.theme.DarkPalette
-import com.canis.hejje.ui.theme.LightPalette
 import com.canis.hejje.ui.trips.DarkDash
 import com.canis.hejje.ui.trips.LightDash
 import com.canis.hejje.ui.trips.compass
-import com.canis.hejje.ui.trips.dialMax
 import com.canis.hejje.ui.trips.drawDrumDigits
 import com.canis.hejje.ui.trips.odometerPositions
-import com.canis.hejje.ui.trips.speedStops
-import com.canis.hejje.ui.trips.speedometer
 
-/** One frame of the car's cluster. [needle], [turn] and [odometer] are the animated, shown values. */
+/** One frame of the car's screen. [turn] and [odometer] are the animated, shown values. */
 internal class CarFrame(
-    val needle: Float,
-    val digits: String,
-    val unit: String,
     val turn: Float,
     val heading: String,
     val trace: TraceState,
     val here: RawPoint?,
     val odometer: Float,
     val distanceUnit: String,
-    val miles: Boolean,
+    /** Driving time as on a stopwatch ("18:42"), or "–" when not recording. */
+    val elapsed: String,
+    /** The small headings over the time and the odometer ("DRIVING TIME", "TRIP"). */
+    val timeLabel: String,
+    val tripLabel: String,
     val dark: Boolean,
-    /** Unsure of the speed (a stop not told from a crawl, GPS gone quiet): digits in grey. */
-    val uncertain: Boolean = false,
 )
 
 /**
- * Draws the live cluster on the car screen with the same drawing code as the phone's card: the
- * speedometer and the compass side by side in the part of the screen Android Auto leaves free,
- * the trip odometer under the speedometer and the heading under the compass.
+ * Draws the car screen's own part (beside Android Auto's list of stops) with the phone's drawing
+ * code: the compass around the line driven so far, with the heading under it, and beside it the
+ * driving time and the trip odometer. No speedometer: Android Auto is for finding places, and the
+ * car has its own.
  */
 internal class CarClusterRenderer(context: Context) {
     private val fonts = createFontFamilyResolver(context)
@@ -61,39 +56,46 @@ internal class CarClusterRenderer(context: Context) {
 
     fun draw(canvas: Canvas, width: Int, height: Int, visible: Rect, density: Float, f: CarFrame) {
         val dash = if (f.dark) DarkDash else LightDash
-        val palette = if (f.dark) DarkPalette else LightPalette
         val m = measurer?.takeIf { measurerDensity == density }
             ?: TextMeasurer(fonts, Density(density), LayoutDirection.Ltr, cacheSize = 32).also { measurer = it; measurerDensity = density }
         val area = RectF(visible).apply { inset(PAD_DP * density, PAD_DP * density) }
-        // The phone's proportions: speedometer (2.07 r), a gap, compass (1.52 r); dials, then the odometer row.
+        // Compass (2 r wide) on the left, a gap, then the column of time and odometer.
         val r = minOf(area.width() / WIDE, area.height() / TALL)
         val left = area.left + (area.width() - WIDE * r) / 2
         val top = area.top + (area.height() - TALL * r) / 2
-        val c = Offset(left + 1.035f * r, top + 1.035f * r)
-        val rc = 0.76f * r
-        val cc = Offset(left + WIDE * r - rc, c.y)
-        val u = r / 100f
+        val cc = Offset(left + r, top + r)
         scope.draw(Density(density), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(canvas), Size(width.toFloat(), height.toFloat())) {
             drawRect(Brush.verticalGradient(listOf(dash.panelTop, dash.panelBottom)))
-            val brush = Brush.sweepGradient(*speedStops(palette.speedRamp, f.miles), center = c)
-            speedometer(dash, c, r, u, 7 * u, f.needle, dialMax(f.miles), brush, m, f.digits, f.unit, f.uncertain)
-            compass(dash, cc, rc, f.turn, f.trace, f.here, m)
+            compass(dash, cc, r, f.turn, f.trace, f.here, m)
         }
-        // The odometer row: drums centred under the speedometer, the heading under the compass.
-        val rowTop = top + (DIAL + ROW_GAP) * r
-        val rowMid = rowTop + ODO * r / 2
-        odometer(canvas, c.x, rowTop, ODO * r, f, dash)
+        fun label(text: String, x: Float, baseline: Float, align: Paint.Align) {
+            paint.reset()
+            paint.isAntiAlias = true
+            paint.color = dash.muted.toArgb()
+            paint.textSize = 0.12f * r
+            paint.letterSpacing = 0.14f
+            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            paint.textAlign = align
+            canvas.drawText(text, x, baseline, paint)
+        }
+        // The heading, centred under the compass.
+        label(f.heading, cc.x, top + 2.3f * r, Paint.Align.CENTER)
+        // The column: driving time, then the trip odometer.
+        val x0 = left + (2f + GAP) * r
+        label(f.timeLabel, x0, top + 0.42f * r, Paint.Align.LEFT)
         paint.reset()
         paint.isAntiAlias = true
-        paint.color = dash.muted.toArgb()
-        paint.textSize = 0.13f * r
-        paint.letterSpacing = 0.14f
+        paint.color = dash.text.toArgb()
+        paint.textSize = 0.46f * r
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        paint.textAlign = Paint.Align.CENTER
-        canvas.drawText(f.heading, cc.x, rowMid - (paint.ascent() + paint.descent()) / 2, paint)
+        paint.fontFeatureSettings = "tnum"
+        canvas.drawText(f.elapsed, x0 - 0.02f * r, top + 0.92f * r, paint)
+        label(f.tripLabel, x0, top + 1.32f * r, Paint.Align.LEFT)
+        odometer(canvas, x0, top + 1.42f * r, ODO * r, f, dash)
     }
 
-    private fun odometer(canvas: Canvas, centerX: Float, top: Float, height: Float, f: CarFrame, dash: com.canis.hejje.ui.trips.DashColors) {
+    /** The trip odometer with its left edge at [left]. */
+    private fun odometer(canvas: Canvas, left: Float, top: Float, height: Float, f: CarFrame, dash: com.canis.hejje.ui.trips.DashColors) {
         val whole = if (f.odometer >= 999f) 4 else 3
         val positions = odometerPositions(f.odometer, whole)
         val inner = height * 0.18f
@@ -107,7 +109,7 @@ internal class CarClusterRenderer(context: Context) {
         paint.letterSpacing = 0.1f
         val unitW = paint.measureText(f.distanceUnit) + gap * 2
         val width = inner * 2 + whole * (drumW + gap) + dotW + drumW + unitW
-        val window = RectF(centerX - width / 2, top, centerX + width / 2, top + height)
+        val window = RectF(left, top, left + width, top + height)
         val corner = height * 0.22f
         paint.color = dash.window.toArgb()
         canvas.drawRoundRect(window, corner, corner, paint)
@@ -151,10 +153,11 @@ internal class CarClusterRenderer(context: Context) {
 
     private companion object {
         const val PAD_DP = 16f
-        const val DIAL = 1.76f
-        const val ROW_GAP = 0.08f
+        /** In compass radii: the gap before the column, the column's width, the odometer's height. */
+        const val GAP = 0.6f
+        const val COLUMN = 1.9f
         const val ODO = 0.42f
-        const val WIDE = 2.07f + 0.55f + 1.52f
-        const val TALL = DIAL + ROW_GAP + ODO
+        const val WIDE = 2f + GAP + COLUMN
+        const val TALL = 2.4f
     }
 }

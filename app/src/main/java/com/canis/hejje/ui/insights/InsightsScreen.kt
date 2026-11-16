@@ -1,5 +1,6 @@
 package com.canis.hejje.ui.insights
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -109,11 +111,12 @@ fun InsightsScreen(onTrip: (Long) -> Unit, onStretch: () -> Unit = {}) {
         val zone = ZoneId.systemDefault()
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
             item(key = "totals") {
-                Column(Modifier.padding(horizontal = ScreenPadding)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column {
+                    // Scrolls edge to edge when large text makes the chips wider than the screen.
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = ScreenPadding), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(R.string.this_week, R.string.this_month, R.string.all_time).forEachIndexed { i, label ->
                             FilterChip(
-                                selected = period == i, onClick = { haptics.tick(); period = i }, label = { Text(stringResource(label)) },
+                                selected = period == i, onClick = { haptics.tick(); period = i }, label = { Text(stringResource(label), maxLines = 1, softWrap = false) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -123,7 +126,7 @@ fun InsightsScreen(onTrip: (Long) -> Unit, onStretch: () -> Unit = {}) {
                     }
                     Spacer(Modifier.height(10.dp))
                     val totals = listOf(data.week, data.month, data.allTime)[period]
-                    TotalsCard(totals, if (period == 0) data.lastWeek else null, f)
+                    TotalsCard(totals, if (period == 0) data.lastWeek else null, f, Modifier.padding(horizontal = ScreenPadding))
                 }
             }
             item(key = "calendar") {
@@ -231,8 +234,8 @@ fun InsightsScreen(onTrip: (Long) -> Unit, onStretch: () -> Unit = {}) {
 }
 
 @Composable
-private fun TotalsCard(t: Totals, previous: Totals?, f: Formatter) {
-    HejjeCard(Modifier.fillMaxWidth()) {
+private fun TotalsCard(t: Totals, previous: Totals?, f: Formatter, modifier: Modifier = Modifier) {
+    HejjeCard(modifier.fillMaxWidth()) {
         Text(
             f.distanceValue(countUp(t.distanceM.toFloat()).toDouble()) + " " + f.distanceUnit,
             style = MaterialTheme.typography.displaySmall,

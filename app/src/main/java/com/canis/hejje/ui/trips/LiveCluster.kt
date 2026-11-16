@@ -71,6 +71,7 @@ import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.PulsingDot
+import com.canis.hejje.ui.theme.Footsteps
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
 import com.canis.hejje.ui.theme.WordmarkFont
@@ -153,8 +154,8 @@ internal fun headingLabel(heading: Float?): String {
     return "${points[((heading + 22.5f) / 45f).toInt() % 8]} · ${heading.roundToInt() % 360}°"
 }
 
-/** Elapsed time as on a stopwatch: 18:42, or 1:05:12 from an hour. */
-private fun elapsed(ms: Long): String {
+/** Elapsed time as on a stopwatch: 18:42, or 1:05:12 from an hour. Shared with the car screen. */
+internal fun elapsed(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     val h = s / 3600
     return if (h > 0) String.format(Locale.ROOT, "%d:%02d:%02d", h, s % 3600 / 60, s % 60)
@@ -171,6 +172,7 @@ private fun Header(live: LiveState, now: Long, f: Formatter, onStop: () -> Unit)
             maxLines = 1,
             modifier = Modifier.semantics { heading() },
         )
+        Footsteps(17.dp, dash.accent, Modifier.padding(start = 2.dp, bottom = 10.dp))
         Spacer(Modifier.weight(1f))
         PulsingDot(size = 7.dp)
         Text(

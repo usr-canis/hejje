@@ -17,7 +17,6 @@
     <string name="action_close_search">Close search</string>
     <string name="action_continue">Continue</string>
     <string name="action_delete">Delete</string>
-    <string name="action_dismiss">Dismiss</string>
     <string name="action_fix">Fix</string>
     <string name="action_more">More options</string>
     <string name="action_retry">Try again</string>
@@ -36,9 +35,12 @@
     <string name="unit_m">m</string>
     <string name="unit_ft">ft</string>
     <string name="unit_h">h</string>
-    <string name="unit_min">m</string>
+    <string name="unit_min">min</string>
     <string name="unit_s">s</string>
     <string name="time_just_now">Just now</string>
+    <string name="trip_from">From %s</string>
+    <string name="trip_to">To %s</string>
+    <string name="trip_untitled">Drive</string>
     <string name="time_minutes_ago">%d min ago</string>
     <string name="time_hours_ago">%d h ago</string>
     <string name="time_today">Today</string>
@@ -94,7 +96,6 @@
     <!-- Notifications -->
     <string name="channel_recording">Recording</string>
     <string name="channel_summary">Trip summaries</string>
-    <string name="channel_updates">App updates</string>
     <string name="channel_location">Location reminders</string>
     <string name="notif_location_on_title">Location is off</string>
     <string name="notif_location_on_text">Turn it on to record this drive.</string>
@@ -107,8 +108,6 @@
     <string name="notif_waiting_gps">Waiting for GPS…</string>
     <string name="notif_summary_title">Trip finished: %1$s in %2$s</string>
     <string name="notif_summary_text">Average %1$s · %2$s · fluidity %3$d</string>
-    <string name="notif_update_title">Version %1$s is available</string>
-    <string name="notif_update_text">Tap to see what is new and update.</string>
     <string name="recording_now">Recording</string>
 
     <!-- Problems shown in Recording health -->
@@ -133,8 +132,12 @@
     <string name="car_start">Start</string>
     <string name="car_start_on_phone">Open Hejje on your phone to start recording</string>
     <string name="car_next_stop">Next stop · %1$s</string>
-    <string name="car_this_trip">This trip</string>
-    <string name="car_not_recording">Not recording</string>
+    <string name="car_title">Hejje</string>
+    <string name="car_time">Driving time</string>
+    <string name="car_stop_away">%1$s · %2$s away</string>
+    <string name="car_no_stops">No saved stops yet</string>
+    <string name="car_no_stops_text">Stops you name after parking appear here</string>
+    <string name="car_navigate_failed">No navigation app could be opened</string>
     <string name="summary_idle_auto">Records when your car connects</string>
     <string name="summary_idle_setup">Set up your car</string>
     <string name="parked_open">Parked car location. Opens the map.</string>
@@ -146,15 +149,6 @@
     <string name="parked_map_description">Map showing where the car is parked</string>
 
     <!-- Updates -->
-    <string name="update_available">Version %1$s is available</string>
-    <string name="update_now">Update</string>
-    <string name="update_skip">Skip this version</string>
-    <string name="update_downloading">Downloading… %1$d%%</string>
-    <string name="update_confirm_hint">Android will now ask you to confirm the install.</string>
-    <string name="update_error_network">Could not reach GitHub. Check your connection and try again.</string>
-    <string name="update_error_wifi">Downloads are set to Wi-Fi only. Connect to Wi-Fi or change this in Settings.</string>
-    <string name="update_error_verify">The download did not pass the safety check and was discarded.</string>
-    <string name="update_error_install">Android could not install the update.</string>
 
     <!-- Trip detail -->
     <string name="stat_distance">Distance</string>
@@ -388,17 +382,6 @@
     <string name="settings_auto_backup_last">To %1$s · last backup %2$s</string>
     <string name="settings_auto_backup_stop">Turn off automatic backup</string>
     <string name="settings_backup_keep">Backups to keep</string>
-    <string name="settings_updates">Updates</string>
-    <string name="settings_update_auto">Check for updates automatically</string>
-    <string name="settings_update_auto_summary">At most once a day</string>
-    <string name="settings_update_notify">Notify me about new versions</string>
-    <string name="settings_update_wifi">Download on Wi-Fi only</string>
-    <string name="settings_update_check">Check for updates</string>
-    <string name="settings_update_checking">Checking…</string>
-    <string name="settings_update_current">Version %1$s installed</string>
-    <string name="settings_update_latest">Version %1$s is the latest</string>
-    <string name="settings_update_no_release">No published release found, or the repository is unavailable.</string>
-    <string name="settings_update_found">Version %1$s is available. Tap to update.</string>
     <string name="settings_data">Data</string>
     <string name="settings_delete_all">Delete all data</string>
     <string name="settings_delete_all_summary">Trips, tags, privacy zones and cached place names</string>
@@ -449,7 +432,7 @@
     <string name="health_link_bad">Optional, makes auto-start more reliable</string>
     <string name="health_battery">Battery: unrestricted</string>
     <string name="health_battery_ok">The app may run in the background</string>
-    <string name="health_battery_bad">Android may stop the app. Allow unrestricted battery use.</string>
+    <string name="health_battery_bad">Android may stop the app. In the list that opens, choose Hejje Guruthu and allow unrestricted battery use.</string>
     <string name="health_auto">Automatic recording</string>
     <string name="health_auto_ok">On</string>
     <string name="health_auto_bad">Switched off in Settings</string>
@@ -513,7 +496,7 @@
     <!-- About -->
     <string name="about_meaning">“Hejje” is Kannada for footprint.</string>
     <string name="about_privacy_title">Your data</string>
-    <string name="about_privacy">Trips are stored only on this phone. There are no accounts, no cloud, no analytics and no ads. The app uses the internet for three things only: map tiles, place names (if switched on) and checking for updates.</string>
+    <string name="about_privacy">Trips are stored only on this phone. There are no accounts, no cloud, no analytics and no ads. The app uses the internet for two things only: map tiles, and place names (if switched on).</string>
     <string name="about_credits_title">Maps and place names</string>
     <string name="about_credits">Map tiles by OpenFreeMap, using the OpenMapTiles schema. Map data and place names © OpenStreetMap contributors, available under the Open Database License. Place names come from the Nominatim service.</string>
     <string name="about_link_osm">OpenStreetMap copyright</string>
@@ -521,6 +504,7 @@
     <string name="about_font_credit">The name ಹೆಜ್ಜೆ is set in Mallige, © 2005 Indian Institute of Science, Bangalore, used under the GNU General Public License v2.</string>
     <string name="about_link_font">Mallige font (Brahmi project)</string>
     <string name="about_link_source">Source code and releases</string>
+    <string name="about_link_privacy">Privacy policy</string>
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Every drive, recorded for you</string>

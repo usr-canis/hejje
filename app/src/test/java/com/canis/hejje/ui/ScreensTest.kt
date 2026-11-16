@@ -100,7 +100,7 @@ class ScreensTest {
         ).forEach { c.db.log().insert(it) }
         c.settings.update {
             // No place-name lookups over the internet in tests.
-            it.copy(onboardingDone = true, updateAutoCheck = false, placeLookup = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
+            it.copy(onboardingDone = true, placeLookup = false, parkedLat = 12.975, parkedLon = 77.605, parkedAt = System.currentTimeMillis() - 2 * hour, carName = "My Car", carAddress = "00:11:22:33:44:55")
         }
     }
 
@@ -142,6 +142,35 @@ class ScreensTest {
     @Test @Config(qualifiers = "+night") fun tripsList_dark() {
         await("This week")
         shot("trips-dark")
+    }
+
+    /** A small phone with large text (130%): where layouts clip or wrap badly first. */
+    @Test @Config(qualifiers = "w360dp-h640dp-xhdpi", fontScale = 1.3f) fun smallPhone_largeText_staysTidy() {
+        await("This week")
+        shot("small-trips")
+        rule.onAllNodesWithText("Home", substring = true).onFirst().performClick()
+        await("Distance")
+        shot("small-detail")
+        scrollTo("Timeline")
+        shot("small-timeline")
+        rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        await("This week")
+        rule.onNodeWithText("Insights").performClick()
+        await("Driving calendar")
+        shot("small-insights")
+        rule.onNodeWithText("Settings").performClick()
+        await("Car Bluetooth device")
+        shot("small-settings")
+        // The live cluster, recording.
+        rule.onNodeWithText("Trips").performClick()
+        await("This week")
+        val controller = app.container.controller
+        rule.runOnUiThread { controller.manualStart() }
+        val sim = DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).apply { heading = 30.0 }.drive(60, 14f)
+        rule.runOnUiThread { sim.points.forEach { controller.onLocation(it) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("This trip, ", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("small-live")
+        rule.runOnUiThread { controller.manualStop() }
     }
 
     @Test fun tripDetail_showsStats_andEditsCanBeUndone() {
@@ -209,7 +238,7 @@ class ScreensTest {
         rule.onNodeWithText("Settings").performClick()
         await("Car Bluetooth device")
         shot("settings-light-1")
-        scrollTo("Check for updates")
+        scrollTo("Delete all data")
         shot("settings-light-2")
         scrollTo("Recording health")
         rule.onNodeWithText("Recording health").performClick()

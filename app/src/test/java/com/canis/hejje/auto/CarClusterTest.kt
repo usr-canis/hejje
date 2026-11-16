@@ -45,7 +45,7 @@ class CarClusterTest {
         return list.singleList!!.items.map { row -> (row as Row).let { "${it.title} | ${it.texts.joinToString { t -> t.toString() }}" } }
     }
 
-    @Test fun card_showsTheWeekWhenIdle_andTheTripWhileRecording() {
+    @Test fun card_listsYourStops_nextOnTheRoadFirst() {
         // As if connected to an Android Auto that can show app-drawn screens (the library sets this on connect).
         val car = TestCarContext.createCarContext(app).apply {
             CarContext::class.java.getDeclaredField("mCarAppApiLevel").apply { isAccessible = true }.setInt(this, CarAppApiLevels.LEVEL_7)
@@ -53,7 +53,7 @@ class CarClusterTest {
         val screen = ClusterScreen(car)
         ScreenController(screen).moveToState(Lifecycle.State.RESUMED)
         fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
-        // The trips list loads in the background: wait for the card to follow along.
+        // Data loads in the background: wait for the card to follow along.
         fun eventually(check: (List<String>) -> Boolean) {
             repeat(100) {
                 idle()
@@ -62,14 +62,26 @@ class CarClusterTest {
             }
             throw AssertionError(rows(screen).toString())
         }
-        eventually { it.first().startsWith("This week") }
+        // No saved stops yet: a short note.
+        eventually { it.first().startsWith("No saved stops yet") }
+        // Two saved stops (one set to "don't remind", which stays out) and a home that is no stop.
+        runBlocking {
+            app.container.food.save("Coffee", "Brew Corner", 13.06, 77.71, System.currentTimeMillis())
+            val fuel = app.container.food.save("Fuel", "Shell", 13.2, 77.8, System.currentTimeMillis())
+            app.container.food.save("Food", "Skipped Dhaba", 13.1, 77.75, System.currentTimeMillis())
+                .let { app.container.food.setRemind(it, remind = false) }
+            assertTrue(fuel > 0)
+        }
         val controller = app.container.controller
         controller.manualStart()
         idle()
-        DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).drive(60, 15f).points.forEach(controller::onLocation)
-        eventually { rows -> rows.any { it.startsWith("This trip") && "km" in it } }
+        DriveSim(t = System.currentTimeMillis(), lat = 13.05, lon = 77.7).drive(30, 15f).points.forEach(controller::onLocation)
+        eventually { rows -> rows.size == 2 && rows[0].startsWith("Brew Corner | Coffee ·") && "away" in rows[0] && rows[1].startsWith("Shell | Fuel ·") }
+        // The next stop on this road comes first.
+        app.container.food.showNext(com.canis.hejje.food.NextStop("Kamat Upachar", "food", 4_200.0, 0.0, 13.3, 77.9))
+        eventually { rows -> rows.size == 3 && rows[0].startsWith("Kamat Upachar | Next stop ·") }
         controller.manualStop()
-        eventually { it.first().startsWith("This week") }
+        app.container.food.showNext(null)
     }
 
     @Test fun drawnCluster_fitsBesideTheCard() {
@@ -79,8 +91,8 @@ class CarClusterTest {
         for (dark in listOf(true, false)) {
             val bitmap = Bitmap.createBitmap(1280, 600, Bitmap.Config.ARGB_8888)
             val frame = CarFrame(
-                needle = 92f, digits = "92", unit = "KM/H", turn = trace.state.value.heading!!, heading = "NE · 40°",
-                trace = trace.state.value, here = sim.points.last(), odometer = 12.4f, distanceUnit = "KM", miles = false, dark = dark, uncertain = false,
+                turn = trace.state.value.heading!!, heading = "NE · 40°", trace = trace.state.value, here = sim.points.last(),
+                odometer = 12.4f, distanceUnit = "KM", elapsed = "18:42", timeLabel = "DRIVING TIME", tripLabel = "TRIP", dark = dark,
             )
             // Android Auto's card covers the left of the screen; the visible area is the rest.
             CarClusterRenderer(app).draw(Canvas(bitmap), 1280, 600, Rect(410, 70, 1280, 600), 1.5f, frame)

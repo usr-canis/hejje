@@ -66,7 +66,7 @@ jobs:
       - name: Unit tests and lint
         run: ./gradlew testDebugUnitTest lintDebug
 
-      - name: Build the signed release APK
+      - name: Build the signed release APK and Play bundle
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           HEJJE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -75,9 +75,11 @@ jobs:
           export HEJJE_KEYSTORE_FILE="$RUNNER_TEMP/hejje.keystore"
           trap 'rm -f "$HEJJE_KEYSTORE_FILE"' EXIT
           echo "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$HEJJE_KEYSTORE_FILE"
-          ./gradlew assembleRelease -PversionName="${{ steps.version.outputs.name }}"
+          ./gradlew assembleRelease bundleRelease -PversionName="${{ steps.version.outputs.name }}"
           rm -f "$HEJJE_KEYSTORE_FILE"
           cp app/build/outputs/apk/release/app-release.apk "hejje-${{ steps.version.outputs.name }}.apk"
+          # The bundle to upload to the Play Store (signed with the upload key).
+          cp app/build/outputs/bundle/release/app-release.aab "hejje-${{ steps.version.outputs.name }}.aab"
 
       - name: Verify the APK is signed
         run: |
@@ -96,8 +98,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" "hejje-${{ steps.version.outputs.name }}.apk" \
-            --title "Hejje ${{ steps.version.outputs.name }}" \
+          gh release create "${{ steps.version.outputs.tag }}" "hejje-${{ steps.version.outputs.name }}.apk" "hejje-${{ steps.version.outputs.name }}.aab" \
+            --title "Hejje Guruthu ${{ steps.version.outputs.name }}" \
             --notes-file notes.md \
             --target "${{ github.sha }}" ${{ steps.version.outputs.prerelease }}
 
@@ -106,5 +108,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.name }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          printf '[Download Hejje %s APK](https://github.com/%s/releases/download/%s/hejje-%s.apk)\n' \
+          printf '[Download Hejje Guruthu %s APK](https://github.com/%s/releases/download/%s/hejje-%s.apk)\n\n' \
             "$VERSION" "$GITHUB_REPOSITORY" "$TAG" "$VERSION" >> "$GITHUB_STEP_SUMMARY"
+          printf '[Play Store bundle (.aab)](https://github.com/%s/releases/download/%s/hejje-%s.aab)\n' \
+            "$GITHUB_REPOSITORY" "$TAG" "$VERSION" >> "$GITHUB_STEP_SUMMARY"

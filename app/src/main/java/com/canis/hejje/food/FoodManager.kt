@@ -40,8 +40,18 @@ fun ZoneEntity.stopPurpose(): String? = purpose ?: when (icon) {
 
 fun ZoneEntity.meal(): Meal? = Meal.of(stopPurpose())
 
-/** The nearest saved stop ahead: [aheadM] along the road when the drive had covered [atDriveM]. */
-data class NextStop(val name: String, val purpose: String, val aheadM: Double, val atDriveM: Double)
+/**
+ * The nearest saved stop ahead: [aheadM] along the road when the drive had covered [atDriveM],
+ * at [lat], [lon] (to navigate there).
+ */
+data class NextStop(
+    val name: String,
+    val purpose: String,
+    val aheadM: Double,
+    val atDriveM: Double,
+    val lat: Double = Double.NaN,
+    val lon: Double = Double.NaN,
+)
 
 /**
  * Food and coffee stops, kept quiet and simple:
@@ -287,7 +297,7 @@ class FoodManager(
         }
         val known = tracksOrLoad() ?: run { lastNext = 0; return }
         val hit = FoodStops.ahead(p.lat, p.lon, DEFAULT_SPEED, places, known, reach = NEXT_REACH_M, minM = NEXT_MIN_M)
-        _next.value = hit?.let { (place, along) -> NextStop(place.name, place.purpose, along, l.distanceM) }
+        _next.value = hit?.let { (place, along) -> NextStop(place.name, place.purpose, along, l.distanceM, place.lat, place.lon) }
     }
 
     companion object {

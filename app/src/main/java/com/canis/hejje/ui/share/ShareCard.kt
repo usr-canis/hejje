@@ -21,6 +21,7 @@ import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Route
 import com.canis.hejje.ui.map.Flags
 import com.canis.hejje.ui.theme.DarkPalette
+import com.canis.hejje.ui.theme.drawFootsteps
 import com.canis.hejje.ui.trips.drawDrumDigits
 import com.canis.hejje.ui.trips.odometerPositions
 import java.io.File
@@ -80,7 +81,9 @@ object ShareCard {
         p.typeface = mallige
         p.color = TEXT
         p.textSize = 78f
-        c.drawText(context.getString(R.string.brand_name), PAD, 128f, p)
+        val name = context.getString(R.string.brand_name)
+        c.drawText(name, PAD, 128f, p)
+        c.drawFootsteps(context, PAD + p.measureText(name) + 6f, 100f, 48f, accent)
         p.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         p.textAlign = Paint.Align.RIGHT
         p.letterSpacing = 0.14f

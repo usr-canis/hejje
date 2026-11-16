@@ -24,7 +24,7 @@ android {
         targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
-        buildConfigField("String", "UPDATE_REPO", "\"usr-canis/hejje\"")
+        buildConfigField("String", "SOURCE_REPO", "\"usr-canis/hejje\"")
     }
 
     signingConfigs {

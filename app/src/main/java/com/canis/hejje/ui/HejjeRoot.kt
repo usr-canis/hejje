@@ -23,6 +23,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -101,6 +102,7 @@ import com.canis.hejje.ui.settings.SettingsScreen
 import com.canis.hejje.ui.settings.ZonesScreen
 import com.canis.hejje.ui.stretch.SectionScreen
 import com.canis.hejje.ui.stretch.StretchScreen
+import com.canis.hejje.ui.theme.Footsteps
 import com.canis.hejje.ui.theme.HejjeTheme
 import com.canis.hejje.ui.theme.LocalPalette
 import com.canis.hejje.ui.theme.LocalReduceMotion
@@ -239,11 +241,14 @@ private fun BrandSplash() {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
             // Same drawable and size as the system splash, so the icon does not move.
             Image(painterResource(R.drawable.ic_splash), null, Modifier.size(288.dp))
-            Text(
-                stringResource(R.string.brand_name),
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.offset(y = 84.dp),
-            )
+            Row(Modifier.offset(y = 84.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.brand_name),
+                    style = MaterialTheme.typography.titleLarge.copy(fontFamily = WordmarkFont, fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Footsteps(17.dp, LocalPalette.current.accent, Modifier.padding(start = 2.dp, bottom = 10.dp))
+            }
         }
     }
 }
@@ -307,8 +312,6 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
             onTripOpened()
         }
     }
-    // Quiet update check on start, at most once a day; failures are ignored.
-    LaunchedEffect(Unit) { runCatching { container.updater.check(manual = false) } }
 
     val placesFlow = remember { container.db.zones().observe().map { list -> list.map { it.toPlace() } } }
     val places by placesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
