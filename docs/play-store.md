@@ -105,9 +105,19 @@ whether data is processed ephemerally, because the third-party services may keep
 > recorded; a notification is shown the whole time. Without background location, trips would be
 > missed whenever the app is not on screen, which is nearly always while driving.
 
+**In-app notice** (Play's "prominent disclosure"): the welcome guide's "Allow it all the time"
+step shows this, right before Android's own prompt:
+
+> This app collects location data to record your drives (route, distance, speed and where you
+> park) even when the app is closed or not in use. Your trips stay on this phone and are never
+> used for ads. To name places, start and end points are sent to OpenStreetMap; you can turn this
+> off in Settings.
+
 **Demo video** (needed, 30–60 s, unlisted YouTube link). Record on the phone:
-1. Open the app. Show Settings → Car with the car chosen and "Record automatically" on.
-2. Show Android's location permission for the app set to "Allow all the time".
+1. Install fresh (or clear the app's storage) and open it. Go through the guide to the
+   "Allow it all the time" step, show the notice, tap "Open location setting" and choose
+   "Allow all the time".
+2. Show Settings → Car with the car chosen and "Record automatically" on.
 3. Close the app. Connect the phone to the car (start the engine); show the "Recording"
    notification appearing by itself.
 4. Drive a short distance. Disconnect; show the trip saved in the app with its route.

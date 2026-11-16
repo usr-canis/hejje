@@ -513,7 +513,7 @@
     <string name="onboarding_location_title">Allow location</string>
     <string name="onboarding_location_body">The app needs your precise location to draw the route and measure distance and speed. Choose “Precise” and “While using the app”.</string>
     <string name="onboarding_background_title">Allow it all the time</string>
-    <string name="onboarding_background_body">Drives start while the phone is in your pocket and the app is closed. On the next screen choose “Allow all the time”. Location is only used while a drive is being recorded.</string>
+    <string name="onboarding_background_body">This app collects location data to record your drives (route, distance, speed and where you park) even when the app is closed or not in use. Your trips stay on this phone and are never used for ads. To name places, start and end points are sent to OpenStreetMap; you can turn this off in Settings. On the next screen choose “Allow all the time”.</string>
     <string name="onboarding_background_action">Open location setting</string>
     <string name="onboarding_notifications_title">Allow notifications</string>
     <string name="onboarding_notifications_body">You will see a small notification while a drive is recorded, and a short summary afterwards.</string>

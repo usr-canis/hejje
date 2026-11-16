@@ -428,6 +428,8 @@ class OnboardingTest {
         // Skip every step; the app must still be usable without any permission.
         var guard = 0
         while (rule.onAllNodesWithText("You are all set").fetchSemanticsNodes().isEmpty() && guard++ < 12) {
+            // The background-location notice Play reviews, shot so its wording can be checked.
+            if (rule.onAllNodesWithText("Allow it all the time").fetchSemanticsNodes().isNotEmpty()) shot("onboarding-background")
             val skip = listOf("Skip for now", "Choose later", "Continue").firstOrNull { rule.onAllNodesWithText(it).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText(skip ?: break).performClick()
             rule.mainClock.advanceTimeBy(600)
