@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, SegmentEntity::class, TagEntity::class, TripTagEntity::class,
         ZoneEntity::class, PlaceEntity::class, RawPointEntity::class, LogEntity::class, StopAskEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class HejjeDb : RoomDatabase() {
@@ -72,13 +72,21 @@ abstract class HejjeDb : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE raw_points ADD COLUMN fSpeed REAL")
+                db.execSQL("ALTER TABLE raw_points ADD COLUMN fDist REAL")
+                db.execSQL("ALTER TABLE raw_points ADD COLUMN fState INTEGER")
+            }
+        }
+
         fun create(context: Context, inMemory: Boolean = false): HejjeDb {
             val builder = if (inMemory) {
                 Room.inMemoryDatabaseBuilder(context, HejjeDb::class.java).allowMainThreadQueries()
             } else {
                 Room.databaseBuilder(context, HejjeDb::class.java, "hejje.db")
             }
-            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).addCallback(object : Callback() {
+            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) = insertPresetTags(db)
             }).build()
         }

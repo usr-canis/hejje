@@ -15,7 +15,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -64,7 +63,7 @@ class RecordingService : Service() {
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            for (l in result.locations) controller.onLocation(toPoint(l))
+            for (l in result.locations) motion.fix(toPoint(l), l.elapsedRealtimeNanos)
         }
     }
 
@@ -103,11 +102,9 @@ class RecordingService : Service() {
         super.onCreate()
         val container = (application as HejjeApp).container
         controller = container.controller
-        // Someone opened (or closed) the live cluster: switch the GPS rate.
-        scope.launch { controller.watched.collect { if (updating) requestUpdates() } }
         notifier = container.notifier
         fused = LocationServices.getFusedLocationProviderClient(this)
-        motion = MotionSensors(this)
+        motion = MotionSensors(this, onPoint = { controller.onLocation(it) }, onReading = { controller.onFused(it) })
         ContextCompat.registerReceiver(
             this, powerReceiver,
             IntentFilter().apply {
@@ -196,20 +193,11 @@ class RecordingService : Service() {
         handler.postDelayed(watchdog, 10_000)
     }
 
-    /**
-     * 1 s while charging or while the live cluster is on screen (phone or car), 2 s on battery
-     * otherwise; slower in battery-saver mode.
-     */
+    /** A fix every second while recording (the fusion wants that), every 5 s in battery-saver mode. */
     @SuppressLint("MissingPermission") // checked in startUpdates()
     private fun requestUpdates() {
-        // Someone watching the live cluster gets the same 1 s rate as when charging.
-        val charging = getSystemService(BatteryManager::class.java)?.isCharging == true || controller.watched.value
         val saver = (application as HejjeApp).container.settings.current.gpsMode == 1
-        val wanted = when {
-            charging && !saver -> 1_000L
-            charging || !saver -> 2_000L
-            else -> 5_000L
-        }
+        val wanted = if (saver) 5_000L else 1_000L
         if (wanted == intervalMs) return
         intervalMs = wanted
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, wanted)
@@ -255,7 +243,6 @@ class RecordingService : Service() {
             else -> Float.NaN
         }
         val speed = if (l.hasSpeed()) l.speed else Float.NaN
-        val sensed = motion.onFix(l.elapsedRealtimeNanos, speed)
         return RawPoint(
             t = System.currentTimeMillis() - ageMs.coerceIn(0, 10_000),
             lat = l.latitude,
@@ -265,10 +252,6 @@ class RecordingService : Service() {
             acc = if (l.hasAccuracy()) l.accuracy else Float.NaN,
             pressure = pressure,
             speedAcc = if (l.hasSpeedAccuracy()) l.speedAccuracyMetersPerSecond else Float.NaN,
-            sLon = sensed?.meanLon ?: Float.NaN,
-            sMin = sensed?.minLon ?: Float.NaN,
-            sMax = sensed?.maxLon ?: Float.NaN,
-            sLat = sensed?.peakLat ?: Float.NaN,
             bearing = if (l.hasBearing()) l.bearing else Float.NaN,
         )
     }

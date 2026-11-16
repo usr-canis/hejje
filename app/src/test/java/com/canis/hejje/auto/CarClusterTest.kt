@@ -80,7 +80,7 @@ class CarClusterTest {
             val bitmap = Bitmap.createBitmap(1280, 600, Bitmap.Config.ARGB_8888)
             val frame = CarFrame(
                 needle = 92f, digits = "92", unit = "KM/H", turn = trace.state.value.heading!!, heading = "NE · 40°",
-                trace = trace.state.value, here = sim.points.last(), odometer = 12.4f, distanceUnit = "KM", miles = false, dark = dark,
+                trace = trace.state.value, here = sim.points.last(), odometer = 12.4f, distanceUnit = "KM", miles = false, dark = dark, uncertain = false,
             )
             // Android Auto's card covers the left of the screen; the visible area is the rest.
             CarClusterRenderer(app).draw(Canvas(bitmap), 1280, 600, Rect(410, 70, 1280, 600), 1.5f, frame)

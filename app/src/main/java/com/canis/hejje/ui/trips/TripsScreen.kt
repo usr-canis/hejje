@@ -75,7 +75,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
@@ -116,12 +115,6 @@ fun TripsScreen(onTrip: (Long) -> Unit, onParked: () -> Unit) {
     val live by vm.live.collectAsStateWithLifecycle()
     val trace by vm.trace.collectAsStateWithLifecycle()
     val next by vm.next.collectAsStateWithLifecycle()
-    if (live != null) {
-        LifecycleStartEffect(vm) {
-            vm.watching(true)
-            onStopOrDispose { vm.watching(false) }
-        }
-    }
     val update by container.updater.state.collectAsStateWithLifecycle()
     val f = rememberFormatter(state.settings.miles)
     val haptics = rememberHaptics()

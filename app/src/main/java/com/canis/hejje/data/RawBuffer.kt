@@ -38,6 +38,7 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
                 writeLong(p.t); writeDouble(p.lat); writeDouble(p.lon)
                 writeFloat(p.alt); writeFloat(p.speed); writeFloat(p.acc); writeFloat(p.pressure); writeFloat(p.speedAcc)
                 writeFloat(p.sLon); writeFloat(p.sMin); writeFloat(p.sMax); writeFloat(p.sLat)
+                writeFloat(p.fSpeed); writeFloat(p.fDist); writeInt(p.fState)
                 flush()
             }
             if (++sinceSync >= SYNC_EVERY) {
@@ -85,20 +86,25 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
     /** After a restart: move fixes left in journal files into the database. */
     suspend fun recover() {
         synchronized(this) { close(); pending.clear(); session = null }
-        val suffixes = listOf(JOURNAL, FLUSHING, OLD_JOURNAL, OLD_FLUSHING)
+        val suffixes = listOf(JOURNAL, FLUSHING, V2_JOURNAL, V2_FLUSHING, OLD_JOURNAL, OLD_FLUSHING)
         val files = dir.listFiles { f -> suffixes.any { f.name.endsWith(it) } } ?: return
         for (f in files.sortedBy { it.lastModified() }) {
-            val flushing = f.name.endsWith(FLUSHING) || f.name.endsWith(OLD_FLUSHING)
-            val name = if (flushing) f.name.substringBeforeLast('-') else f.name.removeSuffix(JOURNAL).removeSuffix(OLD_JOURNAL)
+            val flushing = f.name.endsWith(FLUSHING) || f.name.endsWith(V2_FLUSHING) || f.name.endsWith(OLD_FLUSHING)
+            val name = if (flushing) f.name.substringBeforeLast('-') else f.name.removeSuffix(JOURNAL).removeSuffix(V2_JOURNAL).removeSuffix(OLD_JOURNAL)
             val last = dao.lastTime(name) ?: Long.MIN_VALUE
-            // Files from before 1.2.0 have no sensor values in each record.
-            val points = read(f, extended = f.name.endsWith(JOURNAL) || f.name.endsWith(FLUSHING)).filter { it.t > last }
+            // Files from before 1.2.0 have no sensor values in each record; before 1.8.0 no fused values.
+            val version = when {
+                f.name.endsWith(JOURNAL) || f.name.endsWith(FLUSHING) -> 3
+                f.name.endsWith(V2_JOURNAL) || f.name.endsWith(V2_FLUSHING) -> 2
+                else -> 1
+            }
+            val points = read(f, version).filter { it.t > last }
             if (points.isNotEmpty()) dao.insert(points.map { toEntity(name, it) })
             f.delete()
         }
     }
 
-    private fun read(f: File, extended: Boolean): List<RawPoint> {
+    private fun read(f: File, version: Int): List<RawPoint> {
         val list = ArrayList<RawPoint>()
         runCatching {
             DataInputStream(f.inputStream().buffered()).use { input ->
@@ -108,7 +114,8 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
                             input.readLong(), input.readDouble(), input.readDouble(),
                             input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(),
                         )
-                        if (extended) base.copy(sLon = input.readFloat(), sMin = input.readFloat(), sMax = input.readFloat(), sLat = input.readFloat()) else base
+                        val sensed = if (version >= 2) base.copy(sLon = input.readFloat(), sMin = input.readFloat(), sMax = input.readFloat(), sLat = input.readFloat()) else base
+                        if (version >= 3) sensed.copy(fSpeed = input.readFloat(), fDist = input.readFloat(), fState = input.readInt()) else sensed
                     } catch (_: EOFException) {
                         break // a half-written last record is simply dropped
                     }
@@ -120,8 +127,10 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
     }
 
     companion object {
-        private const val JOURNAL = ".journal2"
-        private const val FLUSHING = ".flushing2"
+        private const val JOURNAL = ".journal3"
+        private const val FLUSHING = ".flushing3"
+        private const val V2_JOURNAL = ".journal2"
+        private const val V2_FLUSHING = ".flushing2"
         private const val OLD_JOURNAL = ".journal"
         private const val OLD_FLUSHING = ".flushing"
         private const val SYNC_EVERY = 10
@@ -131,12 +140,14 @@ class RawBuffer(private val dir: File, private val dao: RawDao) {
             p.alt.takeUnless { it.isNaN() }, p.speed.takeUnless { it.isNaN() }, p.acc.takeUnless { it.isNaN() },
             p.pressure.takeUnless { it.isNaN() }, p.speedAcc.takeUnless { it.isNaN() },
             p.sLon.takeUnless { it.isNaN() }, p.sMin.takeUnless { it.isNaN() }, p.sMax.takeUnless { it.isNaN() }, p.sLat.takeUnless { it.isNaN() },
+            p.fSpeed.takeUnless { it.isNaN() }, p.fDist.takeUnless { it.isNaN() }, p.fState.takeIf { it >= 0 },
         )
 
         fun toRaw(e: RawPointEntity) = RawPoint(
             e.t, e.lat, e.lon, e.alt ?: Float.NaN, e.speed ?: Float.NaN, e.acc ?: Float.NaN,
             e.pressure ?: Float.NaN, e.speedAcc ?: Float.NaN,
             e.sLon ?: Float.NaN, e.sMin ?: Float.NaN, e.sMax ?: Float.NaN, e.sLat ?: Float.NaN,
+            fSpeed = e.fSpeed ?: Float.NaN, fDist = e.fDist ?: Float.NaN, fState = e.fState ?: -1,
         )
     }
 }

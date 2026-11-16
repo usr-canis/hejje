@@ -1,6 +1,7 @@
 package com.canis.hejje.recording
 
 import com.canis.hejje.domain.Geo
+import com.canis.hejje.domain.MotionState
 import com.canis.hejje.domain.RawPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +45,10 @@ class LiveTrace {
     /** The points already recorded, after the app was restarted mid-drive. */
     fun load(points: List<RawPoint>) {
         reset()
-        points.forEach { add(it, moving = !it.speed.isNaN() && it.speed > 1.4f, publish = false) }
+        points.forEach { p ->
+            val moving = if (p.fState >= 0) p.fState != MotionState.STOPPED.ordinal else !p.speed.isNaN() && p.speed > 1.4f
+            add(p, moving, publish = false)
+        }
         publish()
     }
 

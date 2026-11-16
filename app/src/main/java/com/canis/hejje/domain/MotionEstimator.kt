@@ -75,10 +75,12 @@ class MotionEstimator {
     /**
      * One sensor reading. [t] in nanoseconds (the sensor clock), [linear] acceleration without
      * gravity and [gravity] in the phone's axes, [gyro] rotation rate (rad/s) if available.
+     * Returns the car's forward acceleration (m/s², smoothed) when the phone is settled and forward
+     * is known, else NaN.
      */
-    fun onMotion(t: Long, linear: FloatArray, gravity: FloatArray, gyro: FloatArray?, screenOn: Boolean) {
+    fun onMotion(t: Long, linear: FloatArray, gravity: FloatArray, gyro: FloatArray?, screenOn: Boolean): Float {
         val gn = norm(gravity)
-        if (gn < 5f) return
+        if (gn < 5f) return Float.NaN
         if (!haveUp) {
             for (i in 0..2) up[i] = gravity[i] / gn
             haveUp = true
@@ -144,7 +146,7 @@ class MotionEstimator {
 
         samples++
         val settled = t >= unsettledUntil && t - settledSince >= SETTLE_NS
-        if (!settled) return
+        if (!settled) return Float.NaN
         settledSamples++
         for (i in 0..2) hSum[i] += filtered[i]
         if (calibrated) {
@@ -153,7 +155,9 @@ class MotionEstimator {
             val lat = dot(filtered, left)
             lonN++; lonSum += lon
             lonMin = min(lonMin, lon); lonMax = max(lonMax, lon); latPeak = max(latPeak, abs(lat))
+            return lon
         }
+        return Float.NaN
     }
 
     /**

@@ -64,6 +64,7 @@ import com.canis.hejje.R
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Geo
 import com.canis.hejje.domain.Meal
+import com.canis.hejje.domain.MotionState
 import com.canis.hejje.domain.RawPoint
 import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
@@ -86,6 +87,7 @@ private const val SWEEP = 240f
 /** Dial height as a multiple of the speedometer's radius (scale, digits and unit below the hub). */
 private const val DIAL_HEIGHT = 1.76f
 private val ODO_ROW = 52.dp
+private const val STALE_MS = 3_000L
 private val ROW_GAP = 8.dp
 
 /**
@@ -99,7 +101,14 @@ internal fun LiveCluster(live: LiveState, trace: TraceState, next: NextStop?, f:
         Modifier.fillMaxWidth().height((windowHeight * 0.4f).coerceIn(320.dp, 460.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Header(live, f, onStop)
+        var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                now = System.currentTimeMillis()
+                delay(1_000)
+            }
+        }
+        Header(live, now, f, onStop)
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
             // The speedometer sits against the left edge and the compass against the right one, both
             // centred on the same line, so the card's padding is the same on both sides.
@@ -108,7 +117,9 @@ internal fun LiveCluster(live: LiveState, trace: TraceState, next: NextStop?, f:
             val rc = minOf(r * 0.76f, (maxWidth - speedoCx * 2 - 14.dp) / 2)
             Column {
                 val speed = live.speed.takeIf { live.hasFix }
-                Dials(speed, trace, live.last, f, r, rc, Modifier.fillMaxWidth().height(r * DIAL_HEIGHT))
+                // Unsure (a stop not told from a crawl, or GPS gone quiet): the digits go grey.
+                val uncertain = live.motion == MotionState.UNKNOWN || now - live.lastFixAt > STALE_MS
+                Dials(speed, uncertain, trace, live.last, f, r, rc, Modifier.fillMaxWidth().height(r * DIAL_HEIGHT))
                 Spacer(Modifier.height(ROW_GAP))
                 Box(Modifier.fillMaxWidth().height(ODO_ROW)) {
                     Box(Modifier.width(speedoCx * 2).fillMaxHeight(), contentAlignment = Alignment.Center) {
@@ -143,15 +154,8 @@ private fun elapsed(ms: Long): String {
 }
 
 @Composable
-private fun Header(live: LiveState, f: Formatter, onStop: () -> Unit) {
+private fun Header(live: LiveState, now: Long, f: Formatter, onStop: () -> Unit) {
     val dash = Dash
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         BasicText(
             stringResource(R.string.brand_name),
@@ -187,7 +191,7 @@ private fun rememberTurn(target: Float?): Float {
 }
 
 @Composable
-private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Formatter, r: Dp, rc: Dp, modifier: Modifier) {
+private fun Dials(speedMs: Float?, uncertain: Boolean, trace: TraceState, here: RawPoint?, f: Formatter, r: Dp, rc: Dp, modifier: Modifier) {
     val dash = Dash
     val palette = LocalPalette.current
     val measurer = rememberTextMeasurer(cacheSize = 32)
@@ -208,7 +212,7 @@ private fun Dials(speedMs: Float?, trace: TraceState, here: RawPoint?, f: Format
         val u = radius / 100f
         val stroke = 7 * u
         val c = Offset(radius * 1.035f, radius * 1.035f)
-        speedometer(dash, c, radius, u, stroke, needle, max, Brush.sweepGradient(*stops, center = c), measurer, digits, unit)
+        speedometer(dash, c, radius, u, stroke, needle, max, Brush.sweepGradient(*stops, center = c), measurer, digits, unit, uncertain)
         val cr = rc.toPx()
         compass(dash, Offset(size.width - cr, c.y), cr, turn, trace, here, measurer)
     }
@@ -232,6 +236,7 @@ internal fun speedStops(ramp: List<Color>, miles: Boolean): Array<Pair<Float, Co
 
 internal fun DrawScope.speedometer(
     dash: DashColors, c: Offset, radius: Float, u: Float, stroke: Float, value: Float, max: Int, colours: Brush, measurer: TextMeasurer, digits: String, unit: String,
+    uncertain: Boolean = false,
 ) {
     val topLeft = Offset(c.x - radius, c.y - radius)
     val box = Size(radius * 2, radius * 2)
@@ -263,7 +268,7 @@ internal fun DrawScope.speedometer(
     drawLine(dash.accent, tail, tip, strokeWidth = 3.5f * u, cap = StrokeCap.Round)
     drawCircle(dash.panelBottom, 9 * u, c)
     drawCircle(dash.accent, 9 * u, c, style = Stroke(2.5f * u))
-    val big = measurer.measure(digits, TextStyle(fontSize = (36 * u).toSp(), fontWeight = FontWeight.SemiBold, color = dash.text, fontFeatureSettings = "tnum"))
+    val big = measurer.measure(digits, TextStyle(fontSize = (36 * u).toSp(), fontWeight = FontWeight.SemiBold, color = if (uncertain) dash.muted else dash.text, fontFeatureSettings = "tnum"))
     drawText(big, topLeft = Offset(c.x - big.size.width / 2f, c.y + 50 * u - big.firstBaseline))
     val small = measurer.measure(unit, TextStyle(fontSize = (11 * u).toSp(), letterSpacing = (1.5f * u).toSp(), color = dash.muted))
     drawText(small, topLeft = Offset(c.x - small.size.width / 2f, c.y + 67 * u - small.firstBaseline))

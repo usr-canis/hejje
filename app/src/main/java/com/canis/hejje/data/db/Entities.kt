@@ -170,4 +170,8 @@ data class RawPointEntity(
     val sMin: Float? = null,
     val sMax: Float? = null,
     val sLat: Float? = null,
+    /** Fused speed at the fix, metres since the previous fix, and motion state (see RawPoint). */
+    val fSpeed: Float? = null,
+    val fDist: Float? = null,
+    val fState: Int? = null,
 )

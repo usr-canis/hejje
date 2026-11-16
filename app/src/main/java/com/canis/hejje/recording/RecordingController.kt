@@ -12,20 +12,17 @@ import com.canis.hejje.data.LogKind
 import com.canis.hejje.data.RawBuffer
 import com.canis.hejje.data.SettingsStore
 import com.canis.hejje.data.db.RawDao
+import com.canis.hejje.domain.FusedReading
 import com.canis.hejje.domain.Geo
-import com.canis.hejje.domain.LiveSpeed
+import com.canis.hejje.domain.MotionState
 import com.canis.hejje.domain.RawPoint
 import com.canis.hejje.domain.RecordingStateMachine
 import com.canis.hejje.domain.RecordingStateMachine.Effect
 import com.canis.hejje.domain.TripProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,8 +39,12 @@ data class LiveState(
     val lastFixAt: Long = 0,
     /** The latest GPS fix, for the car display. */
     val last: RawPoint? = null,
-    /** The speed to show, m/s: 0 while standing still (GPS noise filtered out, see [LiveSpeed]). */
+    /** The fused speed to show (m/s), the forward acceleration when the sensors are trusted (NaN otherwise), and what the car is doing. */
     val speed: Float = 0f,
+    val accel: Float = Float.NaN,
+    val motion: MotionState = MotionState.UNKNOWN,
+    /** One standard deviation of [speed], m/s. */
+    val speedSigma: Float = Float.NaN,
 )
 
 /**
@@ -79,15 +80,8 @@ class RecordingController(
     /** The line driven so far and the heading, for the live card on the Trips tab. */
     val trace = LiveTrace()
 
-    private val speedFilter = LiveSpeed()
-    private val watchers = MutableStateFlow(0)
-
-    /** True while the live cluster is on screen (phone or car); GPS then updates every second. */
-    val watched: StateFlow<Boolean> = watchers.map { it > 0 }.stateIn(scope, SharingStarted.Eagerly, false)
-
-    fun watchStart() = watchers.update { it + 1 }
-
-    fun watchEnd() = watchers.update { (it - 1).coerceAtLeast(0) }
+    /** Distance already recorded before this process started (a drive carried on after a restart). */
+    private var distanceBase = 0.0
 
     /** True while the service has work: recording, or saving a drive that just ended. */
     private val _active = MutableStateFlow(machine.state.recording)
@@ -176,7 +170,7 @@ class RecordingController(
         session = UUID.randomUUID().toString()
         lastPoint = null
         trace.reset()
-        speedFilter.reset()
+        distanceBase = 0.0
         autoStartPending = !e.manual
         _live.value = LiveState(e.at, e.manual)
         log?.add(LogKind.REC_STARTED, if (e.manual) DriveLog.MANUAL else DriveLog.AUTO)
@@ -243,18 +237,21 @@ class RecordingController(
         locationPrompt.onFix()
         buffer.append(id, p)
         var distance = live.distanceM
-        val shown = speedFilter.update(p)
+        val fused = !p.fDist.isNaN()
+        val stopped = p.fState == MotionState.STOPPED.ordinal
+        val shown = if (!p.fSpeed.isNaN()) p.fSpeed else if (p.speed.isNaN() || stopped) 0f else max(0f, p.speed)
+        if (fused) distance += p.fDist
         if (p.acc.isNaN() || p.acc <= TripProcessor.MAX_ACCURACY_M) {
             val last = lastPoint
-            if (last != null && p.t > last.t) {
+            if (!fused && last != null && p.t > last.t) {
+                // No fusion (no sensor worker, or a gap): the straight line, when clearly moving.
                 val d = Geo.distance(last.lat, last.lon, p.lat, p.lon)
                 val speed = d / ((p.t - last.t) / 1000.0)
-                // GPS noise while standing still does not add distance.
-                val moving = if (p.speed.isNaN()) speed > 1.0 else shown > 0f
+                val moving = if (p.speed.isNaN()) speed > 1.0 else p.speed > 1.0f && !stopped
                 if (moving && speed < 70) distance += d
             }
             lastPoint = p
-            trace.add(p, moving = speedFilter.isMoving)
+            trace.add(p, moving = !stopped)
         }
         when {
             live.lastFixAt == 0L -> log?.add(LogKind.FIRST_FIX, ((p.t - live.startedAt) / 1000).coerceAtLeast(0).toString())
@@ -269,6 +266,12 @@ class RecordingController(
             lastFlush = p.t
             scope.launch { flushLock.withLock { buffer.flush() } }
         }
+    }
+
+    /** The live fused picture between fixes (about ten times a second), from the sensor worker. */
+    fun onFused(r: FusedReading) {
+        val live = _live.value ?: return
+        _live.value = live.copy(speed = r.speed, accel = r.accel, motion = r.state, speedSigma = r.speedSigma)
     }
 
     /** Called regularly by the service: flags GPS loss (tunnel) for the notification. */
@@ -324,6 +327,7 @@ class RecordingController(
             return
         }
         log?.add(LogKind.RECOVERED)
+        distanceBase = distance
         if (_live.value == null) _live.value = LiveState(s.startedAt, s.manual, distance, lastFixAt = lastTime ?: 0)
         if (!launchService()) return
         if (s.disconnectAt != 0L) {
@@ -341,11 +345,14 @@ class RecordingController(
         }
     }
 
+    /** Distance of the fixes so far: the fused metres where known, else the straight line while moving. */
     private fun liveDistance(points: List<RawPoint>): Double {
         var d = 0.0
         val clean = TripProcessor.clean(points)
         for (i in 1 until clean.size) {
-            if (clean[i].speed.isNaN() || clean[i].speed > 1f) d += Geo.distance(clean[i - 1].lat, clean[i - 1].lon, clean[i].lat, clean[i].lon)
+            val p = clean[i]
+            if (!p.fDist.isNaN()) d += p.fDist
+            else if (p.speed.isNaN() || p.speed > 1f) d += Geo.distance(clean[i - 1].lat, clean[i - 1].lon, p.lat, p.lon)
         }
         return d
     }

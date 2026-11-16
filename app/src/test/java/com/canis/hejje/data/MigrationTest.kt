@@ -25,7 +25,7 @@ class MigrationTest {
     @get:Rule
     val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), HejjeDb::class.java)
 
-    @Test fun version1To5_keepsTripsZonesAndUnsavedPoints() {
+    @Test fun version1To6_keepsTripsZonesAndUnsavedPoints() {
         helper.createDatabase(name, 1).apply {
             execSQL(
                 "INSERT INTO trips (id, uuid, startTime, endTime, distanceM, movingMs, idleMs, stoppedMs, maxSpeed, stopCount, stopMs, " +
@@ -44,8 +44,9 @@ class MigrationTest {
         helper.runMigrationsAndValidate(name, 3, true, HejjeDb.MIGRATION_2_3).close()
         helper.runMigrationsAndValidate(name, 4, true, HejjeDb.MIGRATION_3_4).close()
         helper.runMigrationsAndValidate(name, 5, true, HejjeDb.MIGRATION_4_5).close()
+        helper.runMigrationsAndValidate(name, 6, true, HejjeDb.MIGRATION_5_6).close()
         val db = Room.databaseBuilder(app, HejjeDb::class.java, name)
-            .addMigrations(HejjeDb.MIGRATION_1_2, HejjeDb.MIGRATION_2_3, HejjeDb.MIGRATION_3_4, HejjeDb.MIGRATION_4_5).allowMainThreadQueries().build()
+            .addMigrations(HejjeDb.MIGRATION_1_2, HejjeDb.MIGRATION_2_3, HejjeDb.MIGRATION_3_4, HejjeDb.MIGRATION_4_5, HejjeDb.MIGRATION_5_6).allowMainThreadQueries().build()
         runBlocking {
             val trip = db.trips().trip(7)!!
             assertEquals("kept", trip.note)
@@ -58,6 +59,7 @@ class MigrationTest {
             assertNull(zone.tag)
             assertEquals(0, zone.rating)
             assertTrue(db.stopAsks().since(0).isEmpty())
+            assertNull("old fixes have no fused values", db.raw().points("s1").single().fSpeed)
             val point = db.raw().points("s1").single()
             assertNull(point.sLon)
             assertEquals(3.0f, point.speed!!, 0f)

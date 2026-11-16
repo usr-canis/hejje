@@ -43,10 +43,10 @@ object TripProcessor {
         if (pts.isEmpty() || end <= start) return null
         val n = pts.size
 
-        // Speed per point: GPS (Doppler) speed when present, otherwise derived from positions.
+        // Speed per point: the fused speed when recorded, else GPS (Doppler) speed, else from positions.
         val v = FloatArray(n)
         for (i in 0 until n) {
-            v[i] = if (!pts[i].speed.isNaN()) max(0f, pts[i].speed) else if (i > 0) {
+            v[i] = if (!pts[i].fSpeed.isNaN()) max(0f, pts[i].fSpeed) else if (!pts[i].speed.isNaN()) max(0f, pts[i].speed) else if (i > 0) {
                 val dt = (pts[i].t - pts[i - 1].t) / 1000f
                 (Geo.distance(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon) / dt).toFloat()
             } else 0f
@@ -58,7 +58,12 @@ object TripProcessor {
         val moving = BooleanArray(n)
         var m = false
         for (i in 0 until n) {
-            if (!m && vs[i] > START_MOVING) m = true else if (m && vs[i] < STOP_MOVING) m = false
+            // The fusion's word when it has one (a confirmed stop, a crawl); else a speed threshold.
+            when (pts[i].fState) {
+                MotionState.STOPPED.ordinal -> m = false
+                MotionState.CREEPING.ordinal, MotionState.MOVING.ordinal -> m = true
+                else -> if (!m && vs[i] > START_MOVING) m = true else if (m && vs[i] < STOP_MOVING) m = false
+            }
             moving[i] = m
         }
 
@@ -79,10 +84,12 @@ object TripProcessor {
             val a = pts[i - 1]
             val b = pts[i]
             val dt = b.t - a.t
-            val d = Geo.distance(a.lat, a.lon, b.lat, b.lon)
             val gap = dt > GAP_MS
+            // The fused metres when recorded (zero through a confirmed stop); else the straight line.
             // Across a GPS gap (tunnel) the straight line counts if the car clearly moved.
-            val drove = if (gap) d > 25 && d / (dt / 1000.0) > 1.0 else moving[i - 1] || moving[i]
+            val fused = !gap && !b.fDist.isNaN()
+            val d = if (fused) b.fDist.toDouble() else Geo.distance(a.lat, a.lon, b.lat, b.lon)
+            val drove = if (fused) d > 0 else if (gap) d > 25 && d / (dt / 1000.0) > 1.0 else moving[i - 1] || moving[i]
             if (!drove) continue
             // Spread the interval over the windows it overlaps.
             var t = a.t

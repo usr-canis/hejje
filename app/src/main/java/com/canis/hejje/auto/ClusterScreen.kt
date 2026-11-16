@@ -26,6 +26,7 @@ import com.canis.hejje.R
 import com.canis.hejje.data.SettingsData
 import com.canis.hejje.domain.Formatter
 import com.canis.hejje.domain.Insights
+import com.canis.hejje.domain.MotionState
 import com.canis.hejje.food.NextStop
 import com.canis.hejje.recording.LiveState
 import com.canis.hejje.recording.TraceState
@@ -33,7 +34,6 @@ import com.canis.hejje.ui.formatter
 import com.canis.hejje.ui.trips.dialMax
 import com.canis.hejje.ui.trips.headingLabel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
@@ -97,15 +97,6 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
                     }
                 }
                 launch { drawLoop() }
-                // GPS every second while the cluster is on the car screen.
-                launch {
-                    container.controller.watchStart()
-                    try {
-                        awaitCancellation()
-                    } finally {
-                        container.controller.watchEnd()
-                    }
-                }
             }
         }
     }
@@ -253,6 +244,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
             distanceUnit = f.distanceUnit.uppercase(),
             miles = now.settings.miles,
             dark = carContext.isDarkMode,
+            uncertain = live != null && (live.motion == MotionState.UNKNOWN || System.currentTimeMillis() - live.lastFixAt > STALE_MS),
         )
         val canvas = runCatching { s.lockHardwareCanvas() }.getOrNull() ?: return
         try {
@@ -264,6 +256,7 @@ internal class ClusterScreen(carContext: CarContext) : Screen(carContext), Surfa
 
     private companion object {
         const val FRAME_MS = 33L
+        const val STALE_MS = 3_000L
         const val CARD_EVERY_MS = 5_000L
     }
 }

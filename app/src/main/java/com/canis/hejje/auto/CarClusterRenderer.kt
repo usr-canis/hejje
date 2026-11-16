@@ -43,6 +43,8 @@ internal class CarFrame(
     val distanceUnit: String,
     val miles: Boolean,
     val dark: Boolean,
+    /** Unsure of the speed (a stop not told from a crawl, GPS gone quiet): digits in grey. */
+    val uncertain: Boolean = false,
 )
 
 /**
@@ -74,7 +76,7 @@ internal class CarClusterRenderer(context: Context) {
         scope.draw(Density(density), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(canvas), Size(width.toFloat(), height.toFloat())) {
             drawRect(Brush.verticalGradient(listOf(dash.panelTop, dash.panelBottom)))
             val brush = Brush.sweepGradient(*speedStops(palette.speedRamp, f.miles), center = c)
-            speedometer(dash, c, r, u, 7 * u, f.needle, dialMax(f.miles), brush, m, f.digits, f.unit)
+            speedometer(dash, c, r, u, 7 * u, f.needle, dialMax(f.miles), brush, m, f.digits, f.unit, f.uncertain)
             compass(dash, cc, rc, f.turn, f.trace, f.here, m)
         }
         // The odometer row: drums centred under the speedometer, the heading under the compass.
