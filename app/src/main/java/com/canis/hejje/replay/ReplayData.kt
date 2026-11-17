@@ -70,6 +70,7 @@ object ReplayData {
             }
             putJsonObject("total") { put("key", context.getString(R.string.replay_total)); put("value", f.distance(trip.distanceM)) }
             put("brand", context.getString(R.string.brand_name))
+            put("near", context.getString(R.string.replay_near))
             put("credit", context.getString(R.string.replay_credit))
         }.toString().let {
             val zone = java.time.ZoneId.systemDefault()

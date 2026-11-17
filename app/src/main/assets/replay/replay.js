@@ -319,7 +319,8 @@ function hits(a, b, pad = 10) { return a.x < b.x + b.w + pad && b.x < a.x + a.w 
 function measure(item) {
   fx.font = `600 19px ${SANS}`; fx.letterSpacing = '3px'; const wk = fx.measureText(item.key).width;
   fx.font = `500 36px ${SANS}`; fx.letterSpacing = '0px'; const wv = fx.measureText(item.value).width;
-  return { w: Math.max(wk, wv) + 44, h: 88 };
+  fx.font = `400 21px ${SANS}`; const ww = item.where ? fx.measureText(item.where).width : 0;
+  return { w: Math.max(wk, wv, ww) + 44, h: item.where ? 118 : 88 };
 }
 // Places each label at the first free spot around its point (near first, then a little away with a
 // thin line back). A label that fits nowhere is left out; its dot stays.
@@ -347,7 +348,41 @@ function drawLabel({ it, b }) {
   fx.textAlign = 'left'; fx.textBaseline = 'alphabetic';
   fx.font = `600 19px ${SANS}`; fx.letterSpacing = '3px'; fx.fillStyle = 'rgba(255,255,255,.62)'; fx.fillText(it.key, b.x + 22, b.y + 33);
   fx.font = `500 36px ${SANS}`; fx.letterSpacing = '0px'; fx.fillStyle = '#ffffff'; fx.fillText(it.value, b.x + 22, b.y + 72);
+  if (it.where) { fx.font = `400 21px ${SANS}`; fx.fillStyle = 'rgba(255,255,255,.6)'; fx.fillText(it.where, b.x + 22, b.y + 102); }
   fx.restore();
+}
+
+// ---------------- where a highlight happened: the road and the nearest place ----------------
+// Read from the map tiles already loaded for the close-up, so nothing extra is fetched.
+const WHERE = new Map();
+function latinName(p) { return p['name:en'] || p.name_en || p['name:latin'] || p.name || ''; }
+function whereOf(h) {
+  if (WHERE.has(h)) return WHERE.get(h);
+  const kx = 111320 * Math.cos(toRad(h.lat)), ky = 110540;
+  const dist = (lon, lat) => Math.hypot((lon - h.lon) * kx, (lat - h.lat) * ky);
+  const segDist = (a, b) => {
+    const ax = (a[0] - h.lon) * kx, ay = (a[1] - h.lat) * ky, bx = (b[0] - h.lon) * kx, by = (b[1] - h.lat) * ky;
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, u = l2 > 0 ? clamp(-(ax * dx + ay * dy) / l2) : 0;
+    return Math.hypot(ax + u * dx, ay + u * dy);
+  };
+  let road = null, best = 70;
+  for (const f of map.querySourceFeatures('omt', { sourceLayer: 'transportation_name' })) {
+    const g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+    for (const line of lines) for (let i = 1; i < line.length; i++) {
+      const d = segDist(line[i - 1], line[i]);
+      if (d < best) { best = d; const p = f.properties, n = latinName(p); road = p.ref && n && n.length > 26 ? p.ref : n || p.ref || null; }
+    }
+  }
+  let place = null, near = 9000;
+  for (const f of map.querySourceFeatures('omt', { sourceLayer: 'place' })) {
+    const p = f.properties; if (!['city', 'town', 'village', 'suburb', 'hamlet', 'neighbourhood', 'quarter'].includes(p.class) || f.geometry.type !== 'Point') continue;
+    const d = dist(...f.geometry.coordinates), n = latinName(p);
+    if (n && d < near) { near = d; place = n; }
+  }
+  const text = [road, place && (near < 800 ? place : `${D.near} ${place}`)].filter(Boolean).join(' · ');
+  const out = text || null;
+  if (out) WHERE.set(h, out);
+  return out;
 }
 function totalBox(a) {
   if (a <= 0) return null;
@@ -370,7 +405,9 @@ function highlights(t, c, arrowAt) {
     if (!dots.some(o => Math.hypot(o.x - q.x, o.y - q.y) < 22)) dots.push({ x: q.x, y: q.y, a: Math.max(pop, end), r: 8 + (1 - pop) * 10 });
     const live = clamp((since + .25) / .35) * (1 - clamp((since - 2.1) / .4));
     const a = Math.max(live * (1 - clamp(c.o * 2)), end);
-    if (a > .01) items.push({ x: q.x, y: q.y, a, key: h.key.toUpperCase(), value: h.value });
+    // The road and the nearest place, only in the close-up: the end card stays short.
+    const where = live > .01 && c.o <= 0 ? whereOf(h) : null;
+    if (a > .01) items.push({ x: q.x, y: q.y, a, key: h.key.toUpperCase(), value: h.value, where: end > 0 ? null : where });
   }
   for (const d of dots) { fx.save(); fx.globalAlpha = d.a; fx.fillStyle = '#ffffff'; fx.strokeStyle = '#ff7a26'; fx.lineWidth = 4; fx.shadowColor = 'rgba(0,0,0,.5)'; fx.shadowBlur = 8; fx.beginPath(); fx.arc(d.x, d.y, d.r, 0, 7); fx.fill(); fx.stroke(); fx.restore(); }
   const obstacles = [box(LOGO.x, LOGO.y, LOGO.w, LOGO.h), ...dots.map(d => box(d.x - 12, d.y - 12, 24, 24))];

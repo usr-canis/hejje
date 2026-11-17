@@ -570,5 +570,6 @@
     <string name="replay_sunrise">Sunrise</string>
     <string name="replay_sunset">Sunset</string>
     <string name="replay_total">Total</string>
+    <string name="replay_near">near</string>
     <string name="replay_credit">Map © OpenStreetMap · OpenFreeMap · Terrain: Mapzen (AWS Open Data) · Weather: Open-Meteo</string>
 </resources>
