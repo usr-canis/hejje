@@ -589,7 +589,7 @@ async function run() {
     for (let f = 0; f < frames; f++) {
       if (failed) throw failed;
       // Motion blur where the ground rushes past: average a few moments across half a frame.
-      const n = CAM[clamp(f, 0, CAM.length - 1)].blur;
+      const n = D.forceBlur || CAM[clamp(f, 0, CAM.length - 1)].blur;   // forceBlur: tests only
       if (n <= 1) await frame(f / FPS, false);
       else for (let j = 0; j < n; j++) {
         await frame((f + (j / (n - 1) - .5) * .5) / FPS, false);
