@@ -45,6 +45,7 @@ class AppContainer(val app: Application) {
 
     val places = PlaceRepository(db.places(), http, trips, settings)
     val backup = BackupManager(app, db, trips, settings)
+    val replays by lazy { com.canis.hejje.replay.ReplayJobs(app, this) }
     private val buffer = RawBuffer(File(app.filesDir, "raw"), db.raw())
     val log = DriveLog(db.log(), scope)
     private val finalizer = TripFinalizer(app, db.raw(), trips, settings, log, db.zones())

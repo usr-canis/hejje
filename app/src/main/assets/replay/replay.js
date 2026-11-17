@@ -2,7 +2,7 @@
 // real sky and weather, and encodes it with the phone's video encoder. Data comes from the app (Android.data()); the
 // finished MP4 goes back in pieces (Android.chunk). Every frame is a function of time alone.
 'use strict';
-const W = 1080, H = 1920, FPS = 30;
+const W = 1080, H = 1920, FPS = 60;
 const SANS = 'Roboto, Inter, "Noto Sans", sans-serif';
 const stage = document.getElementById('stage');
 const out = document.getElementById('out'), og = out.getContext('2d');
@@ -41,71 +41,54 @@ function weather(ts) {
   return { known: true, cloud: lerp(a.cloud, b.cloud, f), rain: lerp(a.rain, b.rain, f), vis: lerp(a.vis, b.vis, f), code: f < .5 ? a.code : b.code };
 }
 
-// ---------------- timing: close-up shots of the moments that matter ----------------
-// The camera stays low over the road. A short trip is one continuous shot. A long one is a few
-// shots, each around a moment (the start, a highlight, sunrise or sunset, the arrival), joined by a
-// soft fade while the route line keeps drawing. The video is as short as the story allows.
-const Z_SHOT = 15.9, PITCH = 72, SPEED_PX = 150, FADE = .45;
-let vClose, SHOTS, OV;
+// ---------------- timing: one continuous shot, close where it matters ----------------
+// At each moment (the start, a highlight, sunrise or sunset, the arrival) the camera comes right
+// down behind the arrow, as close as a navigation view. Between moments it eases back and climbs
+// as far as the trip needs, so a short hop stays close all the way and a long road trip still
+// fits in about 25 seconds. The ground always slides past at the same gentle speed on screen.
+const Z_HL = 17.6, Z_MIN = 9.6, SPEED_PX = 150, OUTRO = 3.4, INTRO = .3;
+let vHL, TT, T, moments, OV;
+const mppAt = z => 156543 * Math.cos(toRad(route[0].lat)) / Math.pow(2, z);
 function buildTiming() {
-  const cos = Math.cos(toRad(route[0].lat));
-  vClose = 156543 * cos * SPEED_PX / Math.pow(2, Z_SHOT);              // metres a second along the road
-  const merge = Math.max(1500, L * .04), groups = [];
+  vHL = mppAt(Z_HL) * SPEED_PX;
+  const merge = Math.max(400, L * .02), groups = [];
   for (const h of D.highlights.slice().sort((a, b) => a.d - b.d)) {
     const g = groups[groups.length - 1];
     if (g && h.d - g.d1 <= merge) { g.items.push(h); g.d1 = h.d; } else groups.push({ d0: h.d, d1: h.d, items: [h] });
   }
-  const moments = [{ d: 0, secs: 2.2, items: [], start: true }];
-  for (const g of groups) moments.push({ d: (g.d0 + g.d1) / 2, items: g.items,
-    secs: 2.6 + .4 * (g.items.length - 1) + (g.items.some(i => i.kind === 'SUNRISE' || i.kind === 'SUNSET') ? .8 : 0) });
-  moments.push({ d: L, secs: 2.2, items: [], end: true });
-  // Each moment's stretch of road; stretches that nearly touch become one continuous shot.
-  let shots = moments.map(m => {
-    const span = vClose * m.secs;
-    const d0 = m.start ? 0 : m.end ? Math.max(0, L - span) : Math.max(0, m.d - span / 2);
-    return { d0, d1: Math.min(L, d0 + span), moments: [m] };
-  });
-  if (L / vClose <= 12) shots = [{ d0: 0, d1: L, moments }];
-  const joined = [];
-  for (const s of shots) {
-    const last = joined[joined.length - 1];
-    if (last && s.d0 - last.d1 <= vClose * 1.4) { last.d1 = Math.max(last.d1, s.d1); last.moments.push(...s.moments); } else joined.push({ ...s, moments: [...s.moments] });
-  }
-  // Within a shot the road goes by steadily, lingering a little at each moment.
-  let t = .3;
-  SHOTS = joined.map(s => {
-    const N = 600, lv = [];
-    for (let i = 0; i <= N; i++) {
-      const d = lerp(s.d0, s.d1, i / N); let k = 1;
-      for (const m of s.moments) if (!m.start && !m.end) k -= .45 * Math.exp(-Math.pow((d - m.d) / (vClose * .7), 2));
-      lv.push(vClose * k);
-    }
-    const tc = [0]; for (let i = 1; i <= N; i++) tc.push(tc[i - 1] + ((s.d1 - s.d0) / N) * 2 / (lv[i] + lv[i - 1]));
-    const shot = { ...s, t0: t, dur: Math.max(tc[N], .8), tc, N };
-    t += shot.dur;
-    return shot;
-  });
-  T = t + OUTRO;
+  moments = [{ d: 0, hold: .7 }];
+  for (const g of groups) moments.push({ d: (g.d0 + g.d1) / 2, span: g.d1 - g.d0, hold: 1.8 + .35 * (g.items.length - 1) + (g.items.some(i => i.kind === 'SUNRISE' || i.kind === 'SUNSET') ? .6 : 0) });
+  moments.push({ d: L, hold: .6 });
+  // Longer trips may take a little longer, up to about 25 s.
+  const goal = clamp(5 + 4.5 * Math.log2(1 + L / 6000), 6.5, 25) - INTRO - OUTRO;
+  const lnHL = Math.log(vHL), lnMax = Math.log(mppAt(Z_MIN) * SPEED_PX * 1.4);
+  let lo = lnHL, hi = lnMax;
+  for (let i = 0; i < 32; i++) { const m = (lo + hi) / 2; if (profile(Math.exp(m)).total > goal) lo = m; else hi = m; }
+  TT = profile(Math.exp(hi));
+  T = INTRO + TT.total + OUTRO;
 }
-const OUTRO = 3.4;
-let T;
-function shotAt(t) {
-  let i = 0; while (i < SHOTS.length - 1 && t >= SHOTS[i + 1].t0) i++;
-  return SHOTS[i];
+// Speed along the road for a given top speed: slow at each moment, climbing exponentially away from
+// it (so the camera eases out in about a second), capped at vTop.
+function profile(vTop) {
+  const N = 8000, lv = [], lnHL = Math.log(vHL), lnTop = Math.log(vTop), lambda = vHL * .65;
+  for (let i = 0; i <= N; i++) {
+    const d = L * i / N; let lnv = lnTop;
+    for (const m of moments) { const core = vHL * m.hold / 2 + (m.span || 0) / 2, x = Math.abs(d - m.d); lnv = Math.min(lnv, x <= core ? lnHL : lnHL + (x - core) / lambda); }
+    lv.push(Math.exp(lnv) * lerp(.4, 1, smooth(d / (vHL * .6))) * lerp(.4, 1, smooth((L - d) / (vHL * .6))));
+  }
+  const tc = [0]; for (let i = 1; i <= N; i++) tc.push(tc[i - 1] + (L / N) * 2 / (lv[i] + lv[i - 1]));
+  return { N, tc, lv, total: tc[N] };
 }
 function progress(t) {
-  if (t >= SHOTS[SHOTS.length - 1].t0 + SHOTS[SHOTS.length - 1].dur) return 1;
-  const s = shotAt(t), u = clamp(t - s.t0, 0, s.dur), c = s.tc; let lo = 0, hi = s.N;
+  const u = t - INTRO; if (u <= 0) return 0; if (u >= TT.total) return 1;
+  const c = TT.tc; let lo = 0, hi = TT.N;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= u) lo = m; else hi = m; }
-  const f = c[hi] > c[lo] ? (u - c[lo]) / (c[hi] - c[lo]) : 0;
-  return lerp(s.d0, s.d1, (lo + f) / s.N) / L;
+  return (lo + (u - c[lo]) / (c[hi] - c[lo])) / TT.N;
 }
-function timeAt(d) {
-  for (const s of SHOTS) if (d >= s.d0 - 1 && d <= s.d1 + 1) { const i = clamp(Math.round((d - s.d0) / (s.d1 - s.d0 || 1) * s.N), 0, s.N); return s.t0 + s.tc[i]; }
-  return null;
-}
+function speedAt(d) { return TT.lv[clamp(Math.round(d / L * TT.N), 0, TT.N)]; }
+function timeAt(d) { return INTRO + TT.tc[clamp(Math.round(d / L * TT.N), 0, TT.N)]; }
 
-// ---------------- camera: planned for each shot, then smoothed like a gimbal ----------------
+// ---------------- camera: planned for the whole video, then smoothed like a gimbal ----------------
 const mercX = lon => lon * 20037508.34 / 180, mercY = lat => Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 6378137;
 const unX = x => x * 180 / 20037508.34, unY = y => 360 / Math.PI * Math.atan(Math.exp(y / 6378137)) - 90;
 function smoothPt(d, r) { let x = 0, y = 0; for (let j = -4; j <= 4; j++) { const p = at(d + j * r / 4); x += mercX(p.lon); y += mercY(p.lat); } return [x / 9, y / 9]; }
@@ -114,31 +97,29 @@ function gauss(arr, sigma) {
   for (let i = 0; i < n; i++) { let s = 0, w = 0; for (let j = -r; j <= r; j++) { const k = clamp(i + j, 0, n - 1), q = Math.exp(-j * j / (2 * sigma * sigma)); s += arr[k] * q; w += q; } res.push(s / w); }
   return res;
 }
+let CAM;
 function buildCamera() {
-  const mpp = 156543 * Math.cos(toRad(route[0].lat)) / Math.pow(2, Z_SHOT);
-  for (const s of SHOTS) {
-    const n = Math.max(2, Math.round(s.dur * FPS) + 1), raw = { x: [], y: [], b: [] };
-    let prevB = null;
-    for (let i = 0; i < n; i++) {
-      const d = progress(s.t0 + i / FPS) * L;
-      const c = smoothPt(d, mpp * 60), K = mpp * 260, a = smoothPt(d - K, K / 2), b = smoothPt(d + K, K / 2);
-      let br = toDeg(Math.atan2(b[0] - a[0], b[1] - a[1]));
-      if (prevB !== null) { while (br - prevB > 180) br -= 360; while (br - prevB < -180) br += 360; }
-      prevB = br; raw.x.push(c[0]); raw.y.push(c[1]); raw.b.push(br);
-    }
-    const x = gauss(raw.x, .35 * FPS), y = gauss(raw.y, .35 * FPS), b = gauss(raw.b, .7 * FPS);
-    // Each shot opens a touch wider and settles in close.
-    s.cam = x.map((_, i) => ({ lon: unX(x[i]), lat: unY(y[i]), bearing: b[i], zoom: Z_SHOT - .55 * (1 - smooth(i / FPS / 1.1)), pitch: PITCH }));
+  const N = Math.round(T * FPS) + 1, raw = { x: [], y: [], b: [], z: [] };
+  let prevB = null;
+  for (let i = 0; i < N; i++) {
+    const d = progress(i / FPS) * L, z = clamp(Math.log2(156543 * Math.cos(toRad(route[0].lat)) * SPEED_PX / speedAt(d)), Z_MIN, Z_HL), mpp = mppAt(z);
+    const c = smoothPt(d, clamp(mpp * 70, 15, 6000)), K = clamp(mpp * 300, 60, 15000), a = smoothPt(d - K, K / 2), b = smoothPt(d + K, K / 2);
+    let br = toDeg(Math.atan2(b[0] - a[0], b[1] - a[1]));
+    if (prevB !== null) { while (br - prevB > 180) br -= 360; while (br - prevB < -180) br += 360; }
+    prevB = br; raw.x.push(c[0]); raw.y.push(c[1]); raw.b.push(br); raw.z.push(z);
   }
+  const x = gauss(raw.x, .3 * FPS), y = gauss(raw.y, .3 * FPS), b = gauss(raw.b, .65 * FPS), z = gauss(raw.z, .3 * FPS);
+  // Close in, the view tilts like a navigation screen; higher up it tilts further to show the sky.
+  CAM = x.map((_, i) => ({ lon: unX(x[i]), lat: unY(y[i]), bearing: b[i], zoom: z[i], pitch: lerp(70, 58, smooth((z[i] - 12) / (Z_HL - 12))) }));
 }
 function camera(t) {
-  const s = shotAt(t), k = s.cam[clamp(Math.round((t - s.t0) * FPS), 0, s.cam.length - 1)], d = progress(t) * L, p = at(d);
-  const cam = { center: [k.lon, k.lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 820, shot: s };
+  const k = CAM[clamp(Math.round(t * FPS), 0, CAM.length - 1)], d = progress(t) * L, p = at(d);
+  const cam = { center: [k.lon, k.lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 860 };
   const o = ease((t - (T - OUTRO)) / 2.4);
   if (o > 0) {
     const db = ((OV.bearing - cam.bearing + 540) % 360) - 180;
     cam.center = [lerp(cam.center[0], OV.center[0], o), lerp(cam.center[1], OV.center[1], o)];
-    cam.zoom = lerp(cam.zoom, OV.zoom, smooth(o * 1.1)); cam.pitch = lerp(cam.pitch, OV.pitch, o); cam.bearing += db * o; cam.pad = lerp(820, 0, o);
+    cam.zoom = lerp(cam.zoom, OV.zoom, smooth(o * 1.1)); cam.pitch = lerp(cam.pitch, OV.pitch, o); cam.bearing += db * o; cam.pad = lerp(860, 0, o);
   }
   return { ...cam, d, p, o };
 }
@@ -162,8 +143,8 @@ function style() {
     version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources: {
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      dem: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 13 },
-      shade: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 13 },
+      dem: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
+      shade: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
       world: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
       all: { type: 'geojson', data: lineFC(null) },
       done: { type: 'geojson', data: lineFC(0) },
@@ -277,7 +258,8 @@ function applyLook(k, p) {
   set('lanes', 'line-opacity', lerp(.85, .35, k.night));
   set('buildings', 'fill-extrusion-color', ['match', ['%', ['to-number', ['coalesce', ['id'], 0]], 3], 0, tint(SURF.b1, k), 1, tint(SURF.b2, k), tint(SURF.b3, k)]);
   set('wood-tex', 'fill-opacity', lerp(.25, .85, 1 - k.night)); set('land-tex', 'fill-opacity', lerp(.15, .5, 1 - k.night));
-  set('glow', 'circle-opacity', ['match', ['get', 'class'], 'city', .45 * k.night, .3 * k.night]);
+  // Towns glow only when the camera is low; from high up they would look like a scatter of dots.
+  set('glow', 'circle-opacity', ['interpolate', ['linear'], ['zoom'], 10.5, ['match', ['get', 'class'], 'city', .4 * k.night, 0], 12.5, ['match', ['get', 'class'], 'city', .45 * k.night, .3 * k.night]]);
   map.setLayoutProperty('glow', 'visibility', k.night > .02 ? 'visible' : 'none');
   // The sun: hills shaded from where it really is, buildings casting shadows away from it.
   const up = clamp((k.el + 2) / 12), az = (p.sunAz + 360) % 360, len = clamp(16 / Math.tan(toRad(Math.max(k.el, 4))), 6, 70) * up * (1 - k.cl * .7);
@@ -383,7 +365,7 @@ function highlights(t, c, arrowAt) {
   for (const h of D.highlights) {
     if (c.d < h.d - 1 && end <= 0) continue;
     const q = map.project([h.lon, h.lat]); if (q.x < -50 || q.x > W + 50 || q.y < 0 || q.y > H + 50) continue;
-    const tb = timeAt(h.d) ?? t, since = t - tb, pop = clamp(since / .35);
+    const tb = timeAt(h.d), since = t - tb, pop = clamp(since / .35);
     // One dot for points that sit on top of each other.
     if (!dots.some(o => Math.hypot(o.x - q.x, o.y - q.y) < 22)) dots.push({ x: q.x, y: q.y, a: Math.max(pop, end), r: 8 + (1 - pop) * 10 });
     const live = clamp((since + .25) / .35) * (1 - clamp((since - 2.1) / .4));
@@ -398,12 +380,8 @@ function highlights(t, c, arrowAt) {
 }
 
 // ---------------- one frame ----------------
-const prevC = mk(), pv = prevC.getContext('2d');
-let lastShot = null, fadeFrom = -1;
-async function frame(t, warm, sequential) {
+async function frame(t, warm) {
   const c = camera(t), p = c.p, wx = weather(p.t), k = look(p, wx);
-  if (!warm && sequential && lastShot && c.shot !== lastShot && c.o <= 0) { pv.clearRect(0, 0, W, H); pv.drawImage(out, 0, 0); fadeFrom = c.shot.t0; }
-  if (!warm) lastShot = c.shot;
   map.jumpTo({ center: c.center, zoom: c.zoom, pitch: c.pitch, bearing: c.bearing, padding: { top: c.pad, bottom: 0, left: 0, right: 0 } });
   if (!warm) {
     applyLook(k, p); map.getSource('done').setData(lineFC(c.d));
@@ -482,17 +460,14 @@ function compose(t) {
   og.filter = 'saturate(1.12) contrast(1.04)'; og.drawImage(map.getCanvas(), 0, 0, W, H); og.filter = 'none';
   og.globalCompositeOperation = 'soft-light'; og.drawImage(grC, 0, 0);
   og.globalCompositeOperation = 'source-over'; og.drawImage(fxC, 0, 0);
-  // A soft fade from the last shot into this one.
-  const f = fadeFrom >= 0 ? 1 - (t - fadeFrom) / FADE : 0;
-  if (f > 0 && f <= 1) { og.globalAlpha = smooth(f); og.drawImage(prevC, 0, 0); og.globalAlpha = 1; }
 }
 
 
 // ---------------- encoding ----------------
 async function pickCodec() {
   if (typeof VideoEncoder === 'undefined') return null;
-  for (const [codec, kind] of [['avc1.640028', 'avc'], ['avc1.4d0028', 'avc'], ['avc1.42e028', 'avc'], ['vp09.00.40.08', 'vp9']]) {
-    const config = { codec, width: W, height: H, bitrate: 12_000_000, framerate: FPS, latencyMode: 'quality' };
+  for (const [codec, kind] of [['avc1.64002a', 'avc'], ['avc1.640028', 'avc'], ['avc1.4d002a', 'avc'], ['avc1.4d0028', 'avc'], ['avc1.42e02a', 'avc'], ['vp09.00.41.08', 'vp9']]) {
+    const config = { codec, width: W, height: H, bitrate: 20_000_000, framerate: FPS, latencyMode: 'quality' };
     if (kind === 'avc') config.avc = { format: 'avc' };
     try { const s = await VideoEncoder.isConfigSupported(config); if (s.supported) return { config, kind }; } catch (e) { /* try the next */ }
   }
@@ -502,6 +477,9 @@ function toBase64(bytes) {
   let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(s);
 }
+// Progress goes to the app a few times a second, not every frame.
+let lastReport = 0;
+function report(x, stage) { const now = performance.now(); if (now - lastReport > 150 || x >= 1) { lastReport = now; Android.progress(x, stage); } }
 async function run() {
   try {
     D = JSON.parse(Android.data());
@@ -514,7 +492,7 @@ async function run() {
     for (let i = 0; i < 280; i++) rain.push([rnd() * W, rnd() * H, rnd() * .6 + .7, rnd()]);
     CLOUD = noiseCanvas(512, 192);
     buildTiming();
-    map = new maplibregl.Map({ container: 'map', style: style(), center: [route[0].lon, route[0].lat], zoom: Z_SHOT, pitch: PITCH, maxPitch: 80, interactive: false, attributionControl: false,
+    map = new maplibregl.Map({ container: 'map', style: style(), center: [route[0].lon, route[0].lat], zoom: Z_HL, pitch: 60, maxPitch: 80, interactive: false, attributionControl: false,
       preserveDrawingBuffer: true, fadeDuration: 0, pixelRatio: 1, maxTileCacheSize: 1500 });
     await new Promise((res, rej) => { map.on('load', res); map.on('error', e => { if (!map.loaded()) rej(e.error || new Error('map')); }); });
     textures(); map.setTerrain({ source: 'dem', exaggeration: 1.5 });
@@ -522,10 +500,10 @@ async function run() {
     const ov = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 260, bottom: 500, left: 130, right: 130 }, bearing: 0 });
     OV = { center: [ov.center.lng, ov.center.lat], zoom: Math.min(ov.zoom, 15), pitch: 0, bearing: 0 };
     buildCamera();
-    if (D.stills) { for (const t of D.stills) { await frame(t, false, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
+    if (D.stills) { for (const t of (D.stills === 'highlights' ? D.highlights.map(h => timeAt(h.d) + .3) : D.stills)) { await frame(t, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
     const frames = Math.min(Math.round(T * FPS), D.limitFrames || Infinity);   // limitFrames: tests only
     // Fetch the map along the way first, so drawing never waits mid-shot.
-    for (let f = 0; f < frames; f += 6) { await frame(f / FPS, true, false); Android.progress(.25 * f / frames, 'map'); }
+    for (let f = 0; f < frames; f += 12) { await frame(f / FPS, true); report(.2 * f / frames, 'map'); }
     const muxer = new Mp4Muxer.Muxer({
       target: new Mp4Muxer.StreamTarget({ onData: (data, position) => Android.chunk(toBase64(data), position), chunked: true, chunkSize: 2 ** 20 }),
       video: { codec: codec.kind, width: W, height: H, frameRate: FPS }, fastStart: false, firstTimestampBehavior: 'offset',
@@ -535,11 +513,11 @@ async function run() {
     enc.configure(codec.config);
     for (let f = 0; f < frames; f++) {
       if (failed) throw failed;
-      await frame(f / FPS, false, true);
+      await frame(f / FPS, false);
       const vf = new VideoFrame(out, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
       enc.encode(vf, { keyFrame: f % (FPS * 2) === 0 }); vf.close();
       while (enc.encodeQueueSize > 2) await sleep(4);
-      Android.progress(.25 + .75 * (f + 1) / frames, 'video');
+      report(.2 + .8 * (f + 1) / frames, 'video');
     }
     await enc.flush(); if (failed) throw failed;
     muxer.finalize();

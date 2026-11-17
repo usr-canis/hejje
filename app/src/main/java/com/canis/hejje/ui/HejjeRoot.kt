@@ -87,6 +87,7 @@ import com.canis.hejje.data.toPlace
 import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalContainer
+import com.canis.hejje.ui.replay.ReplayHost
 import com.canis.hejje.ui.replay.ReplayScreen
 import com.canis.hejje.ui.components.LocalUndo
 import com.canis.hejje.ui.components.UndoHost
@@ -209,13 +210,13 @@ object Routes {
  * @param openTripId a trip to open straight away (from the summary notification)
  */
 @Composable
-fun HejjeRoot(container: AppContainer, openTripId: Long?, onTripOpened: () -> Unit) {
+fun HejjeRoot(container: AppContainer, openTripId: Long?, openReplay: Boolean = false, onTripOpened: () -> Unit) {
     val settings by container.settings.data.collectAsStateWithLifecycle()
     HejjeTheme(settings.theme) {
         CompositionLocalProvider(LocalContainer provides container) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Box {
-                    if (settings.onboardingDone) MainScaffold(container, openTripId, onTripOpened) else OnboardingScreen()
+                    if (settings.onboardingDone) MainScaffold(container, openTripId, openReplay, onTripOpened) else OnboardingScreen()
                     BrandSplash()
                 }
             }
@@ -289,7 +290,7 @@ private fun AnimatedContentScope.ScreenBackground(content: @Composable () -> Uni
 }
 
 @Composable
-private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpened: () -> Unit) {
+private fun MainScaffold(container: AppContainer, openTripId: Long?, openReplay: Boolean, onTripOpened: () -> Unit) {
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -304,6 +305,7 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
     LaunchedEffect(openTripId) {
         if (openTripId != null) {
             nav.navigate(Routes.trip(openTripId)) { launchSingleTop = true }
+            if (openReplay) nav.navigate(Routes.replay(openTripId)) { launchSingleTop = true }
             onTripOpened()
         }
     }
@@ -325,6 +327,8 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
             },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+                // Makes replay videos out of sight, behind every screen, while the app is open.
+                ReplayHost(container.replays)
                 NavHost(
                     nav, startDestination = Routes.TRIPS,
                     enterTransition = { back.active = false; if (isTabSwitch()) NavMotion.tabEnter else NavMotion.forwardEnter },

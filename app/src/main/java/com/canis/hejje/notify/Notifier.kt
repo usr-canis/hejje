@@ -42,6 +42,9 @@ class Notifier(private val context: Context) {
             NotificationChannel(CH_FOOD, context.getString(R.string.channel_food), NotificationManager.IMPORTANCE_HIGH),
         )
         nm.createNotificationChannel(
+            NotificationChannel(CH_REPLAY, context.getString(R.string.channel_replay), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        nm.createNotificationChannel(
             NotificationChannel(CH_FOOD_FEEDBACK, context.getString(R.string.channel_food_feedback), NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
@@ -167,6 +170,47 @@ class Notifier(private val context: Context) {
         notify(ID_SUMMARY, n)
     }
 
+    /** A replay video being made: progress, or paused while the app is in the background. */
+    fun replayProgress(percent: Int, paused: Boolean, tripId: Long) {
+        if (!canPost()) return
+        val n = NotificationCompat.Builder(context, CH_REPLAY)
+            .setSmallIcon(R.drawable.ic_stat_hejje)
+            .setColor(ContextCompat.getColor(context, R.color.accent))
+            .setContentTitle(context.getString(if (paused) R.string.replay_notif_paused else R.string.replay_notif_making))
+            .setContentText(context.getString(if (paused) R.string.replay_notif_paused_text else R.string.replay_notif_percent, percent))
+            .setProgress(100, percent.coerceIn(0, 100), false)
+            .setOngoing(!paused)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(open({ putExtra(EXTRA_TRIP_ID, tripId); putExtra(EXTRA_OPEN_REPLAY, true) }, requestCode = 5))
+            .build()
+        notify(ID_REPLAY, n)
+    }
+
+    /** The replay is saved: a tap plays it. */
+    fun replayDone(saved: android.net.Uri?, tripId: Long) {
+        if (!canPost()) return
+        val tap = if (saved != null) {
+            PendingIntent.getActivity(
+                context, 6, Intent(Intent.ACTION_VIEW).setDataAndType(saved, "video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            open({ putExtra(EXTRA_TRIP_ID, tripId); putExtra(EXTRA_OPEN_REPLAY, true) }, requestCode = 6)
+        }
+        val n = NotificationCompat.Builder(context, CH_REPLAY)
+            .setSmallIcon(R.drawable.ic_stat_hejje)
+            .setColor(ContextCompat.getColor(context, R.color.accent))
+            .setContentTitle(context.getString(R.string.replay_notif_done))
+            .setContentText(context.getString(if (saved != null) R.string.replay_saved else R.string.replay_done))
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        notify(ID_REPLAY, n)
+    }
+
+    fun cancelReplay() = manager.cancel(ID_REPLAY)
+
     /** Location is off as a drive starts: one tap shows Android's "Turn on location?" dialog. */
     fun locationTurnOn() {
         val intent = Intent(context, com.canis.hejje.recording.LocationPromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -229,6 +273,9 @@ class Notifier(private val context: Context) {
         const val ID_RECORDING = 1
         const val ID_SUMMARY = 2
         const val ID_LOCATION = 4
+        const val ID_REPLAY = 7
+        const val CH_REPLAY = "replay"
+        const val EXTRA_OPEN_REPLAY = "open_replay"
         private const val ID_FOOD = 1_000
         private const val ID_FOOD_FEEDBACK = 500_000
         const val EXTRA_TRIP_ID = "trip_id"

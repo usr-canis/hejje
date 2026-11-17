@@ -23,13 +23,16 @@ import kotlin.math.roundToInt
 
 /** Gathers what the replay page draws: the visible route, highlights, the weather and the total. */
 object ReplayData {
+    /** The page's data, and the route's shape (x, y pairs in 0..1) for the progress screen. */
+    class Prepared(val json: String, val outline: FloatArray, val title: String)
+
     /** The JSON the page reads, or null when the trip has no route to show. */
     suspend fun build(
         context: Context,
         container: AppContainer,
         tripId: Long,
         weatherOf: suspend (List<Replay.Pt>) -> List<Weather.Hour>? = { Weather.hourly(container.http, it) },
-    ): String? = withContext(Dispatchers.Default) {
+    ): Prepared? = withContext(Dispatchers.Default) {
         val trip = container.trips.trip(tripId) ?: return@withContext null
         val segments = container.trips.segments(tripId)
         if (segments.isEmpty()) return@withContext null
@@ -68,7 +71,27 @@ object ReplayData {
             putJsonObject("total") { put("key", context.getString(R.string.replay_total)); put("value", f.distance(trip.distanceM)) }
             put("brand", context.getString(R.string.brand_name))
             put("credit", context.getString(R.string.replay_credit))
-        }.toString()
+        }.toString().let {
+            val zone = java.time.ZoneId.systemDefault()
+            val day = f.dayLabel(com.canis.hejje.domain.Insights.dayOf(trip.startTime, zone), java.time.LocalDate.now(zone))
+            Prepared(it, outline(pts), "$day · ${f.distance(trip.distanceM)}")
+        }
+    }
+
+    /** The route drawn small: up to 400 points, fitted into a unit square, north up. */
+    fun outline(pts: List<Replay.Pt>): FloatArray {
+        if (pts.size < 2) return FloatArray(0)
+        val step = maxOf(1, pts.size / 400)
+        val kept = pts.filterIndexed { i, _ -> i % step == 0 || i == pts.lastIndex }
+        val cos = Math.cos(Math.toRadians(kept.map { it.lat }.average()))
+        val xs = kept.map { it.lon * cos }
+        val ys = kept.map { -it.lat }
+        val span = maxOf(xs.max() - xs.min(), ys.max() - ys.min(), 1e-9)
+        val ox = (xs.min() + xs.max()) / 2
+        val oy = (ys.min() + ys.max()) / 2
+        val out = FloatArray(kept.size * 2)
+        for (i in kept.indices) { out[2 * i] = (.5 + (xs[i] - ox) / span).toFloat().coerceIn(0f, 1f); out[2 * i + 1] = (.5 + (ys[i] - oy) / span).toFloat().coerceIn(0f, 1f) }
+        return out
     }
 
     private fun keyOf(kind: Replay.Kind) = when (kind) {

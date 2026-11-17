@@ -25,7 +25,9 @@ class ReplayDataTest {
         val sim = DriveSim(t = System.currentTimeMillis() - 3_600_000, lat = 12.95, lon = 77.6).apply { heading = 20.0 }
         sim.drive(300, 14f).drive(200, 30f, climbPerSec = .6f).drive(120, 6f).drive(20, 0f, accel = 1.5f)
         val id = app.container.trips.insertTrip("r1", listOf(sim.segment()), "", null, null, emptyList())
-        val json = ReplayData.build(app, app.container, id, weatherOf = { null })!!
+        val prepared = ReplayData.build(app, app.container, id, weatherOf = { null })!!
+        val json = prepared.json
+        assertTrue(prepared.outline.size >= 4 && prepared.outline.all { it in 0f..1f })
         val root = Json.parseToJsonElement(json).jsonObject
         val route = root["route"]!!.jsonArray
         assertTrue("points ${route.size}", route.size > 50)
