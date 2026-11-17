@@ -539,7 +539,7 @@
     <string name="replay_ready">Your replay is ready</string>
     <string name="replay_stage_preparing">Reading your trip</string>
     <string name="replay_stage_map">Building the landscape</string>
-    <string name="replay_stage_video">Filming at 60 fps</string>
+    <string name="replay_stage_video">Filming your drive</string>
     <string name="replay_stage_saving">Saving to your gallery</string>
     <string name="replay_stage_paused">Paused while Hejje is in the background</string>
     <string name="replay_left_soon">Working out the time left…</string>

@@ -50,7 +50,7 @@
 
 **Replay video**
 - Turn any trip into a short vertical video, made on your phone: a close, 3D view of your route over real hills, fields, lakes and towns, with the real sky of that hour (night, sunrise, sunset) and the real weather.
-- The camera stays close to the road; long trips hop between the moments that matter with a soft fade, so a short hop takes a few seconds and a long road trip about twenty.
+- One continuous shot from just behind the arrow, like a navigation view: calm through each highlight, dawn or dusk (the camera looks up at the sky) and the start of rain, a smooth hyperlapse in between. A short hop takes about ten seconds, a long road trip up to 45.
 - Share it or save it to your gallery. Private places are cut out, as in share cards.
 
 **Home-screen widget**
