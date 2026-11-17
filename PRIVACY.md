@@ -40,8 +40,8 @@ The app uses the internet for these things only:
    where a trip started and ended. The app sends the coordinates of those points. This can be
    switched off in Settings ("Look up place names").
 3. **Replay videos**, only when you tap "Make replay video" on a trip. The video is made on your
-   phone. To draw it, the app downloads satellite imagery of the route's area from
-   [EOX](https://s2maps.eu) and map tiles from OpenFreeMap, and asks
+   phone. To draw it, the app downloads map tiles of the route's area from OpenFreeMap and terrain
+   heights from the [Mapzen terrain tiles on AWS Open Data](https://registry.opendata.aws/terrain-tiles/), and asks
    [Open-Meteo](https://open-meteo.com) for that trip's weather: it sends the date and the car's
    rough position each hour, rounded to about 10 km. The finished video stays on your phone
    until you share or save it. Private places are cut out of the video's route, as in share cards.
@@ -49,7 +49,7 @@ The app uses the internet for these things only:
 These services have their own privacy policies:
 [OpenFreeMap](https://openfreemap.org/privacy/),
 [OpenStreetMap Foundation](https://osmfoundation.org/wiki/Privacy_Policy),
-[EOX](https://eox.at/privacy-policy/) and [Open-Meteo](https://open-meteo.com/en/terms#privacy).
+[Amazon Web Services](https://aws.amazon.com/privacy/) and [Open-Meteo](https://open-meteo.com/en/terms#privacy).
 
 Nothing else is sent anywhere. The app does not contain analytics, crash-reporting or advertising
 code.

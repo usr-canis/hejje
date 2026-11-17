@@ -1,5 +1,5 @@
-// Hejje replay video: draws the trip over satellite imagery with its real sky and weather, and
-// encodes it with the phone's video encoder. Data comes from the app (Android.data()); the
+// Hejje replay video: draws the trip over a 3D landscape built from map and terrain data, with its
+// real sky and weather, and encodes it with the phone's video encoder. Data comes from the app (Android.data()); the
 // finished MP4 goes back in pieces (Android.chunk). Every frame is a function of time alone.
 'use strict';
 const W = 1080, H = 1920, FPS = 30;
@@ -26,7 +26,7 @@ function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.styl
 addEventListener('resize', fit); fit();
 
 // ---------------- trip ----------------
-let D, route, L, map, stars = [], rain = [], CLOUD, beats, T, INTRO = .4, END_HOLD = .35, OUTRO = 3.3;
+let D, route, L, map, stars = [], rain = [], CLOUD;
 function at(d) {
   let lo = 0, hi = route.length - 1; d = clamp(d, 0, L);
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (route[m].d <= d) lo = m; else hi = m; }
@@ -41,51 +41,71 @@ function weather(ts) {
   return { known: true, cloud: lerp(a.cloud, b.cloud, f), rain: lerp(a.rain, b.rain, f), vis: lerp(a.vis, b.vis, f), code: f < .5 ? a.code : b.code };
 }
 
-// ---------------- timing: as short as the story allows, never rushed ----------------
-// The ground slides past at a steady, gentle speed on screen. Long empty stretches go by with the
-// camera higher up; the start, each highlight, sunrise or sunset and the arrival get the camera low.
-const Z_CLOSE = 13.3, Z_FAR = 9.1, S_CLOSE = 125, S_FAR = 220;
-let vClose, vFar, TT;
+// ---------------- timing: close-up shots of the moments that matter ----------------
+// The camera stays low over the road. A short trip is one continuous shot. A long one is a few
+// shots, each around a moment (the start, a highlight, sunrise or sunset, the arrival), joined by a
+// soft fade while the route line keeps drawing. The video is as short as the story allows.
+const Z_SHOT = 15.9, PITCH = 72, SPEED_PX = 150, FADE = .45;
+let vClose, SHOTS, OV;
 function buildTiming() {
   const cos = Math.cos(toRad(route[0].lat));
-  vClose = 156543 * cos * S_CLOSE / Math.pow(2, Z_CLOSE);
-  vFar = Math.max(vClose * 1.01, 156543 * cos * S_FAR / Math.pow(2, Z_FAR));
+  vClose = 156543 * cos * SPEED_PX / Math.pow(2, Z_SHOT);              // metres a second along the road
   const merge = Math.max(1500, L * .04), groups = [];
   for (const h of D.highlights.slice().sort((a, b) => a.d - b.d)) {
     const g = groups[groups.length - 1];
     if (g && h.d - g.d1 <= merge) { g.items.push(h); g.d1 = h.d; } else groups.push({ d0: h.d, d1: h.d, items: [h] });
   }
-  beats = [{ d: 0, span: 0, hold: .6, items: [] }];
-  for (const g of groups) beats.push({ d: (g.d0 + g.d1) / 2, span: g.d1 - g.d0, items: g.items,
-    hold: 1.05 + .3 * (g.items.length - 1) + (g.items.some(i => i.kind === 'SUNRISE' || i.kind === 'SUNSET') ? .6 : 0) });
-  beats.push({ d: L, span: 0, hold: .45, items: [] });
-  // Ground speed along the route: slow (camera low) around each beat, fast (camera high) between.
-  // Away from a beat the speed grows exponentially with distance, so the camera climbs (and later
-  // comes down) in about half a second whatever the distance; between beats it cruises high.
-  const N = 8000, lv = [], lnC = Math.log(vClose), lnF = Math.log(vFar), lambda = vClose * .42;
-  for (let i = 0; i <= N; i++) {
-    const d = L * i / N; let lnv = lnF;
-    for (const b of beats) {
-      const core = vClose * b.hold / 2 + b.span / 2, x = Math.abs(d - b.d);
-      lnv = Math.min(lnv, x <= core ? lnC : lnC + (x - core) / lambda);
-    }
-    let v = Math.exp(lnv);
-    v *= lerp(.35, 1, smooth(d / (vClose * .5))) * lerp(.35, 1, smooth((L - d) / (vClose * .5)));   // set off and arrive gently
-    lv.push(v);
+  const moments = [{ d: 0, secs: 2.2, items: [], start: true }];
+  for (const g of groups) moments.push({ d: (g.d0 + g.d1) / 2, items: g.items,
+    secs: 2.6 + .4 * (g.items.length - 1) + (g.items.some(i => i.kind === 'SUNRISE' || i.kind === 'SUNSET') ? .8 : 0) });
+  moments.push({ d: L, secs: 2.2, items: [], end: true });
+  // Each moment's stretch of road; stretches that nearly touch become one continuous shot.
+  let shots = moments.map(m => {
+    const span = vClose * m.secs;
+    const d0 = m.start ? 0 : m.end ? Math.max(0, L - span) : Math.max(0, m.d - span / 2);
+    return { d0, d1: Math.min(L, d0 + span), moments: [m] };
+  });
+  if (L / vClose <= 12) shots = [{ d0: 0, d1: L, moments }];
+  const joined = [];
+  for (const s of shots) {
+    const last = joined[joined.length - 1];
+    if (last && s.d0 - last.d1 <= vClose * 1.4) { last.d1 = Math.max(last.d1, s.d1); last.moments.push(...s.moments); } else joined.push({ ...s, moments: [...s.moments] });
   }
-  const tcum = [0]; for (let i = 1; i <= N; i++) tcum.push(tcum[i - 1] + (L / N) * 2 / (lv[i] + lv[i - 1]));
-  TT = { N, tcum, total: tcum[N] };
-  T = INTRO + TT.total + END_HOLD + OUTRO;
+  // Within a shot the road goes by steadily, lingering a little at each moment.
+  let t = .3;
+  SHOTS = joined.map(s => {
+    const N = 600, lv = [];
+    for (let i = 0; i <= N; i++) {
+      const d = lerp(s.d0, s.d1, i / N); let k = 1;
+      for (const m of s.moments) if (!m.start && !m.end) k -= .45 * Math.exp(-Math.pow((d - m.d) / (vClose * .7), 2));
+      lv.push(vClose * k);
+    }
+    const tc = [0]; for (let i = 1; i <= N; i++) tc.push(tc[i - 1] + ((s.d1 - s.d0) / N) * 2 / (lv[i] + lv[i - 1]));
+    const shot = { ...s, t0: t, dur: Math.max(tc[N], .8), tc, N };
+    t += shot.dur;
+    return shot;
+  });
+  T = t + OUTRO;
+}
+const OUTRO = 3.4;
+let T;
+function shotAt(t) {
+  let i = 0; while (i < SHOTS.length - 1 && t >= SHOTS[i + 1].t0) i++;
+  return SHOTS[i];
 }
 function progress(t) {
-  const u = t - INTRO; if (u <= 0) return 0; if (u >= TT.total) return 1;
-  const c = TT.tcum; let lo = 0, hi = TT.N;
+  if (t >= SHOTS[SHOTS.length - 1].t0 + SHOTS[SHOTS.length - 1].dur) return 1;
+  const s = shotAt(t), u = clamp(t - s.t0, 0, s.dur), c = s.tc; let lo = 0, hi = s.N;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= u) lo = m; else hi = m; }
-  return (lo + (u - c[lo]) / (c[hi] - c[lo])) / TT.N;
+  const f = c[hi] > c[lo] ? (u - c[lo]) / (c[hi] - c[lo]) : 0;
+  return lerp(s.d0, s.d1, (lo + f) / s.N) / L;
 }
-function timeAt(d) { const i = clamp(Math.round(d / L * TT.N), 0, TT.N); return INTRO + TT.tcum[i]; }
+function timeAt(d) {
+  for (const s of SHOTS) if (d >= s.d0 - 1 && d <= s.d1 + 1) { const i = clamp(Math.round((d - s.d0) / (s.d1 - s.d0 || 1) * s.N), 0, s.N); return s.t0 + s.tc[i]; }
+  return null;
+}
 
-// ---------------- camera: planned for the whole video, then smoothed like a gimbal ----------------
+// ---------------- camera: planned for each shot, then smoothed like a gimbal ----------------
 const mercX = lon => lon * 20037508.34 / 180, mercY = lat => Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 6378137;
 const unX = x => x * 180 / 20037508.34, unY = y => 360 / Math.PI * Math.atan(Math.exp(y / 6378137)) - 90;
 function smoothPt(d, r) { let x = 0, y = 0; for (let j = -4; j <= 4; j++) { const p = at(d + j * r / 4); x += mercX(p.lon); y += mercY(p.lat); } return [x / 9, y / 9]; }
@@ -94,68 +114,111 @@ function gauss(arr, sigma) {
   for (let i = 0; i < n; i++) { let s = 0, w = 0; for (let j = -r; j <= r; j++) { const k = clamp(i + j, 0, n - 1), q = Math.exp(-j * j / (2 * sigma * sigma)); s += arr[k] * q; w += q; } res.push(s / w); }
   return res;
 }
-let CAM, OV;
 function buildCamera() {
-  const N = Math.round(T * FPS) + 1, cos = Math.cos(toRad(route[0].lat)), raw = { x: [], y: [], b: [], z: [] };
-  const ds = []; for (let i = 0; i < N; i++) ds.push(progress(i / FPS) * L);
-  const lnC = Math.log(vClose), lnF = Math.log(vFar);
-  let prevB = null;
-  for (let i = 0; i < N; i++) {
-    const v = Math.max(1, (ds[Math.min(i + 1, N - 1)] - ds[Math.max(i - 1, 0)]) * FPS / 2);
-    const z = clamp(lerp(Z_FAR, Z_CLOSE, (Math.log(v) - lnF) / (lnC - lnF)), Z_FAR, Z_CLOSE + .3), mpp = 156543 * cos / Math.pow(2, z);
-    const c = smoothPt(ds[i], clamp(mpp * 120, 120, 6000)), K = clamp(mpp * 320, 250, 15000);
-    const a = smoothPt(ds[i] - K, K / 2), b = smoothPt(ds[i] + K, K / 2);
-    let br = toDeg(Math.atan2(b[0] - a[0], b[1] - a[1]));
-    if (prevB !== null) { while (br - prevB > 180) br -= 360; while (br - prevB < -180) br += 360; }
-    prevB = br; raw.x.push(c[0]); raw.y.push(c[1]); raw.b.push(br); raw.z.push(z);
+  const mpp = 156543 * Math.cos(toRad(route[0].lat)) / Math.pow(2, Z_SHOT);
+  for (const s of SHOTS) {
+    const n = Math.max(2, Math.round(s.dur * FPS) + 1), raw = { x: [], y: [], b: [] };
+    let prevB = null;
+    for (let i = 0; i < n; i++) {
+      const d = progress(s.t0 + i / FPS) * L;
+      const c = smoothPt(d, mpp * 60), K = mpp * 260, a = smoothPt(d - K, K / 2), b = smoothPt(d + K, K / 2);
+      let br = toDeg(Math.atan2(b[0] - a[0], b[1] - a[1]));
+      if (prevB !== null) { while (br - prevB > 180) br -= 360; while (br - prevB < -180) br += 360; }
+      prevB = br; raw.x.push(c[0]); raw.y.push(c[1]); raw.b.push(br);
+    }
+    const x = gauss(raw.x, .35 * FPS), y = gauss(raw.y, .35 * FPS), b = gauss(raw.b, .7 * FPS);
+    // Each shot opens a touch wider and settles in close.
+    s.cam = x.map((_, i) => ({ lon: unX(x[i]), lat: unY(y[i]), bearing: b[i], zoom: Z_SHOT - .55 * (1 - smooth(i / FPS / 1.1)), pitch: PITCH }));
   }
-  const x = gauss(raw.x, .45 * FPS), y = gauss(raw.y, .45 * FPS), b = gauss(raw.b, .8 * FPS), z = gauss(raw.z, .6 * FPS);
-  CAM = x.map((_, i) => ({ lon: unX(x[i]), lat: unY(y[i]), bearing: b[i], zoom: z[i], pitch: lerp(69, 73, clamp((z[i] - Z_FAR) / (Z_CLOSE - Z_FAR))) }));
 }
 function camera(t) {
-  const k = CAM[clamp(Math.round(t * FPS), 0, CAM.length - 1)], d = progress(t) * L, p = at(d);
-  const cam = { center: [k.lon, k.lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 760 };
+  const s = shotAt(t), k = s.cam[clamp(Math.round((t - s.t0) * FPS), 0, s.cam.length - 1)], d = progress(t) * L, p = at(d);
+  const cam = { center: [k.lon, k.lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 820, shot: s };
   const o = ease((t - (T - OUTRO)) / 2.4);
   if (o > 0) {
     const db = ((OV.bearing - cam.bearing + 540) % 360) - 180;
     cam.center = [lerp(cam.center[0], OV.center[0], o), lerp(cam.center[1], OV.center[1], o)];
-    cam.zoom = lerp(cam.zoom, OV.zoom, smooth(o * 1.1)); cam.pitch = lerp(cam.pitch, OV.pitch, o); cam.bearing += db * o; cam.pad = lerp(760, 0, o);
+    cam.zoom = lerp(cam.zoom, OV.zoom, smooth(o * 1.1)); cam.pitch = lerp(cam.pitch, OV.pitch, o); cam.bearing += db * o; cam.pad = lerp(820, 0, o);
   }
   return { ...cam, d, p, o };
 }
 
-// ---------------- map: satellite, a hint of roads, warm town glow at night, few names ----------------
-const EOX = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg';
+// ---------------- the land, built from map data ----------------
+// Heights from terrain tiles (real hills), shaded by the real sun; fields, woods, water, towns and
+// roads from OpenStreetMap; 3D buildings with sun-cast shadows in towns.
+const DEM = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+// Daylight colours. Night, dawn and dusk are mixed from these.
+const SURF = { land: '#a8c27c', farm: '#b9cd86', grass: '#99c46a', wood: '#5b974b', park: '#88c264', urban: '#e1dacb', water: '#3d95d4',
+  sand: '#e6d7a6', curb: '#ece8de', road: '#5e646b', minor: '#8b9096', b1: '#efe6d5', b2: '#d9a98b', b3: '#f3f0ea' };
 function style() {
   const name = ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name:latin'], ['get', 'name']];
-  const label = (id, cls, minzoom) => ({
-    id, type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom, filter: ['==', ['get', 'class'], cls],
-    layout: { 'text-field': name, 'text-font': ['Noto Sans Regular'], 'text-size': cls === 'city' ? 30 : 23, 'text-letter-spacing': .06, 'text-max-width': 8, 'text-allow-overlap': true, 'text-ignore-placement': true },
-    paint: { 'text-color': '#ffffff', 'text-opacity': .78, 'text-halo-color': 'rgba(0,0,0,.55)', 'text-halo-width': 1.6, 'text-halo-blur': 1.4 },
-  });
+  const cls = (...c) => ['in', ['get', 'class'], ['literal', c]];
+  const w = (z0, w0, z1, w1) => ['interpolate', ['exponential', 1.7], ['zoom'], z0, w0, z1, w1];
+  const major = cls('motorway', 'trunk', 'primary', 'secondary');
+  const label = (id, c, minzoom) => ({ id, type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom, filter: ['==', ['get', 'class'], c],
+    layout: { 'text-field': name, 'text-font': ['Noto Sans Regular'], 'text-size': c === 'city' ? 32 : 26, 'text-letter-spacing': .06, 'text-max-width': 8, 'text-allow-overlap': true, 'text-ignore-placement': true },
+    paint: { 'text-color': '#ffffff', 'text-opacity': .9, 'text-halo-color': 'rgba(0,0,0,.45)', 'text-halo-width': 1.8, 'text-halo-blur': 1.2 } });
   return {
     version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources: {
-      satlo: { type: 'raster', tiles: [EOX], tileSize: 256, maxzoom: 8 },
-      sat: { type: 'raster', tiles: [EOX], tileSize: 256, maxzoom: 14 },
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+      dem: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 13 },
+      shade: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 13 },
+      world: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
       all: { type: 'geojson', data: lineFC(null) },
       done: { type: 'geojson', data: lineFC(0) },
     },
     layers: [
-      { id: 'satlo', type: 'raster', source: 'satlo', paint: { 'raster-fade-duration': 0 } },
-      { id: 'sat', type: 'raster', source: 'sat', paint: { 'raster-fade-duration': 0 } },
-      { id: 'glow', type: 'circle', source: 'omt', 'source-layer': 'place', filter: ['in', ['get', 'class'], ['literal', ['city', 'town']]], layout: { visibility: 'none' },
+      { id: 'bg', type: 'background', paint: { 'background-color': '#cfd6dc' } },
+      { id: 'land', type: 'fill', source: 'world', paint: { 'fill-color': SURF.land, 'fill-antialias': false } },
+      { id: 'land-tex', type: 'fill', source: 'world', paint: { 'fill-pattern': 'speckle', 'fill-opacity': .5, 'fill-antialias': false } },
+      { id: 'farm', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: cls('farmland'), paint: { 'fill-color': SURF.farm } },
+      { id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: cls('grass', 'scrub'), paint: { 'fill-color': SURF.grass } },
+      { id: 'sand', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: cls('sand', 'bare_rock', 'rock'), paint: { 'fill-color': SURF.sand } },
+      { id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: cls('wood', 'forest'), paint: { 'fill-color': SURF.wood } },
+      { id: 'wood-tex', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: cls('wood', 'forest'), paint: { 'fill-pattern': 'canopy', 'fill-opacity': .85 } },
+      { id: 'urban', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: cls('residential', 'commercial', 'industrial', 'retail', 'suburb', 'neighbourhood'), paint: { 'fill-color': SURF.urban, 'fill-opacity': .92 } },
+      { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': SURF.park } },
+      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': SURF.water } },
+      { id: 'river', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 10, paint: { 'line-color': SURF.water, 'line-width': w(10, .8, 17, 10) } },
+      { id: 'hills', type: 'hillshade', source: 'shade', paint: { 'hillshade-illumination-anchor': 'map', 'hillshade-exaggeration': .6, 'hillshade-shadow-color': '#2a2418', 'hillshade-highlight-color': '#fff6e2', 'hillshade-accent-color': '#3c3324' } },
+      { id: 'glow', type: 'circle', source: 'omt', 'source-layer': 'place', filter: cls('city', 'town'), layout: { visibility: 'none' },
         paint: { 'circle-color': '#ffb066', 'circle-blur': 1, 'circle-opacity': 0, 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map',
           'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 6, ['match', ['get', 'class'], 'city', 22, 4], 13, ['match', ['get', 'class'], 'city', 2800, 520]] } },
-      { id: 'roads', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]],
-        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffb46b', 'line-opacity': .3, 'line-blur': 1.5, 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 7, .8, 14, 5] } },
-      { id: 'route-all', type: 'line', source: 'all', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-opacity': .22, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 14, 5] } },
-      { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff9a4d', 'line-opacity': .45, 'line-blur': 10, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 16, 14, 26] } },
-      { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffb070', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 14, 7] } },
-      label('city', 'city', 0), label('town', 'town', 12.4),
+      { id: 'minor', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 12.5, filter: cls('tertiary', 'minor', 'service'), layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': SURF.minor, 'line-width': w(12.5, .8, 17, 11) } },
+      { id: 'curb', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 8, filter: major, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': SURF.curb, 'line-width': w(8, 1.4, 17, 34) } },
+      { id: 'road', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 8, filter: major, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': SURF.road, 'line-width': w(8, 1, 17, 28) } },
+      { id: 'lanes', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 14, filter: major, layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-opacity': .85, 'line-dasharray': [3, 3], 'line-width': w(14, .4, 17, 1.6) } },
+      { id: 'bshadow', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: { 'fill-color': '#141820', 'fill-opacity': .26, 'fill-translate-anchor': 'map', 'fill-translate': [0, 0] } },
+      { id: 'buildings', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14,
+        paint: { 'fill-extrusion-color': SURF.b1, 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6], 'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0], 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': true } },
+      { id: 'route-all', type: 'line', source: 'all', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-opacity': .4, 'line-width': w(9, 2, 17, 9) } },
+      { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff8a3d', 'line-opacity': .42, 'line-blur': 8, 'line-width': w(9, 9, 17, 30) } },
+      { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff7a26', 'line-width': w(9, 3.5, 17, 10) } },
+      label('city', 'city', 0), label('town', 'town', 11.5),
     ],
   };
+}
+// Small tileable textures, drawn once: tree crowns for woods, a fine speckle for open land.
+function textures() {
+  const make = (size, paint) => { const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); paint(g, size); return g.getImageData(0, 0, size, size); };
+  const canopy = make(96, (g, s) => {
+    for (let i = 0; i < 70; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 3 + rnd() * 5;
+      for (const [ox, oy] of [[0, 0], [s, 0], [-s, 0], [0, s], [0, -s]]) {
+        g.fillStyle = `rgba(24,58,22,${.35 + rnd() * .25})`; g.beginPath(); g.arc(x + ox + 1.5, y + oy + 1.5, r, 0, 7); g.fill();
+        g.fillStyle = `rgba(${110 + rnd() * 40},${160 + rnd() * 40},${80 + rnd() * 30},${.35 + rnd() * .2})`; g.beginPath(); g.arc(x + ox - 1, y + oy - 1, r * .7, 0, 7); g.fill();
+      }
+    }
+  });
+  const speckle = make(64, (g, s) => {
+    for (let i = 0; i < 260; i++) { const x = rnd() * s, y = rnd() * s; g.fillStyle = rnd() < .5 ? `rgba(40,70,20,${.08 + rnd() * .1})` : `rgba(255,250,210,${.06 + rnd() * .08})`; g.fillRect(x, y, 1 + rnd() * 2, 1 + rnd() * 2); }
+  });
+  map.addImage('canopy', canopy); map.addImage('speckle', speckle);
 }
 function lineFC(upto) {
   const lines = []; let cur = [], piece = route[0].piece;
@@ -178,7 +241,7 @@ function noiseCanvas(w, h) {
 }
 function waitMap() {
   return new Promise(res => {
-    const done = () => map.loaded() && map.areTilesLoaded();
+    const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded());
     const f = () => { if (done()) { map.off('render', f); clearTimeout(to); res(); } };
     const to = setTimeout(() => { map.off('render', f); res(); }, 20000);
     map.on('render', f); map.triggerRepaint();
@@ -190,19 +253,44 @@ function look(p, wx) {
   const el = p.sunEl, day = smooth((el - 1) / 10), tw = clamp(1 - Math.abs(el - .5) / 8.5), night = 1 - smooth((el + 9) / 8), cl = wx.cloud / 100;
   return { el, day, tw, night, cl, known: wx.known, golden: tw * (1 - cl * .65), rain: clamp(wx.rain / 1.5) + (wx.code >= 51 && wx.code <= 67 ? .25 : 0), fog: clamp((9000 - wx.vis) / 8000) };
 }
+// A day colour as it looks at that hour: deep blue night, warm dawn and dusk; cloud mutes it a little.
+function tint(dayHex, k) {
+  const d = hex(dayHex), g = (d[0] + d[1] + d[2]) / 3;
+  const night = mix(mix(d, [g, g, g], .45).map(v => v * .22), [12, 20, 38], .4);
+  const dusk = mix(d, [240, 160, 115], .28).map(v => v * .82);
+  let c = k.day > 0 ? mix(dusk, d, k.day) : mix(night, dusk, smooth((k.el + 9) / 9));
+  const gg = (c[0] + c[1] + c[2]) / 3; c = mix(c, [gg, gg, gg], k.cl * .18).map(v => v * (1 - k.cl * .08));
+  return css(c.map(Math.round));
+}
+function skyColors(k) {
+  const top = mix(mix(mix(hex('#02040a'), hex('#1b2850'), 1 - k.night), hex('#4a8bd0'), k.day), mix(hex('#121318'), hex('#a3adb7'), k.day), k.cl * .7);
+  const hor = mix(mix(mix(mix(hex('#141c2c'), hex('#f0a37a'), k.tw * (1 - k.cl * .5)), hex('#cfe2f0'), k.day), mix(hex('#1e1d20'), hex('#c4c9cf'), k.day), k.cl * .55), hex('#2a2018'), k.night * k.cl * .5);
+  return { top, hor };
+}
 let lastKey = '';
-function applyLook(k) {
-  const key = [k.day, k.tw, k.night, k.cl].map(v => v.toFixed(3)).join(); if (key === lastKey) return; lastKey = key;
-  const bmax = lerp(lerp(.24, .6, smooth((k.el + 9) / 9)), 1, k.day) * (1 - k.cl * .18);
-  for (const id of ['satlo', 'sat']) {
-    map.setPaintProperty(id, 'raster-brightness-max', bmax);
-    map.setPaintProperty(id, 'raster-saturation', lerp(lerp(-.55, -.05, 1 - k.night), .14, k.day) - k.cl * .25);
-    map.setPaintProperty(id, 'raster-contrast', lerp(.08, .14, k.day));
-  }
+function applyLook(k, p) {
+  const key = [k.day, k.tw, k.night, k.cl, k.el].map(v => v.toFixed(3)).join(); if (key === lastKey) return; lastKey = key;
+  const set = (id, prop, v) => map.setPaintProperty(id, prop, v);
+  for (const [id, prop, s] of [['land', 'fill-color', 'land'], ['farm', 'fill-color', 'farm'], ['grass', 'fill-color', 'grass'], ['sand', 'fill-color', 'sand'], ['wood', 'fill-color', 'wood'],
+    ['urban', 'fill-color', 'urban'], ['park', 'fill-color', 'park'], ['water', 'fill-color', 'water'], ['river', 'line-color', 'water'], ['minor', 'line-color', 'minor'], ['curb', 'line-color', 'curb']]) set(id, prop, tint(SURF[s], k));
+  set('road', 'line-color', k.night > .3 ? css(mix(hex('#3a2f26'), hex('#9b6a3a'), .6)) : tint(SURF.road, k));
+  set('lanes', 'line-opacity', lerp(.85, .35, k.night));
+  set('buildings', 'fill-extrusion-color', ['match', ['%', ['to-number', ['coalesce', ['id'], 0]], 3], 0, tint(SURF.b1, k), 1, tint(SURF.b2, k), tint(SURF.b3, k)]);
+  set('wood-tex', 'fill-opacity', lerp(.25, .85, 1 - k.night)); set('land-tex', 'fill-opacity', lerp(.15, .5, 1 - k.night));
+  set('glow', 'circle-opacity', ['match', ['get', 'class'], 'city', .45 * k.night, .3 * k.night]);
   map.setLayoutProperty('glow', 'visibility', k.night > .02 ? 'visible' : 'none');
-  map.setPaintProperty('glow', 'circle-opacity', ['match', ['get', 'class'], 'city', .5 * k.night, .3 * k.night]);
-  map.setPaintProperty('roads', 'line-color', css(mix(hex('#ffb46b'), hex('#ffffff'), k.day)));
-  map.setPaintProperty('roads', 'line-opacity', lerp(.5, .1, k.day) * (1 - k.tw * .4));
+  // The sun: hills shaded from where it really is, buildings casting shadows away from it.
+  const up = clamp((k.el + 2) / 12), az = (p.sunAz + 360) % 360, len = clamp(16 / Math.tan(toRad(Math.max(k.el, 4))), 6, 70) * up * (1 - k.cl * .7);
+  set('hills', 'hillshade-illumination-direction', az);
+  set('hills', 'hillshade-exaggeration', lerp(.3, lerp(.9, .6, smooth((k.el - 5) / 30)), up) * (1 - k.cl * .5));
+  set('hills', 'hillshade-shadow-color', css(mix(hex('#0b1020'), mix(hex('#4a2a1a'), hex('#2a2418'), k.day), up)));
+  set('hills', 'hillshade-highlight-color', css(mix(hex('#ffc890'), hex('#fff6e2'), k.day), .65 * up));
+  set('bshadow', 'fill-translate', [-Math.sin(toRad(az)) * len, Math.cos(toRad(az)) * len]);
+  set('bshadow', 'fill-opacity', .3 * up * (1 - k.cl * .6));
+  map.setLight({ anchor: 'map', position: [1.5, az, clamp(90 - Math.max(k.el, 4), 10, 86)], color: css(mix(hex('#ffcf9a'), hex('#ffffff'), k.day)), intensity: lerp(.15, .5, up) });
+  const sky = skyColors(k);
+  set('bg', 'background-color', css(sky.hor));
+  map.setSky({ 'sky-color': css(sky.top), 'horizon-color': css(sky.hor), 'fog-color': css(sky.hor), 'sky-horizon-blend': .65, 'horizon-fog-blend': .85, 'fog-ground-blend': lerp(.7, .25, k.fog), 'atmosphere-blend': 0 });
 }
 function groundTop() {
   pg.clearRect(0, 0, 27, 480); pg.drawImage(map.getCanvas(), 0, 0, 27, 480);
@@ -293,17 +381,17 @@ function totalBox(a) {
 }
 function highlights(t, c, arrowAt) {
   const end = clamp((t - (T - OUTRO + 1.5)) / .7), items = [], dots = [];
-  for (const b of beats) for (const h of b.items) {
+  for (const h of D.highlights) {
     if (c.d < h.d - 1 && end <= 0) continue;
     const q = map.project([h.lon, h.lat]); if (q.x < -50 || q.x > W + 50 || q.y < 0 || q.y > H + 50) continue;
-    const since = c.d >= h.d - 1 ? t - timeAt(h.d) : 0, pop = clamp(since / .35);
+    const tb = timeAt(h.d) ?? t, since = t - tb, pop = clamp(since / .35);
     // One dot for points that sit on top of each other.
     if (!dots.some(o => Math.hypot(o.x - q.x, o.y - q.y) < 22)) dots.push({ x: q.x, y: q.y, a: Math.max(pop, end), r: 8 + (1 - pop) * 10 });
-    const tb = timeAt(b.d), live = clamp((t - (tb - b.hold / 2 - .1)) / .35) * (1 - clamp((t - (tb + b.hold / 2 + .5)) / .4));
+    const live = clamp((since + .25) / .35) * (1 - clamp((since - 2.1) / .4));
     const a = Math.max(live * (1 - clamp(c.o * 2)), end);
     if (a > .01) items.push({ x: q.x, y: q.y, a, key: h.key.toUpperCase(), value: h.value });
   }
-  for (const d of dots) { fx.save(); fx.globalAlpha = d.a; fx.fillStyle = '#ffffff'; fx.strokeStyle = '#ff9a4d'; fx.lineWidth = 4; fx.shadowColor = 'rgba(0,0,0,.5)'; fx.shadowBlur = 8; fx.beginPath(); fx.arc(d.x, d.y, d.r, 0, 7); fx.fill(); fx.stroke(); fx.restore(); }
+  for (const d of dots) { fx.save(); fx.globalAlpha = d.a; fx.fillStyle = '#ffffff'; fx.strokeStyle = '#ff7a26'; fx.lineWidth = 4; fx.shadowColor = 'rgba(0,0,0,.5)'; fx.shadowBlur = 8; fx.beginPath(); fx.arc(d.x, d.y, d.r, 0, 7); fx.fill(); fx.stroke(); fx.restore(); }
   const obstacles = [box(LOGO.x, LOGO.y, LOGO.w, LOGO.h), ...dots.map(d => box(d.x - 12, d.y - 12, 24, 24))];
   if (arrowAt) obstacles.push(box(arrowAt.x - 50, arrowAt.y - 50, 100, 100));
   if (end > 0) obstacles.push(box(W / 2 - 330, H - 320, 660, 300));
@@ -311,57 +399,60 @@ function highlights(t, c, arrowAt) {
 }
 
 // ---------------- one frame ----------------
-async function frame(t, warm) {
+const prevC = mk(), pv = prevC.getContext('2d');
+let lastShot = null, fadeFrom = -1;
+async function frame(t, warm, sequential) {
   const c = camera(t), p = c.p, wx = weather(p.t), k = look(p, wx);
+  if (!warm && sequential && lastShot && c.shot !== lastShot && c.o <= 0) { pv.clearRect(0, 0, W, H); pv.drawImage(out, 0, 0); fadeFrom = c.shot.t0; }
+  if (!warm) lastShot = c.shot;
   map.jumpTo({ center: c.center, zoom: c.zoom, pitch: c.pitch, bearing: c.bearing, padding: { top: c.pad, bottom: 0, left: 0, right: 0 } });
   if (!warm) {
-    applyLook(k); map.getSource('done').setData(lineFC(c.d));
-    // Names would crowd the far horizon when the camera is high and tilted: fade them there.
-    map.setPaintProperty('city', 'text-opacity', .78 * (1 - clamp((c.pitch - 30) / 20) * clamp((10.4 - c.zoom) / .8)));
+    applyLook(k, p); map.getSource('done').setData(lineFC(c.d));
+    // Names would crowd the far horizon when the camera is tilted: fade them there.
+    map.setPaintProperty('city', 'text-opacity', .9 * (1 - clamp((c.pitch - 30) / 20) * clamp((13.5 - c.zoom) / .8)));
   }
   await waitMap();
-  if (!warm) { draw(t, c, p, k); compose(); }
+  if (!warm) { draw(t, c, p, k); compose(t); }
 }
 function draw(t, c, p, k) {
   fx.clearRect(0, 0, W, H); gr.clearRect(0, 0, W, H); sk.clearRect(0, 0, W, H);
-  const gy = groundTop();
-  const top = mix(mix(mix(hex('#02040a'), hex('#1b2850'), 1 - k.night), hex('#4f88c4'), k.day), mix(hex('#121318'), hex('#9da7b1'), k.day), k.cl * .75);
-  const hor = mix(mix(mix(mix(hex('#101826'), hex('#e8996f'), k.tw * (1 - k.cl * .5)), hex('#cfe0ee'), k.day), mix(hex('#1e1d20'), hex('#c4c9cf'), k.day), k.cl * .65), hex('#2a2018'), k.night * k.cl * .5);
+  const gy = groundTop(), hy = gy > 4 ? gy : 0, { top, hor } = skyColors(k);
   let g;
-  if (gy > 4) {
-    g = sk.createLinearGradient(0, 0, 0, gy + 40); g.addColorStop(0, css(top)); g.addColorStop(.62, css(mix(top, hor, .55))); g.addColorStop(1, css(hor));
-    sk.fillStyle = g; sk.fillRect(0, 0, W, gy + 60);
-    const rel = ((p.sunAz - c.bearing + 540) % 360) - 180, fovx = map.transform.fov * W / H, sx = W / 2 + rel / fovx * W, sy = gy - p.sunEl / map.transform.fov * H * .9;
+  // The sky sits behind the land: hills and towns cut into it.
+  g = sk.createLinearGradient(0, 0, 0, Math.max(hy, 200) + 120); g.addColorStop(0, css(top)); g.addColorStop(.6, css(mix(top, hor, .55))); g.addColorStop(1, css(hor));
+  sk.fillStyle = g; sk.fillRect(0, 0, W, H);
+  if (hy > 4) {
+    const rel = ((p.sunAz - c.bearing + 540) % 360) - 180, fovx = map.transform.fov * W / H, sx = W / 2 + rel / fovx * W, sy = hy - p.sunEl / map.transform.fov * H * .9;
     const glow = clamp(1 - Math.abs(p.sunEl - 2) / 12) * (1 - k.cl * .5);
     if (glow > .01) {
       g = sk.createRadialGradient(sx, sy, 0, sx, sy, W * 1.1);
       g.addColorStop(0, `rgba(255,214,160,${.85 * glow})`); g.addColorStop(.2, `rgba(255,168,110,${.45 * glow})`); g.addColorStop(.55, `rgba(232,122,122,${.12 * glow})`); g.addColorStop(1, 'rgba(232,122,122,0)');
-      sk.save(); sk.globalCompositeOperation = 'screen'; sk.fillStyle = g; sk.fillRect(0, 0, W, gy + 60); sk.restore();
+      sk.save(); sk.globalCompositeOperation = 'screen'; sk.fillStyle = g; sk.fillRect(0, 0, W, hy + 60); sk.restore();
     }
-    if (p.sunEl > -.9) { sk.save(); sk.globalAlpha = clamp((p.sunEl + .9) / 1.5) * (1 - k.cl * .7); sk.fillStyle = '#fff6e4'; sk.shadowColor = '#ffd08a'; sk.shadowBlur = 60; sk.beginPath(); sk.arc(sx, sy, 20, 0, 7); sk.fill(); sk.restore(); }
+    if (p.sunEl > -.9) { sk.save(); sk.globalAlpha = clamp((p.sunEl + .9) / 1.5) * (1 - k.cl * .7); sk.fillStyle = '#fff6e4'; sk.shadowColor = '#ffd08a'; sk.shadowBlur = 60; sk.beginPath(); sk.arc(sx, sy, 22, 0, 7); sk.fill(); sk.restore(); }
     const sa = k.known ? k.night * clamp(1 - k.cl / .6) : 0;       // stars only when we know the night was clear
-    if (sa > .01) for (const [x, y, r, ph, b] of stars) { const yy = y * gy; sk.fillStyle = `rgba(255,250,240,${sa * (.3 + .55 * b) * (.75 + .25 * Math.sin(t * 2.2 + ph)) * clamp((gy - yy) / 80)})`; sk.beginPath(); sk.arc(x, yy, r, 0, 7); sk.fill(); }
+    if (sa > .01) for (const [x, y, r, ph, b] of stars) { const yy = y * hy; sk.fillStyle = `rgba(255,250,240,${sa * (.3 + .55 * b) * (.75 + .25 * Math.sin(t * 2.2 + ph)) * clamp((hy - yy) / 80)})`; sk.beginPath(); sk.arc(x, yy, r, 0, 7); sk.fill(); }
     if (k.cl > .05) {
-      const tint = mix(mix(mix(hex('#3b3330'), hex('#f2a985'), k.golden), hex('#f4f6f8'), k.day), hex('#8c939b'), k.cl * k.day * .55);
-      const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = Math.max(1, Math.round(gy)); const tg = tmp.getContext('2d');
+      const tint2 = mix(mix(mix(hex('#3b3330'), hex('#f2a985'), k.golden), hex('#f6f8fa'), k.day), hex('#8c939b'), k.cl * k.day * .5);
+      const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = Math.max(1, Math.round(hy)); const tg = tmp.getContext('2d');
       const off = ((c.bearing / 360) * 2048 + t * 16) % 1024;
-      for (let i = -1; i < 2; i++) tg.drawImage(CLOUD, i * 1024 - off + W / 2, gy * .08, 1024, gy * .92);
-      tg.globalCompositeOperation = 'source-in'; tg.fillStyle = css(tint); tg.fillRect(0, 0, W, gy);
-      sk.save(); sk.globalAlpha = clamp(k.cl * 1.1) * .8; sk.drawImage(tmp, 0, 0); sk.restore();
+      for (let i = -1; i < 2; i++) tg.drawImage(CLOUD, i * 1024 - off + W / 2, hy * .05, 1024, hy * .9);
+      tg.globalCompositeOperation = 'source-in'; tg.fillStyle = css(tint2); tg.fillRect(0, 0, W, hy);
+      sk.save(); sk.globalAlpha = clamp(k.cl * 1.1) * .75; sk.drawImage(tmp, 0, 0); sk.restore();
     }
-    g = fx.createLinearGradient(0, gy - 30, 0, gy + 480); g.addColorStop(0, css(hor, .97)); g.addColorStop(.18, css(hor, .62)); g.addColorStop(.5, css(hor, .2)); g.addColorStop(1, css(hor, 0));
-    fx.fillStyle = g; fx.fillRect(0, gy - 30, W, 510);
-  } else { sk.fillStyle = '#000'; sk.fillRect(0, 0, W, H); }
-  if (k.fog > .02) { fx.fillStyle = css(hor, k.fog * .35); fx.fillRect(0, 0, W, H); }
+    // A light haze where land meets sky gives depth without washing the colours out.
+    g = fx.createLinearGradient(0, hy - 30, 0, hy + 300); g.addColorStop(0, css(hor, .8)); g.addColorStop(.3, css(hor, .35)); g.addColorStop(1, css(hor, 0));
+    fx.fillStyle = g; fx.fillRect(0, hy - 30, W, 330);
+  }
+  if (k.fog > .02) { fx.fillStyle = css(hor, k.fog * .3); fx.fillRect(0, 0, W, H); }
   if (k.rain > .03 && c.o < 1) {
     fx.save(); fx.strokeStyle = `rgba(215,225,240,${clamp(k.rain) * .32 * (1 - c.o)})`; fx.lineWidth = 1.3; fx.lineCap = 'round';
     for (const [x, y, s] of rain) { const yy = (y + t * 2600 * s) % H, xx = (x - t * 260 * s + W * 2) % W; fx.beginPath(); fx.moveTo(xx, yy); fx.lineTo(xx - 6 * s, yy + 36 * s); fx.stroke(); }
     fx.restore();
   }
-  const gTop = mix(mix(hex('#2d4f9a'), hex('#ff9a5e'), k.golden), hex('#8fb6ff'), k.day * (1 - k.golden)), gBot = mix(mix(hex('#1b2d5a'), hex('#ffc27a'), k.golden), hex('#ffd9a8'), k.day * (1 - k.golden));
-  g = gr.createLinearGradient(0, 0, 0, H); g.addColorStop(0, css(gTop, .55)); g.addColorStop(1, css(gBot, .5)); gr.fillStyle = g; gr.fillRect(0, 0, W, H);
-  // Vignette under the marks and labels.
-  g = fx.createRadialGradient(W / 2, H * .56, H * .32, W / 2, H * .56, H * .82); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${lerp(.5, .28, k.day)})`);
+  const gTop = mix(mix(hex('#2d4f9a'), hex('#ff9a5e'), k.golden), hex('#9cc0ff'), k.day * (1 - k.golden)), gBot = mix(mix(hex('#1b2d5a'), hex('#ffc27a'), k.golden), hex('#ffe0b4'), k.day * (1 - k.golden));
+  g = gr.createLinearGradient(0, 0, 0, H); g.addColorStop(0, css(gTop, .38)); g.addColorStop(1, css(gBot, .32)); gr.fillStyle = g; gr.fillRect(0, 0, W, H);
+  g = fx.createRadialGradient(W / 2, H * .56, H * .34, W / 2, H * .56, H * .85); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${lerp(.45, .22, k.day)})`);
   fx.fillStyle = g; fx.fillRect(0, 0, W, H);
   const arrowAlpha = 1 - smooth((t - (T - OUTRO + 1.1)) / .9);
   const arrowAt = c.o < 1 && arrowAlpha > 0 ? arrow(t, c, arrowAlpha) : null;
@@ -371,6 +462,7 @@ function draw(t, c, p, k) {
   if (t > T - 2.4) { fx.save(); fx.globalAlpha = clamp((t - (T - 2.4)) / .8) * .55; fx.font = `400 17px ${SANS}`; fx.fillStyle = '#ffffff'; fx.textAlign = 'center'; fx.fillText(D.credit, W / 2, H - 44); fx.restore(); }
   const fi = clamp(t / .5); if (fi < 1) { fx.fillStyle = `rgba(0,0,0,${1 - fi})`; fx.fillRect(0, 0, W, H); }
 }
+
 function arrow(t, c, alpha) {
   const p = c.p, q = map.project([p.lon, p.lat]), mpp = 156543 * Math.cos(toRad(p.lat)) / Math.pow(2, c.zoom), dd = clamp(mpp * 45, 25, 2500);
   const a = smoothPt(c.d - dd, dd / 2), b = smoothPt(c.d + dd, dd / 2), qa = map.project([unX(a[0]), unY(a[1])]), qb = map.project([unX(b[0]), unY(b[1])]);
@@ -385,12 +477,17 @@ function arrow(t, c, alpha) {
   fx.restore();
   return { x: q.x, y: q.y };
 }
-function compose() {
+function compose(t) {
   og.globalCompositeOperation = 'source-over'; og.fillStyle = '#000'; og.fillRect(0, 0, W, H);
-  og.drawImage(skyC, 0, 0); og.drawImage(map.getCanvas(), 0, 0, W, H);
+  og.drawImage(skyC, 0, 0);
+  og.filter = 'saturate(1.12) contrast(1.04)'; og.drawImage(map.getCanvas(), 0, 0, W, H); og.filter = 'none';
   og.globalCompositeOperation = 'soft-light'; og.drawImage(grC, 0, 0);
   og.globalCompositeOperation = 'source-over'; og.drawImage(fxC, 0, 0);
+  // A soft fade from the last shot into this one.
+  const f = fadeFrom >= 0 ? 1 - (t - fadeFrom) / FADE : 0;
+  if (f > 0 && f <= 1) { og.globalAlpha = smooth(f); og.drawImage(prevC, 0, 0); og.globalAlpha = 1; }
 }
+
 
 // ---------------- encoding ----------------
 async function pickCodec() {
@@ -418,17 +515,18 @@ async function run() {
     for (let i = 0; i < 280; i++) rain.push([rnd() * W, rnd() * H, rnd() * .6 + .7, rnd()]);
     CLOUD = noiseCanvas(512, 192);
     buildTiming();
-    map = new maplibregl.Map({ container: 'map', style: style(), center: [route[0].lon, route[0].lat], zoom: Z_CLOSE, pitch: 70, maxPitch: 80, interactive: false, attributionControl: false,
+    map = new maplibregl.Map({ container: 'map', style: style(), center: [route[0].lon, route[0].lat], zoom: Z_SHOT, pitch: PITCH, maxPitch: 80, interactive: false, attributionControl: false,
       preserveDrawingBuffer: true, fadeDuration: 0, pixelRatio: 1, maxTileCacheSize: 1500 });
     await new Promise((res, rej) => { map.on('load', res); map.on('error', e => { if (!map.loaded()) rej(e.error || new Error('map')); }); });
+    textures(); map.setTerrain({ source: 'dem', exaggeration: 1.5 });
     let w = 180, e = -180, s = 90, n = -90; for (const r of route) { w = Math.min(w, r.lon); e = Math.max(e, r.lon); s = Math.min(s, r.lat); n = Math.max(n, r.lat); }
     const ov = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 260, bottom: 500, left: 130, right: 130 }, bearing: 0 });
     OV = { center: [ov.center.lng, ov.center.lat], zoom: Math.min(ov.zoom, 15), pitch: 0, bearing: 0 };
     buildCamera();
-    if (D.stills) { for (const t of D.stills) { await frame(t, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
+    if (D.stills) { for (const t of D.stills) { await frame(t, false, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
     const frames = Math.min(Math.round(T * FPS), D.limitFrames || Infinity);   // limitFrames: tests only
-    // Fetch the imagery along the way first, so drawing never waits mid-shot.
-    for (let f = 0; f < frames; f += 6) { await frame(f / FPS, true); Android.progress(.25 * f / frames, 'map'); }
+    // Fetch the map along the way first, so drawing never waits mid-shot.
+    for (let f = 0; f < frames; f += 6) { await frame(f / FPS, true, false); Android.progress(.25 * f / frames, 'map'); }
     const muxer = new Mp4Muxer.Muxer({
       target: new Mp4Muxer.StreamTarget({ onData: (data, position) => Android.chunk(toBase64(data), position), chunked: true, chunkSize: 2 ** 20 }),
       video: { codec: codec.kind, width: W, height: H, frameRate: FPS }, fastStart: false, firstTimestampBehavior: 'offset',
@@ -438,7 +536,7 @@ async function run() {
     enc.configure(codec.config);
     for (let f = 0; f < frames; f++) {
       if (failed) throw failed;
-      await frame(f / FPS, false);
+      await frame(f / FPS, false, true);
       const vf = new VideoFrame(out, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
       enc.encode(vf, { keyFrame: f % (FPS * 2) === 0 }); vf.close();
       while (enc.encodeQueueSize > 2) await sleep(4);

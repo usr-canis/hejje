@@ -49,8 +49,8 @@
 - A compass, driving time and trip distance drawn on the map.
 
 **Replay video**
-- Turn any trip into a short vertical video, made on your phone: a satellite view of your route with the real sky of that hour (night, sunrise, sunset) and the real weather.
-- The camera glides low over the start, each highlight and the arrival and rises over long empty stretches, so a short hop takes a few seconds and a long road trip about twenty.
+- Turn any trip into a short vertical video, made on your phone: a close, 3D view of your route over real hills, fields, lakes and towns, with the real sky of that hour (night, sunrise, sunset) and the real weather.
+- The camera stays close to the road; long trips hop between the moments that matter with a soft fade, so a short hop takes a few seconds and a long road trip about twenty.
 - Share it or save it to your gallery. Private places are cut out, as in share cards.
 
 **Home-screen widget**

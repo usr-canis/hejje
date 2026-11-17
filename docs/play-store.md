@@ -32,7 +32,7 @@ GitHub release), and the privacy policy is published.
 > • Next time you drive that road, Hejje tells you the stop is coming up
 >
 > REPLAY YOUR DRIVE
-> • Turn any trip into a short vertical video: satellite view, the real sky of that hour
+> • Turn any trip into a short vertical video over a 3D landscape with real hills, the real sky of that hour
 >   (night, sunrise, sunset) and the real weather, with your highlights
 > • Made on your phone; share it or save it to your gallery
 >
@@ -91,7 +91,7 @@ Data types:
 | Type | Collected | Shared | Why it is declared | Optional? | Purpose |
 |---|---|---|---|---|---|
 | **Location → Precise location** | Yes | Yes | Trip start and end coordinates are sent to OpenStreetMap's Nominatim to show place names | Yes: Settings → "Look up place names" | App functionality |
-| **Location → Approximate location** | Yes | Yes | Map tile requests (OpenFreeMap, and EOX satellite imagery for replay videos) reveal the area being viewed; replay videos send the trip's date and rough position (about 10 km) to Open-Meteo for its weather | No (replay videos only when the user makes one) | App functionality |
+| **Location → Approximate location** | Yes | Yes | Map tile requests (OpenFreeMap, and AWS terrain tiles for replay videos) reveal the area being viewed; replay videos send the trip's date and rough position (about 10 km) to Open-Meteo for its weather | No (replay videos only when the user makes one) | App functionality |
 
 Not collected: personal info, financial info, health, messages, photos, audio, files, calendar,
 contacts, app activity, web history, device IDs, diagnostics. No analytics or crash-reporting
