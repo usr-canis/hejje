@@ -290,7 +290,6 @@ function applyLook(k, p) {
   map.setLight({ anchor: 'map', position: [1.5, az, clamp(90 - Math.max(k.el, 4), 10, 86)], color: css(mix(hex('#ffcf9a'), hex('#ffffff'), k.day)), intensity: lerp(.15, .5, up) });
   const sky = skyColors(k);
   set('bg', 'background-color', css(sky.hor));
-  map.setSky({ 'sky-color': css(sky.top), 'horizon-color': css(sky.hor), 'fog-color': css(sky.hor), 'sky-horizon-blend': .65, 'horizon-fog-blend': .85, 'fog-ground-blend': lerp(.7, .25, k.fog), 'atmosphere-blend': 0 });
 }
 function groundTop() {
   pg.clearRect(0, 0, 27, 480); pg.drawImage(map.getCanvas(), 0, 0, 27, 480);
