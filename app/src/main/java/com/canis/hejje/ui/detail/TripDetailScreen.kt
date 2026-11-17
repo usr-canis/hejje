@@ -113,6 +113,7 @@ fun TripDetailScreen(
     onBack: () -> Unit,
     onStretch: () -> Unit = {},
     onPart: () -> Unit = {},
+    onReplay: () -> Unit = {},
 ) {
     val vm = hejjeViewModel(key = "trip-$tripId") { TripDetailViewModel(it, tripId) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -334,6 +335,7 @@ fun TripDetailScreen(
                         state.next?.let { n -> entry(R.string.detail_merge_next) { vm.merge(n.id) { u -> haptics.confirm(); undo.show(if (u != null) msgMerged else msgFailed, u) } } }
                         entry(R.string.detail_part_stats, state.routes.isNotEmpty()) { onPart() }
                         entry(R.string.detail_measure_stretch, state.routes.isNotEmpty()) { onStretch() }
+                        entry(R.string.replay_menu, state.routes.isNotEmpty()) { onReplay() }
                         entry(R.string.detail_export_gpx) {
                             val day = trip?.let { Insights.dayOf(it.startTime, ZoneId.systemDefault()) } ?: LocalDate.now()
                             gpx.launch("hejje-$day-${trip?.let { f.time(it.startTime).replace(":", "") }}.gpx")

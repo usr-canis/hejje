@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="maplibre-gl.css">
+<style>
+@font-face { font-family: 'Mallige'; src: url('/font/mallige.ttf'); font-weight: 700; }
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+#stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+#map, #out { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+</style>
+</head><body>
+<div id="stage"><div id="map"></div><canvas id="out" width="1080" height="1920"></canvas></div>
+<script src="maplibre-gl.js"></script>
+<script src="mp4-muxer.js"></script>
+<script src="replay.js"></script>
+</body></html>

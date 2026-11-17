@@ -48,6 +48,11 @@
 - Your saved stops on the car screen, the next one on your route first. Tap one to navigate there.
 - A compass, driving time and trip distance drawn on the map.
 
+**Replay video**
+- Turn any trip into a short vertical video, made on your phone: a satellite view of your route with the real sky of that hour (night, sunrise, sunset) and the real weather.
+- The camera glides low over the start, each highlight and the arrival and rises over long empty stretches, so a short hop takes a few seconds and a long road trip about twenty.
+- Share it or save it to your gallery. Private places are cut out, as in share cards.
+
 **Home-screen widget**
 - This week's kilometres on a little odometer, right on your home screen.
 

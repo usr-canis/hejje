@@ -87,6 +87,7 @@ import com.canis.hejje.data.toPlace
 import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalContainer
+import com.canis.hejje.ui.replay.ReplayScreen
 import com.canis.hejje.ui.components.LocalUndo
 import com.canis.hejje.ui.components.UndoHost
 import com.canis.hejje.ui.detail.TripDetailScreen
@@ -200,6 +201,7 @@ object Routes {
     fun stretch(fromTrip: Long? = null) = if (fromTrip != null) "stretch?trip=$fromTrip" else "stretch"
     fun section(tripId: Long, from: Long, to: Long) = "section/$tripId/$from/$to"
     fun part(tripId: Long) = "part/$tripId"
+    fun replay(tripId: Long) = "replay/$tripId"
     val TOP = setOf(TRIPS, INSIGHTS, SETTINGS)
 }
 
@@ -345,9 +347,12 @@ private fun MainScaffold(container: AppContainer, openTripId: Long?, onTripOpene
                         ScreenBackground {
                             TripDetailScreen(
                                 id, onBack = { nav.popBackStack() }, onStretch = { nav.navigate(Routes.stretch(id)) },
-                                onPart = { nav.navigate(Routes.part(id)) },
+                                onPart = { nav.navigate(Routes.part(id)) }, onReplay = { nav.navigate(Routes.replay(id)) },
                             )
                         }
+                    }
+                    composable("replay/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
+                        ScreenBackground { ReplayScreen(back.arguments?.getLong("id") ?: -1L, onBack = { nav.popBackStack() }) }
                     }
                     composable(
                         "stretch?trip={trip}",

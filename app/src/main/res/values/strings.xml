@@ -496,9 +496,9 @@
     <!-- About -->
     <string name="about_meaning">“Hejje” is Kannada for footprint.</string>
     <string name="about_privacy_title">Your data</string>
-    <string name="about_privacy">Trips are stored only on this phone. There are no accounts, no cloud, no analytics and no ads. The app uses the internet for two things only: map tiles, and place names (if switched on).</string>
+    <string name="about_privacy">Trips are stored only on this phone. There are no accounts, no cloud, no analytics and no ads. The app uses the internet for map tiles, place names (if switched on), and, only when you make a replay video, satellite imagery and that trip’s weather.</string>
     <string name="about_credits_title">Maps and place names</string>
-    <string name="about_credits">Map tiles by OpenFreeMap, using the OpenMapTiles schema. Map data and place names © OpenStreetMap contributors, available under the Open Database License. Place names come from the Nominatim service.</string>
+    <string name="about_credits">Map tiles by OpenFreeMap, using the OpenMapTiles schema. Map data and place names © OpenStreetMap contributors, available under the Open Database License. Place names come from the Nominatim service. Replay videos use Sentinel-2 cloudless imagery by EOX IT Services (contains modified Copernicus Sentinel data, CC BY 4.0), weather data by Open-Meteo.com (CC BY 4.0), MapLibre GL JS and mp4-muxer.</string>
     <string name="about_link_osm">OpenStreetMap copyright</string>
     <string name="about_link_ofm">OpenFreeMap</string>
     <string name="about_font_credit">The name ಹೆಜ್ಜೆ is set in Mallige, © 2005 Indian Institute of Science, Bangalore, used under the GNU General Public License v2.</string>
@@ -531,4 +531,28 @@
     <!-- Widget -->
     <string name="widget_label" tools:ignore="UnusedResources">Hejje: this week</string>
     <string name="widget_description">This week’s distance and your last trip</string>
+
+    <!-- Replay video -->
+    <string name="replay_menu">Make replay video</string>
+    <string name="replay_title">Replay</string>
+    <string name="replay_preparing">Getting the route, sky and weather…</string>
+    <string name="replay_map">Fetching satellite imagery…</string>
+    <string name="replay_video">Making the video…</string>
+    <string name="replay_done">Your replay is ready</string>
+    <string name="replay_empty">This trip has no route to replay.</string>
+    <string name="replay_unsupported">This phone can’t make replay videos yet. Updating Android System WebView from Google Play may help.</string>
+    <string name="replay_failed">Couldn’t make the video. Check the internet connection and try again.</string>
+    <string name="replay_retry">Try again</string>
+    <string name="replay_data_note">Keep the app open. It downloads satellite imagery for the route (about 20–60 MB), so Wi‑Fi is best.</string>
+    <string name="replay_share">Share</string>
+    <string name="replay_save">Save to gallery</string>
+    <string name="replay_saved">Saved to Movies/Hejje</string>
+    <string name="replay_top_speed">Top speed</string>
+    <string name="replay_highest">Highest point</string>
+    <string name="replay_steady">Steady</string>
+    <string name="replay_slowest">Slowest</string>
+    <string name="replay_sunrise">Sunrise</string>
+    <string name="replay_sunset">Sunset</string>
+    <string name="replay_total">Total</string>
+    <string name="replay_credit">Imagery: Sentinel-2 cloudless by EOX · Weather: Open-Meteo · © OpenStreetMap</string>
 </resources>

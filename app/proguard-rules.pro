@@ -10,3 +10,8 @@
 
 # Play services location and MapLibre ship their own rules.
 -dontwarn org.maplibre.**
+
+# Replay video: the page calls these through the JavaScript bridge.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

@@ -31,6 +31,11 @@ GitHub release), and the privacy policy is published.
 > • After parking, name the place: food, coffee, fuel or anything you like
 > • Next time you drive that road, Hejje tells you the stop is coming up
 >
+> REPLAY YOUR DRIVE
+> • Turn any trip into a short vertical video: satellite view, the real sky of that hour
+>   (night, sunrise, sunset) and the real weather, with your highlights
+> • Made on your phone; share it or save it to your gallery
+>
 > ON ANDROID AUTO
 > • Your saved stops on the car screen, the next one on your road first; tap to navigate
 > • Driving time, trip distance and a compass with the road you've driven
@@ -72,8 +77,8 @@ and stop a recording with the Record button on the Trips screen or the Quick Set
 
 ## 3. Data safety
 
-Everything the app stores stays on the phone (not "collected" in Play's sense). Two things leave
-the phone, both over HTTPS:
+Everything the app stores stays on the phone (not "collected" in Play's sense). A few things leave
+the phone, all over HTTPS:
 
 | Question | Answer |
 |---|---|
@@ -86,7 +91,7 @@ Data types:
 | Type | Collected | Shared | Why it is declared | Optional? | Purpose |
 |---|---|---|---|---|---|
 | **Location → Precise location** | Yes | Yes | Trip start and end coordinates are sent to OpenStreetMap's Nominatim to show place names | Yes: Settings → "Look up place names" | App functionality |
-| **Location → Approximate location** | Yes | Yes | Map tile requests to OpenFreeMap reveal the area being viewed | No | App functionality |
+| **Location → Approximate location** | Yes | Yes | Map tile requests (OpenFreeMap, and EOX satellite imagery for replay videos) reveal the area being viewed; replay videos send the trip's date and rough position (about 10 km) to Open-Meteo for its weather | No (replay videos only when the user makes one) | App functionality |
 
 Not collected: personal info, financial info, health, messages, photos, audio, files, calendar,
 contacts, app activity, web history, device IDs, diagnostics. No analytics or crash-reporting
