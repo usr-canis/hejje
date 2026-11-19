@@ -357,20 +357,7 @@ function groundTop() {
 
 // ---------------- brand marks ----------------
 const SOLE = new Path2D('M47,78 C40.5,78 37,71.5 38.2,64 C39.2,57.5 42,53.5 42,47 C42,39 46.5,34 53.5,34 C61.5,34 66,40 65,48 C64.2,54.5 61,58.5 59.8,65 C58.5,72.5 54,78 47,78 Z');
-const TRAIL = new Path2D('M47.5,70.5 C47.5,64 52.5,61.5 51.5,55.5 C50.6,50 55.5,48 54.5,42.5');
-const ICON_TOES = [[44.5, 27.5, 4.6], [54, 25, 3.9], [62, 27.5, 3.4], [68, 33, 3]];
 const FEET_TOES = [[44, 27.5, 4.6], [52.8, 23.6, 3.5], [60, 24.2, 3], [66.2, 27, 2.6], [70.6, 31.6, 2.2]];
-function appIcon(g, x, y, s) {
-  g.save(); g.translate(x, y);
-  g.fillStyle = '#1A1C1F'; g.beginPath(); g.roundRect(0, 0, s, s, s * .24); g.fill();
-  g.beginPath(); g.roundRect(0, 0, s, s, s * .24); g.clip();
-  const k = s / 72; g.translate(-18 * k, -18 * k); g.scale(k, k);
-  g.translate(54, 57); g.rotate(toRad(18)); g.scale(.94, .94); g.translate(-54, -54);
-  g.fillStyle = '#E8590C'; g.fill(SOLE); for (const [cx, cy, r] of ICON_TOES) { g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill(); }
-  g.strokeStyle = '#1A1C1F'; g.lineWidth = 2.6; g.lineCap = 'round'; g.stroke(TRAIL);
-  g.fillStyle = '#1A1C1F'; for (const [cx, cy] of [[47.5, 70.5], [54.5, 42.5]]) { g.beginPath(); g.arc(cx, cy, 2.4, 0, 7); g.fill(); }
-  g.restore();
-}
 function feet(g, x, y, h, color) { // the 👣 mark, bottom-left at (x, y)
   const F = [{ sx: -.5, rot: 4, tx: -44.5, ty: -28.5 }, { sx: .5, rot: -4, tx: -26, ty: -33 }];
   g.save(); g.translate(x, y - h); g.scale(h / 36, h / 36); g.fillStyle = color;
@@ -380,12 +367,11 @@ function feet(g, x, y, h, color) { // the 👣 mark, bottom-left at (x, y)
 const LOGO = { x: 44, y: 60, w: 0, h: 72 };
 function logo(a) {
   fx.save(); fx.globalAlpha = a; fx.shadowColor = 'rgba(0,0,0,.45)'; fx.shadowBlur = 18;
-  appIcon(fx, LOGO.x, LOGO.y, 72);
   fx.font = '700 58px Mallige'; fx.fillStyle = '#ffffff'; fx.textBaseline = 'alphabetic';
-  const tx = LOGO.x + 72 + 18, base = LOGO.y + 50, w = fx.measureText(D.brand).width;
+  const tx = LOGO.x, base = LOGO.y + 50, w = fx.measureText(D.brand).width;
   fx.fillText(D.brand, tx, base); fx.shadowBlur = 10; feet(fx, tx + w + 6, base, 30, '#ff8a3d');
   fx.restore();
-  LOGO.w = 72 + 18 + w + 50;
+  LOGO.w = w + 50;
 }
 
 // ---------------- names: the road painted on the road, the nearest village or town ----------------
