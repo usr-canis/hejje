@@ -249,7 +249,7 @@ function style() {
       { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff8a3d', 'line-opacity': .42, 'line-blur': 8, 'line-width': w(9, 9, 17, 30) } },
       { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff7a26', 'line-width': w(9, 3.5, 17, 10) } },
       // The road's name painted on the road ahead, facing the driver.
-      { id: 'roadname', type: 'symbol', source: 'roadname', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 58, 'text-letter-spacing': .12, 'text-max-width': 30,
+      { id: 'roadname', type: 'symbol', source: 'roadname', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 48, 'text-letter-spacing': .1, 'text-max-width': 30,
         'text-rotate': ['get', 'rot'], 'text-rotation-alignment': 'map', 'text-pitch-alignment': 'map', 'text-allow-overlap': true, 'text-ignore-placement': true },
         paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.22)', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
       { id: 'placename', type: 'symbol', source: 'placename', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 34, 'text-letter-spacing': .06, 'text-max-width': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
@@ -451,7 +451,7 @@ function planNames() {
     if (s - e.t > 5 || s + ROAD_SECS > travelEnd() - .5) continue;      // too late to be about this road
     if (planAt(s).z < 14) continue;
     if (last && last.text === e.text) continue;
-    const d = planAt(s).d + mppAt(planAt(s).z) * 380, [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
+    const d = planAt(s).d + mppAt(planAt(s).z) * 560, [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
     ROAD_EVENTS.push({ s, text: e.text, lon, lat, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
   }
   // Places: where the route passes closest to each one, and how close.
