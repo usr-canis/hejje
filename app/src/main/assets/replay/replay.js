@@ -251,7 +251,11 @@ function style() {
       // The road's name painted on the road ahead, facing the driver.
       { id: 'roadname', type: 'symbol', source: 'roadname', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 48, 'text-letter-spacing': .1, 'text-max-width': 30,
         'text-rotate': ['get', 'rot'], 'text-rotation-alignment': 'map', 'text-pitch-alignment': 'map', 'text-allow-overlap': true, 'text-ignore-placement': true },
-        paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.22)', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
+        filter: ['!', ['get', 'high']], paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.22)', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
+      // From high up, painted letters would be too flat to read: the number stands upright by the road instead.
+      { id: 'roadname-high', type: 'symbol', source: 'roadname', filter: ['get', 'high'], layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 34, 'text-letter-spacing': .1,
+        'text-anchor': 'left', 'text-offset': [.9, 0], 'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.5)', 'text-halo-width': 2, 'text-halo-blur': 1 } },
       { id: 'placename', type: 'symbol', source: 'placename', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 34, 'text-letter-spacing': .06, 'text-max-width': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
         paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.45)', 'text-halo-width': 1.8, 'text-halo-blur': 1.2 } },
     ],
@@ -437,8 +441,9 @@ function planNames() {
     if (s - e.t > 5 || s + ROAD_SECS > travelEnd() - .5) continue;      // too late to be about this road
     if (last && last.text === e.text) continue;
     // Painted far enough ahead that the arrow doesn't reach it while it shows.
-    const pl = planAt(s), pace = (planAt(s + .1).d - pl.d) / .1 / mppAt(pl.z), d = pl.d + mppAt(pl.z) * clamp(pace * 3.8, 480, 1000), [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
-    ROAD_EVENTS.push({ s, text: e.text, lon, lat, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
+    const pl = planAt(s), high = pl.z < 14, pace = (planAt(s + .1).d - pl.d) / .1 / mppAt(pl.z);
+    const d = pl.d + mppAt(pl.z) * (high ? clamp(pace * 2.4, 260, 640) : clamp(pace * 3.8, 480, 1000)), [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
+    ROAD_EVENTS.push({ s, text: e.text, lon, lat, high, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
   }
   // Places: where the route passes closest to each one, and how close.
   const cityAt = d => { let k = null; for (const s of SEEN.roads) if (!k || Math.abs(s.d - d) < Math.abs(k.d - d)) k = s; return k ? k.city : false; };
@@ -478,9 +483,9 @@ function planNames() {
 let shownRoad = null, shownPlace = null;
 function applyNames(t, c) {
   const road = ROAD_EVENTS.find(e => t >= e.s && t < e.s + ROAD_SECS) || null;
-  if (road !== shownRoad) { shownRoad = road; map.getSource('roadname').setData(road ? { type: 'Feature', geometry: { type: 'Point', coordinates: [road.lon, road.lat] }, properties: { label: road.text, rot: road.rot } } : EMPTY); }
+  if (road !== shownRoad) { shownRoad = road; map.getSource('roadname').setData(road ? { type: 'Feature', geometry: { type: 'Point', coordinates: [road.lon, road.lat] }, properties: { label: road.text, rot: road.rot, high: road.high } } : EMPTY); }
   const ra = road ? smooth((t - road.s) / .5) * (1 - smooth((t - road.s - ROAD_SECS + .6) / .6)) * (1 - c.o) : 0;
-  map.setPaintProperty('roadname', 'text-opacity', ra * .92);
+  map.setPaintProperty('roadname', 'text-opacity', ra * .92); map.setPaintProperty('roadname-high', 'text-opacity', ra);
   const place = PLACE_SHOWS.find(e => t >= e.a && t < e.b) || null;
   if (place !== shownPlace) { shownPlace = place; map.getSource('placename').setData(place ? { type: 'Feature', geometry: { type: 'Point', coordinates: [place.lon, place.lat] }, properties: { label: place.name } } : EMPTY); }
   let pa = 0;
