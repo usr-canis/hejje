@@ -11,6 +11,18 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import com.canis.hejje.ui.rememberFormatter
+import com.canis.hejje.replay.ReplayData
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
@@ -67,27 +79,125 @@ import com.canis.hejje.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-/** Starts (or shows) the trip's replay video. It is made in the background while the app is open. */
+/** Chooses what to replay, then makes the video in the background while the app is open. */
 @Composable
 fun ReplayScreen(tripId: Long, onBack: () -> Unit) {
-    val jobs = LocalContainer.current.replays
+    val container = LocalContainer.current
+    val context = LocalContext.current
+    val jobs = container.replays
     val job by jobs.job.collectAsStateWithLifecycle()
-    LaunchedEffect(tripId) {
-        val j = jobs.job.value
-        if (j == null || (!j.running && j.tripId != tripId)) { jobs.clear(); jobs.start(tripId) }
-    }
+    var trip by remember { mutableStateOf<ReplayData.Trip?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var choosing by remember { mutableStateOf(false) }
+    LaunchedEffect(tripId) { trip = runCatching { ReplayData.load(context, container, tripId) }.getOrNull(); loading = false }
     val mine = job?.takeIf { it.tripId == tripId }
     Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         HejjeTopBar(stringResource(R.string.replay_title), onBack)
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = ScreenPadding).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val other = job
+            val loaded = trip
             when {
-                mine == null && other != null && other.running -> Busy(other, onBack)
-                mine == null -> Unit
-                mine.running -> Making(mine, onLeave = onBack, onCancel = { jobs.cancel(); onBack() })
-                mine.phase == Phase.DONE -> Ready(mine, jobs, onAgain = { jobs.clear(); jobs.start(tripId) })
-                else -> Problem(mine.phase, onRetry = { jobs.clear(); jobs.start(tripId) })
+                mine != null && mine.running -> Making(mine, onLeave = onBack, onCancel = { jobs.cancel(); onBack() })
+                mine != null && !choosing && mine.phase == Phase.DONE -> Ready(mine, jobs, onAgain = { choosing = true })
+                mine != null && !choosing -> Problem(mine.phase, onRetry = { choosing = true })
+                other != null && other.running -> Busy(other, onBack)
+                loading -> Unit
+                loaded == null -> Problem(Phase.EMPTY, onRetry = {})
+                else -> Choose(loaded) { from, to -> jobs.clear(); choosing = false; jobs.start(loaded, from, to) }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+/** Pick the whole trip or a part of it: two markers on the route, or one of the suggested parts. */
+@Composable
+private fun ColumnScope.Choose(trip: ReplayData.Trip, onMake: (Double, Double) -> Unit) {
+    val f = rememberFormatter(LocalContainer.current.settings.current.miles)
+    val minGap = (trip.lengthM * .03).coerceIn(500.0, 2_000.0).coerceAtMost(trip.lengthM)
+    var from by remember { mutableDoubleStateOf(0.0) }
+    var to by remember { mutableDoubleStateOf(trip.lengthM) }
+    val whole = from <= 1 && to >= trip.lengthM - 1
+    val count = trip.highlights.count { it.d in from..to }
+    Spacer(Modifier.height(8.dp))
+    Card(trip.day) {
+        RouteChooser(trip, from, to, Modifier.size(260.dp)) { a, b ->
+            from = a.coerceIn(0.0, trip.lengthM - minGap); to = b.coerceIn(from + minGap, trip.lengthM)
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            if (whole) f.distance(trip.tripDistanceM) else f.distance(to - from),
+            style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"), color = Color.White,
+        )
+        Text(pluralStringResource(R.plurals.replay_highlights, count, count), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = .6f))
+    }
+    Spacer(Modifier.height(14.dp))
+    Text(stringResource(R.string.replay_choose_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(10.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        for (s in trip.suggestions) {
+            val selected = kotlin.math.abs(s.from - from) < 1 && kotlin.math.abs(s.to - to) < 1
+            FilterChip(selected = selected, onClick = { from = s.from; to = s.to }, label = { Text(s.label) })
+        }
+    }
+    Spacer(Modifier.weight(1f))
+    Text(stringResource(R.string.replay_length_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(12.dp))
+    Button(onClick = { onMake(from, to) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.replay_make)) }
+}
+
+/** The route with the chosen part lit, its highlights, and two markers to drag. */
+@Composable
+private fun RouteChooser(trip: ReplayData.Trip, from: Double, to: Double, modifier: Modifier, onChange: (Double, Double) -> Unit) {
+    val accent = LocalPalette.current.accent
+    val pts = trip.outline
+    val ds = trip.outlineD
+    val n = pts.size / 2
+    val latest by rememberUpdatedState(Pair(from, to))
+    val change by rememberUpdatedState(onChange)
+    var dragging by remember { mutableIntStateOf(-1) }
+    Canvas(
+        modifier.pointerInput(trip.id) {
+            val pad = 22.dp.toPx()
+            fun at(i: Int, size: Float) = Offset(pad + pts[2 * i] * size, pad + pts[2 * i + 1] * size)
+            fun nearest(p: Offset, size: Float) = (0 until n).minBy { (at(it, size) - p).getDistanceSquared() }
+            fun indexOf(d: Double) = (0 until n).minBy { kotlin.math.abs(ds[it] - d) }
+            detectDragGestures(
+                onDragStart = { p ->
+                    val s = this.size.width.coerceAtMost(this.size.height) - 2 * pad
+                    val (a, b) = latest
+                    dragging = if ((at(indexOf(a), s) - p).getDistance() <= (at(indexOf(b), s) - p).getDistance()) 0 else 1
+                },
+                onDragEnd = { dragging = -1 }, onDragCancel = { dragging = -1 },
+            ) { change, _ ->
+                val s = this.size.width.coerceAtMost(this.size.height) - 2 * pad
+                val d = ds[nearest(change.position, s)].toDouble()
+                val (a, b) = latest
+                if (dragging == 0) change(d, b) else change(a, d)
+            }
+        },
+    ) {
+        if (n < 2) return@Canvas
+        val pad = 22.dp.toPx()
+        val s = size.minDimension - 2 * pad
+        fun at(i: Int) = Offset(pad + pts[2 * i] * s, pad + pts[2 * i + 1] * s)
+        fun path(a: Int, b: Int) = Path().apply { moveTo(at(a).x, at(a).y); for (i in a + 1..b) lineTo(at(i).x, at(i).y) }
+        val stroke = { w: Float -> Stroke(width = w, cap = StrokeCap.Round, join = StrokeJoin.Round) }
+        val i0 = (0 until n).minBy { kotlin.math.abs(ds[it] - from) }
+        val i1 = (0 until n).minBy { kotlin.math.abs(ds[it] - to) }
+        drawPath(path(0, n - 1), Color.White.copy(alpha = .16f), style = stroke(5.dp.toPx()))
+        if (i1 > i0) {
+            drawPath(path(i0, i1), accent.copy(alpha = .28f), style = stroke(16.dp.toPx()))
+            drawPath(path(i0, i1), accent, style = stroke(5.dp.toPx()))
+        }
+        for (h in trip.highlights) {
+            val i = (0 until n).minBy { kotlin.math.abs(ds[it] - h.d) }
+            drawCircle(Color.White, radius = 4.dp.toPx(), center = at(i))
+        }
+        for ((k, i) in listOf(i0, i1).withIndex()) {
+            val r = if (dragging == k) 13.dp.toPx() else 10.dp.toPx()
+            drawCircle(Color.White, radius = r, center = at(i))
+            drawCircle(accent, radius = r - 3.dp.toPx(), center = at(i))
         }
     }
 }

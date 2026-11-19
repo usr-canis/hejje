@@ -67,15 +67,15 @@ class ReplayJobs(private val context: Context, private val container: AppContain
 
     val busy: Boolean get() = state.value?.running == true
 
-    /** Starts a replay of [tripId] unless one is already being made. */
-    fun start(tripId: Long) {
+    /** Starts a replay of the part [from]..[to] (metres along the visible route) of [trip], unless one is already being made. */
+    fun start(trip: ReplayData.Trip, from: Double = 0.0, to: Double = trip.lengthM) {
         if (busy) return
         val id = nextId++
-        state.value = Job(id, tripId, Phase.PREPARING)
+        state.value = Job(id, trip.id, Phase.PREPARING)
         container.scope.launch {
-            val prepared = runCatching { ReplayData.build(context, container, tripId) }.getOrNull()
+            val prepared = runCatching { ReplayData.build(context, container, trip, from, to) }.getOrNull()
             if (state.value?.id != id) return@launch
-            if (prepared == null) { state.update { it?.copy(phase = Phase.EMPTY) }; return@launch }
+            if (prepared == null) { state.update { it?.copy(phase = Phase.FAILED) }; return@launch }
             sink = VideoSink(file)
             state.update { it?.copy(phase = Phase.MAP, json = prepared.json, outline = prepared.outline, title = prepared.title) }
             state.value?.let { notifyProgress(it, force = true) }

@@ -41,79 +41,119 @@ function weather(ts) {
   return { known: true, cloud: lerp(a.cloud, b.cloud, f), rain: lerp(a.rain, b.rain, f), vis: lerp(a.vis, b.vis, f), code: f < .5 ? a.code : b.code };
 }
 
-// ---------------- timing: one continuous shot at navigation height ----------------
-// The camera zooms in once at the start and out once at the end; in between it rides close behind
-// the arrow like a navigation view. It goes calmly through each highlight, dawn or dusk and the
-// start of rain, and faster (a smooth hyperlapse, with motion blur) in between. At most 45 s.
-const Z_NAV = 16.6, PITCH = 60, CALM_PX = 140, OUTRO = 3.4, INTRO = .3, START = 1.8;
-let vCalm, TT, T, slow, OV;
+// ---------------- timing and height ----------------
+// Calm everywhere: at highlights, sunrise or sunset, rain and the ends the road slides past at a
+// calm pace at navigation height; between them it eases (over a few seconds) to at most twice that
+// pace, and on long trips the camera also climbs gradually so the trip fits in a minute, coming
+// back down gradually for the next moment. The arrow never stops moving.
+const Z_NAV = 16.6, Z_MIN = 9.8, PITCH = 60, S0 = 140, S1 = 280, OUTRO = 3.4, INTRO = .3, START = 1.8, MAX_T = 60;
+let T, PLAN, OV, MOMENTS = [], skyZones = [];
 const mppAt = z => 156543 * Math.cos(toRad(route[0].lat)) / Math.pow(2, z);
-// Where the camera lifts its gaze to the sky: dawn or dusk, and the moment rain starts.
-let skyZones = [];
+const rampTime = dz => 1.8 + .45 * Math.max(0, dz);    // gentle: about 2 s for speed alone, longer for a climb
+// A zoom from za to zb at the calm pace: the mean metres per pixel along an eased change.
+const meanMpp = (za, zb) => { let s = 0; for (let i = 0; i < 24; i++) s += mppAt(lerp(za, zb, smooth((i + .5) / 24))); return s / 24; };
 function buildTiming() {
-  vCalm = mppAt(Z_NAV) * CALM_PX;
-  slow = [];
-  for (const h of D.highlights) slow.push({ d0: h.d - vCalm * 1.1, d1: h.d + vCalm * 1.3, secs: 2.4 });
-  // Dawn and dusk: the stretch where the sun is within a few degrees of the horizon gets ~3.5 s.
-  skyZones = [];
-  let z0 = null;
+  const vNav = mppAt(Z_NAV) * S0, m = [];
+  m.push({ d0: 0, d1: vNav * 1.3, secs: 2.6, z: Z_NAV, shape: 'in' });
+  for (const h of D.highlights) m.push({ d0: h.d - vNav * 1, d1: h.d + vNav * 1.2, secs: 2.2, z: Z_NAV });
+  // Dawn and dusk: the stretch with the sun near the horizon plays over about 5.5 s, looking up at the sky.
+  skyZones = []; let z0 = null;
   for (let i = 0; i < route.length; i++) {
     const tw = route[i].sunEl > -8 && route[i].sunEl < 5;
     if (tw && z0 === null) z0 = route[i].d;
-    if ((!tw || i === route.length - 1) && z0 !== null) { if (route[i].d - z0 > 50) skyZones.push({ d0: z0, d1: route[i].d, kind: 'sun' }); z0 = null; }
+    if ((!tw || i === route.length - 1) && z0 !== null) { if (route[i].d - z0 > 50) skyZones.push({ d0: z0, d1: route[i].d }); z0 = null; }
   }
-  // Rain starting along the way (not already at the start).
   const wet = d => { const w = weather(at(d).t); return w.known && (w.rain >= .1 || (w.code >= 51 && w.code <= 67)); };
-  for (let i = 1; i <= 200; i++) { const a = L * (i - 1) / 200, b = L * i / 200; if (a > vCalm * 4 && !wet(a) && wet(b)) skyZones.push({ d0: b - vCalm, d1: b + vCalm * 1.5, kind: 'rain' }); }
-  for (const z of skyZones) slow.push({ d0: z.d0, d1: z.d1, secs: z.kind === 'sun' ? 5.5 : 2.2 });
-  const goal = clamp(8 + 4.8 * Math.log2(1 + L / 5000), 8, 45) - INTRO - OUTRO;
-  let lo = Math.log(vCalm), hi = Math.log(vCalm * 400);
-  for (let i = 0; i < 28; i++) { const m = (lo + hi) / 2; if (profile(Math.exp(m)).total > goal) lo = m; else hi = m; }
-  TT = profile(Math.exp(Math.max(hi, Math.log(vCalm))));
-  T = INTRO + TT.total + OUTRO;
-}
-// Speed along the road: calm in slow zones, vFast elsewhere, then smoothed over time so speeding up
-// and slowing down always take about a second (no jolts).
-function profile(vFast) {
-  const N = 4000, dd = L / N, lnv = new Float64Array(N + 1);
-  for (let i = 0; i <= N; i++) {
-    const d = i * dd; let v = vFast;
-    for (const z of slow) if (d >= z.d0 && d <= z.d1) v = Math.min(v, Math.max(vCalm, (z.d1 - z.d0) / z.secs));
-    // Set off gently and arrive gently.
-    v *= lerp(.25, 1, smooth(d / (vCalm * 2))) * lerp(.3, 1, smooth((L - d) / (vCalm * 1.5)));
-    lnv[i] = Math.log(Math.min(v, vFast));
+  for (let i = 1; i <= 200; i++) { const a = L * (i - 1) / 200, b = L * i / 200; if (a > vNav * 4 && !wet(a) && wet(b)) skyZones.push({ d0: b - vNav, d1: b + vNav * 1.5 }); }
+  for (const s of skyZones) { const secs = s.d1 - s.d0 > vNav * 3 ? 5 : 2.4; m.push({ d0: s.d0, d1: s.d1, secs, z: clamp(Math.log2(156543 * Math.cos(toRad(route[0].lat)) * S0 * secs / Math.max(1, s.d1 - s.d0)), Z_MIN + 1, Z_NAV) }); }
+  m.push({ d0: Math.max(0, L - vNav), d1: L, secs: 2, z: Z_NAV, shape: 'out' });
+  // Clip to the route and merge moments that touch.
+  m.sort((a, b) => a.d0 - b.d0);
+  MOMENTS = [];
+  for (const x of m) {
+    x.d0 = clamp(x.d0, 0, L); x.d1 = clamp(x.d1, 0, L);
+    const last = MOMENTS[MOMENTS.length - 1];
+    if (last && x.d0 <= last.d1 + vNav * .5) { if (x.shape) last.shape = x.shape; last.d1 = Math.max(last.d1, x.d1); last.secs = Math.max(last.secs + x.secs * .6, (last.d1 - last.d0) / mppAt(Math.min(last.z, x.z)) / S1); last.z = Math.min(last.z, x.z); }
+    else MOMENTS.push({ ...x });
   }
-  let sm = lnv;
-  for (let pass = 0; pass < 2; pass++) {
-    const tc = [0]; for (let i = 1; i <= N; i++) tc.push(tc[i - 1] + dd / Math.exp((sm[i] + sm[i - 1]) / 2));
-    const next = new Float64Array(N + 1), sigma = .45;
-    let a = 0, b = 0;
-    for (let i = 0; i <= N; i++) {
-      while (tc[i] - tc[a] > 3 * sigma) a++;
-      while (b < N && tc[b + 1] - tc[i] <= 3 * sigma) b++;
-      let s = 0, w = 0;
-      for (let j = a; j <= b; j++) { const x = (tc[j] - tc[i]) / sigma, q = Math.exp(-x * x / 2); s += lnv[j] * q; w += q; }
-      next[i] = Math.min(s / w, lnv[i] + .7);   // never much faster than the zone allows
+  // The lowest the camera may need to fly: as low as possible, high enough for the minute.
+  // Longer trips may run longer, up to a minute; a short drive stays short.
+  const goal = clamp(12 + 7 * Math.log2(1 + L / 5000), 12, MAX_T) - INTRO - OUTRO;
+  let zc = Z_NAV;
+  if (totalTime(Z_NAV) > goal) { let lo = Z_MIN, hi = Z_NAV; for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (totalTime(mid) > goal) hi = mid; else lo = mid; } zc = lo; }
+  PLAN = buildPlan(zc);
+  T = INTRO + PLAN.end + OUTRO;
+}
+function legPlan(G, zA, zB, zc) {
+  // Climb from zA towards zc and come down to zB, easing speed up to at most S1; p = how far.
+  const lowZ = Math.min(zA, zB);
+  const tryP = p => {
+    const zp = lowZ - p * (lowZ - Math.min(lowZ, zc)), sp = S0 + p * (S1 - S0), ru = rampTime(zA - zp), rd = rampTime(zB - zp);
+    const ramp = (za, r) => { let s = 0; for (let i = 0; i < 24; i++) { const b = smooth((i + .5) / 24); s += (S0 + (sp - S0) * b) * mppAt(za + (zp - za) * b) * r / 24; } return s; };
+    return { zp, sp, ru, rd, dist: ramp(zA, ru) + ramp(zB, rd) };
+  };
+  const full = tryP(1);
+  if (full.dist <= G) return { ...full, cruise: (G - full.dist) / (full.sp * mppAt(full.zp)), G };
+  if (tryP(0).dist > G) return { short: true, G, secs: G / (S0 * meanMpp(zA, zB)), zA, zB };
+  let lo = 0, hi = 1; for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (tryP(mid).dist > G) hi = mid; else lo = mid; }
+  return { ...tryP(lo), cruise: 0, G };
+}
+const legTime = l => l.short ? l.secs : l.ru + l.rd + l.cruise;
+function totalTime(zc) {
+  let t = 0;
+  for (let i = 0; i < MOMENTS.length; i++) {
+    t += MOMENTS[i].secs;
+    if (i + 1 < MOMENTS.length) t += legTime(legPlan(Math.max(0, MOMENTS[i + 1].d0 - MOMENTS[i].d1), MOMENTS[i].z, MOMENTS[i + 1].z, zc));
+  }
+  return t;
+}
+// The whole flight sampled every 1/120 s: time, distance along the road, camera height.
+function buildPlan(zc) {
+  const dt = 1 / 120, ts = [], ds = [], zs = [];
+  let t = 0, d = 0;
+  const push = (z, dd) => { ts.push(t); ds.push(d); zs.push(z); t += dt; d += dd; };
+  for (let i = 0; i < MOMENTS.length; i++) {
+    const mo = MOMENTS[i], n = Math.max(1, Math.round(mo.secs / dt)), step = (mo.d1 - mo.d0) / n;
+    // The arrow sets off gently and comes gently to a stop; elsewhere it keeps the calm pace.
+    const shape = u => mo.shape === 'in' ? u * u : mo.shape === 'out' ? 1 - (1 - u) * (1 - u) : u;
+    for (let k = 0; k < n; k++) { d = mo.d0 + (mo.d1 - mo.d0) * shape(k / n); push(mo.z, 0); }
+    d = mo.d1;
+    if (i + 1 === MOMENTS.length) break;
+    const next = MOMENTS[i + 1], G = Math.max(0, next.d0 - mo.d1), l = legPlan(G, mo.z, next.z, zc), start = ds.length;
+    if (l.short) { const k = Math.max(1, Math.round(l.secs / dt)); for (let j = 0; j < k; j++) { const z = lerp(mo.z, next.z, smooth(j / k)); push(z, S0 * mppAt(z) * dt); } }
+    else {
+      const phase = (za, r, up) => { const k = Math.max(1, Math.round(r / dt)); for (let j = 0; j < k; j++) { const b = up ? smooth(j / k) : 1 - smooth(j / k), z = za + (l.zp - za) * b; push(z, (S0 + (l.sp - S0) * b) * mppAt(z) * dt); } };
+      phase(mo.z, l.ru, true);
+      const kc = Math.round(l.cruise / dt); for (let j = 0; j < kc; j++) push(l.zp, l.sp * mppAt(l.zp) * dt);
+      // Coming down: z goes from zp back to next.z.
+      const k = Math.max(1, Math.round(l.rd / dt));
+      for (let j = 0; j < k; j++) { const b = 1 - smooth(j / k), z = next.z + (l.zp - next.z) * b; push(z, (S0 + (l.sp - S0) * b) * mppAt(z) * dt); }
     }
-    sm = next;
+    // Land exactly where the next moment starts.
+    const got = d - mo.d1; if (got > 0) for (let j = start; j < ds.length; j++) ds[j] = mo.d1 + (ds[j] - mo.d1) * (G / got);
+    d = next.d0;
   }
-  const lv = Array.from(sm, Math.exp), tc = [0];
-  for (let i = 1; i <= N; i++) tc.push(tc[i - 1] + dd * 2 / (lv[i] + lv[i - 1]));
-  return { N, tc, lv, total: tc[N] };
+  ts.push(t); ds.push(L); zs.push(MOMENTS[MOMENTS.length - 1].z);
+  return { ts, ds, zs, dt, end: t };
 }
-function progress(t) {
-  const u = t - INTRO; if (u <= 0) return 0; if (u >= TT.total) return 1;
-  const c = TT.tc; let lo = 0, hi = TT.N;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= u) lo = m; else hi = m; }
-  return (lo + (u - c[lo]) / (c[hi] - c[lo])) / TT.N;
-}
-function speedAt(d) { return TT.lv[clamp(Math.round(d / L * TT.N), 0, TT.N)]; }
-function timeAt(d) { return INTRO + TT.tc[clamp(Math.round(d / L * TT.N), 0, TT.N)]; }
+function planAt(t) { const u = clamp(t - INTRO, 0, PLAN.end), i = Math.min(PLAN.ts.length - 2, Math.floor(u / PLAN.dt)), f = clamp((u - PLAN.ts[i]) / PLAN.dt); return { d: lerp(PLAN.ds[i], PLAN.ds[i + 1], f), z: lerp(PLAN.zs[i], PLAN.zs[i + 1], f) }; }
+function progress(t) { return planAt(t).d / L; }
+function timeAt(d) { let lo = 0, hi = PLAN.ds.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (PLAN.ds[m] <= d) lo = m; else hi = m; } return INTRO + PLAN.ts[lo]; }
+const travelEnd = () => INTRO + PLAN.end;
 
-// ---------------- camera: planned for the whole video, then smoothed like a gimbal ----------------
+// ---------------- the arrow's path: the GPS track gently smoothed ----------------
 const mercX = lon => lon * 20037508.34 / 180, mercY = lat => Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 6378137;
 const unX = x => x * 180 / 20037508.34, unY = y => 360 / Math.PI * Math.atan(Math.exp(y / 6378137)) - 90;
-function smoothPt(d, r) { let x = 0, y = 0; for (let j = -4; j <= 4; j++) { const p = at(d + j * r / 4); x += mercX(p.lon); y += mercY(p.lat); } return [x / 9, y / 9]; }
+let SM;   // the route resampled every 8 m along its length and smoothed over ~40 m
+function buildPath() {
+  const step = 8, n = Math.max(2, Math.ceil(L / step) + 1), x = new Float64Array(n), y = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const p = at(Math.min(L, i * step)); x[i] = mercX(p.lon); y[i] = mercY(p.lat); }
+  const sx = new Float64Array(n), sy = new Float64Array(n), r = 10, sig = 5;
+  for (let i = 0; i < n; i++) { let a = 0, b = 0, w = 0; for (let j = -r; j <= r; j++) { const k = clamp(i + j, 0, n - 1), q = Math.exp(-j * j / (2 * sig * sig)); a += x[k] * q; b += y[k] * q; w += q; } sx[i] = a / w; sy[i] = b / w; }
+  SM = { step, n, x: sx, y: sy };
+}
+function smAt(d) { const u = clamp(d / SM.step, 0, SM.n - 1), i = Math.min(SM.n - 2, Math.floor(u)), f = u - i; return [lerp(SM.x[i], SM.x[i + 1], f), lerp(SM.y[i], SM.y[i + 1], f)]; }
+function smLonLat(d) { const [x, y] = smAt(d); return [unX(x), unY(y)]; }
 function gauss(arr, sigma) {
   const res = [], n = arr.length, r = Math.ceil(sigma * 3);
   for (let i = 0; i < n; i++) { let s = 0, w = 0; for (let j = -r; j <= r; j++) { const k = clamp(i + j, 0, n - 1), q = Math.exp(-j * j / (2 * sigma * sigma)); s += arr[k] * q; w += q; } res.push(s / w); }
@@ -121,36 +161,36 @@ function gauss(arr, sigma) {
 }
 let CAM;
 function buildCamera() {
-  const N = Math.round(T * FPS) + 1, raw = { b: [], up: [] }, ds = [];
+  buildPath();
+  const N = Math.round(T * FPS) + 1, raw = { b: [], up: [] }, plan = [];
   let prevB = null;
   for (let i = 0; i < N; i++) {
-    const d = progress(i / FPS) * L, v = speedAt(d); ds.push(d);
-    // Look further ahead the faster we go, so the heading turns smoothly at speed.
-    const K = clamp(v * 1.4, 120, 25000), a = smoothPt(d - K * .4, K / 3), b = smoothPt(d + K, K / 2);
+    const pl = planAt(i / FPS), v = Math.max(1, (planAt((i + 1) / FPS).d - planAt((i - 1) / FPS).d) * FPS / 2); plan.push(pl);
+    // Anticipate bends: look ahead about a second of travel (more when high up and fast).
+    const K = clamp(v * 1.1, 60, 25000), a = smAt(pl.d - K * .2), b = smAt(pl.d + K);
     let br = toDeg(Math.atan2(b[0] - a[0], b[1] - a[1]));
     if (prevB !== null) { while (br - prevB > 180) br -= 360; while (br - prevB < -180) br += 360; }
     prevB = br; raw.b.push(br);
-    raw.up.push(skyZones.some(z => d >= z.d0 && d <= z.d1) ? 1 : 0);
+    raw.up.push(skyZones.some(z => pl.d >= z.d0 && pl.d <= z.d1) ? 1 : 0);
   }
-  const b = gauss(raw.b, .8 * FPS), up = gauss(raw.up, .5 * FPS);
-  CAM = ds.map((d, i) => {
-    const p = at(d), t = i / FPS, s = smooth((t - INTRO) / START);
-    // Motion blur samples for this frame: more when the ground rushes past.
-    const pxPerFrame = speedAt(d) / mppAt(Z_NAV) / FPS;
-    return { lon: p.lon, lat: p.lat, bearing: b[i], zoom: lerp(Z_NAV - 2.6, Z_NAV, s), pitch: lerp(40, PITCH, s) + 16 * up[i] * s, blur: clamp(Math.ceil(pxPerFrame / 45), 1, 4) };
+  const b = gauss(raw.b, .9 * FPS), up = gauss(raw.up, .7 * FPS);
+  CAM = plan.map((pl, i) => {
+    const t = i / FPS, s = smooth((t - INTRO) / START);
+    const moving = t > INTRO + .2 && t < travelEnd();
+    return { d: pl.d, bearing: b[i], zoom: lerp(Z_NAV - 2.6, pl.z, s), pitch: lerp(40, PITCH + 4 * clamp((Z_NAV - pl.z) / 4), s) + 16 * up[i] * s, blur: moving ? 2 : 1 };
   });
 }
 function camera(t) {
-  const i = clamp(Math.round(t * FPS), 0, CAM.length - 1), k = CAM[i], d = progress(t) * L, p = at(d);
-  // The camera keeps the arrow exactly in place; only its heading is smoothed.
-  const cam = { center: [p.lon, p.lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 820, blur: k.blur };
+  const k = CAM[clamp(Math.round(t * FPS), 0, CAM.length - 1)], d = planAt(t).d, [lon, lat] = smLonLat(d), p = at(d);
+  // The camera keeps the arrow exactly in place on the smoothed path; its heading is smoothed.
+  const cam = { center: [lon, lat], zoom: k.zoom, pitch: k.pitch, bearing: k.bearing, pad: 820, blur: k.blur };
   const o = ease((t - (T - OUTRO)) / 2.4);
   if (o > 0) {
     const db = ((OV.bearing - cam.bearing + 540) % 360) - 180;
     cam.center = [lerp(cam.center[0], OV.center[0], o), lerp(cam.center[1], OV.center[1], o)];
     cam.zoom = lerp(cam.zoom, OV.zoom, smooth(o * 1.1)); cam.pitch = lerp(cam.pitch, OV.pitch, o); cam.bearing += db * o; cam.pad = lerp(820, 0, o); cam.blur = 1;
   }
-  return { ...cam, d, p, o };
+  return { ...cam, d, p: { ...p, lon, lat }, o };
 }
 
 // ---------------- the land, built from map data ----------------
@@ -165,9 +205,6 @@ function style() {
   const cls = (...c) => ['in', ['get', 'class'], ['literal', c]];
   const w = (z0, w0, z1, w1) => ['interpolate', ['exponential', 1.7], ['zoom'], z0, w0, z1, w1];
   const major = cls('motorway', 'trunk', 'primary', 'secondary');
-  const label = (id, c, minzoom) => ({ id, type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom, filter: ['==', ['get', 'class'], c],
-    layout: { 'text-field': name, 'text-font': ['Noto Sans Regular'], 'text-size': c === 'city' ? 32 : 26, 'text-letter-spacing': .06, 'text-max-width': 8, 'text-allow-overlap': true, 'text-ignore-placement': true },
-    paint: { 'text-color': '#ffffff', 'text-opacity': .9, 'text-halo-color': 'rgba(0,0,0,.45)', 'text-halo-width': 1.8, 'text-halo-blur': 1.2 } });
   return {
     version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources: {
@@ -177,6 +214,8 @@ function style() {
       world: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
       all: { type: 'geojson', data: lineFC(null) },
       done: { type: 'geojson', data: lineFC(0) },
+      roadname: { type: 'geojson', data: EMPTY },
+      placename: { type: 'geojson', data: EMPTY },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#cfd6dc' } },
@@ -209,7 +248,12 @@ function style() {
       { id: 'route-all', type: 'line', source: 'all', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-opacity': .4, 'line-width': w(9, 2, 17, 9) } },
       { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff8a3d', 'line-opacity': .42, 'line-blur': 8, 'line-width': w(9, 9, 17, 30) } },
       { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff7a26', 'line-width': w(9, 3.5, 17, 10) } },
-      label('city', 'city', 0),
+      // The road's name painted on the road ahead, facing the driver.
+      { id: 'roadname', type: 'symbol', source: 'roadname', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 58, 'text-letter-spacing': .12, 'text-max-width': 30,
+        'text-rotate': ['get', 'rot'], 'text-rotation-alignment': 'map', 'text-pitch-alignment': 'map', 'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.22)', 'text-halo-width': 1.5, 'text-halo-blur': 1 } },
+      { id: 'placename', type: 'symbol', source: 'placename', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 34, 'text-letter-spacing': .06, 'text-max-width': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.45)', 'text-halo-width': 1.8, 'text-halo-blur': 1.2 } },
     ],
   };
 }
@@ -249,13 +293,15 @@ function noiseCanvas(w, h) {
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let v = 0; for (const o of oct) v += val(o, x / w, y / h * .5) * o.amp; const k = (y * w + x) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = Math.round(255 * smooth((v - .38) / .45)); }
   g.putImageData(img, 0, 0); return c;
 }
-function waitMap() {
-  return new Promise(res => {
-    const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded());
-    const f = () => { if (done()) { map.off('render', f); clearTimeout(to); res(); } };
-    const to = setTimeout(() => { map.off('render', f); res(); }, 20000);
-    map.on('render', f); map.triggerRepaint();
-  });
+// Draws the map until every tile it needs is in. Each drawing is asked for directly, so this keeps
+// going when the screen isn't refreshing (the app in the background).
+const nap = () => document.hidden ? new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); }) : sleep(8);
+async function waitMap() {
+  const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded()) && !map._placementDirty;
+  const t0 = performance.now();
+  map.redraw();
+  while (!done() && performance.now() - t0 < 20000) { await nap(); map.redraw(); }
+  map.redraw();
 }
 
 // ---------------- light of that hour and that weather ----------------
@@ -342,6 +388,137 @@ function logo(a) {
   LOGO.w = 72 + 18 + w + 50;
 }
 
+// ---------------- names: the road painted on the road, the nearest village or town ----------------
+// Read from the map tiles while the map is fetched before filming, so nothing extra is downloaded
+// and every frame agrees. Inside a city only the road is named; high up only towns are.
+const latinName = p => p['name:en'] || p.name_en || p['name:latin'] || p.name || '';
+// The road's number when it has one ("NH 48"), otherwise its name.
+function roadText(p) {
+  const refs = String(p.ref || '').split(';').map(s => s.trim()).filter(Boolean);
+  const ref = refs.find(r => /^(NH|SH|MDR)/i.test(r)) || refs[0];
+  if (ref) return ref.replace(/^([A-Za-z]+)[\s-]*(\d)/, '$1 $2');
+  return latinName(p) || null;
+}
+// Distance in metres from (lon, lat) to a polyline [[lon, lat], ...].
+function nearLine(lon, lat, line) {
+  const kx = 111320 * Math.cos(toRad(lat)), ky = 110540; let best = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const ax = (line[i - 1][0] - lon) * kx, ay = (line[i - 1][1] - lat) * ky, bx = (line[i][0] - lon) * kx, by = (line[i][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, u = l2 > 0 ? clamp(-(ax * dx + ay * dy) / l2) : 0;
+    best = Math.min(best, Math.hypot(ax + u * dx, ay + u * dy));
+  }
+  return best;
+}
+const metres = (a, b, lat) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos(toRad(lat)), (a[1] - b[1]) * 110540);
+const SEEN = { roads: [], places: new Map() };
+// One look at the map around the arrow (while fetching): which road it is on, which places are near.
+function collect(t) {
+  const pl = planAt(t), [lon, lat] = smLonLat(pl.d), tol = clamp(mppAt(pl.z) * 6, 15, 60);
+  let key = null, best = tol;
+  for (const f of map.querySourceFeatures('omt', { sourceLayer: 'transportation_name' })) {
+    const g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+    for (const line of lines) { const dd = nearLine(lon, lat, line); if (dd < best) { const k = roadText(f.properties); if (k) { best = dd; key = k; } } }
+  }
+  let city = false;
+  for (const f of map.querySourceFeatures('omt', { sourceLayer: 'place' })) {
+    const p = f.properties, n = latinName(p); if (!n || f.geometry.type !== 'Point') continue;
+    const xy = f.geometry.coordinates, id = n + '|' + xy[0].toFixed(3) + '|' + xy[1].toFixed(3);
+    if (!SEEN.places.has(id)) SEEN.places.set(id, { name: n, cls: p.class, lon: xy[0], lat: xy[1] });
+    const dd = metres(xy, [lon, lat], lat);
+    if ((p.class === 'city' && dd < 8000) || (['suburb', 'quarter', 'neighbourhood'].includes(p.class) && dd < 1200)) city = true;
+  }
+  SEEN.roads.push({ t, d: pl.d, z: pl.z, key, city });
+}
+let ROAD_EVENTS = [], PLACE_SHOWS = [], START_NAME = null, END_NAME = null;
+const HL_WINDOWS = () => D.highlights.map(h => [timeAt(h.d) - .3, timeAt(h.d) + 2.9]);
+const ROAD_SECS = 3, PLACE_PRE = 2.2, PLACE_POST = .5;
+function planNames() {
+  const hl = HL_WINDOWS(), busy = (a, b) => hl.some(([x, y]) => a < y && b > x);
+  // Roads: a change counts once the new road holds for a while; nothing while the camera is high.
+  let cur = null, cand = null, cT = 0, cD = 0, n = 0;
+  const changes = [];
+  for (const s of SEEN.roads) {
+    if (!s.key || s.z < 14) continue;
+    if (s.key === cur) { cand = null; continue; }
+    if (s.key !== cand) { cand = s.key; cT = s.t; cD = s.d; n = 1; } else n++;
+    if (n >= 4 && s.d - cD >= 100) { cur = cand; changes.push({ t: Math.max(cT, INTRO + .8), text: cur }); cand = null; }
+  }
+  ROAD_EVENTS = [];
+  for (const e of changes) {
+    let s = e.t; const last = ROAD_EVENTS[ROAD_EVENTS.length - 1];
+    if (last && s < last.s + ROAD_SECS + .3) s = last.s + ROAD_SECS + .3;
+    for (const [x, y] of hl) if (s < y && s + ROAD_SECS > x) s = y + .2;
+    if (s - e.t > 5 || s + ROAD_SECS > travelEnd() - .5) continue;      // too late to be about this road
+    if (planAt(s).z < 14) continue;
+    if (last && last.text === e.text) continue;
+    const d = planAt(s).d + mppAt(planAt(s).z) * 380, [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
+    ROAD_EVENTS.push({ s, text: e.text, lon, lat, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
+  }
+  // Places: where the route passes closest to each one, and how close.
+  const cityAt = d => { let k = null; for (const s of SEEN.roads) if (!k || Math.abs(s.d - d) < Math.abs(k.d - d)) k = s; return k ? k.city : false; };
+  const cands = [];
+  for (const p of SEEN.places.values()) {
+    if (!['village', 'town', 'city'].includes(p.cls)) continue;
+    const px = mercX(p.lon), py = mercY(p.lat), k = Math.cos(toRad(p.lat));
+    let best = Infinity, bi = 0;
+    for (let i = 0; i < SM.n; i += 4) { const dd = Math.hypot(SM.x[i] - px, SM.y[i] - py); if (dd < best) { best = dd; bi = i; } }
+    const d = bi * SM.step, near = best * k, z = planAt(timeAt(d)).z, high = z < 14;
+    if (high ? p.cls === 'village' || near > Math.max(2500, 70 * mppAt(z)) : p.cls === 'city' || near > 2000) continue;
+    if (!high && cityAt(d)) continue;
+    cands.push({ ...p, d, near, t: timeAt(d), rank: (p.cls === 'village' ? 1 : 0) + near / 5000 });
+  }
+  cands.sort((a, b) => a.rank - b.rank);
+  const taken = [[-1, INTRO + 3.4], [travelEnd() - .6, T + 1], ...hl, ...ROAD_EVENTS.map(e => [e.s - .2, e.s + ROAD_SECS])];
+  PLACE_SHOWS = [];
+  for (const c of cands) {
+    const a = c.t - PLACE_PRE, b = c.t + PLACE_POST;
+    if (taken.some(([x, y]) => a < y + .3 && b > x - .3)) continue;
+    taken.push([a, b]); PLACE_SHOWS.push({ ...c, a, b });
+  }
+  // Start and end: the names the app knows, else the most precise nearby name from the map.
+  const nameNear = d => {
+    const [lon, lat] = smLonLat(d); let best = null, bs = Infinity;
+    for (const p of SEEN.places.values()) {
+      const dd = metres([p.lon, p.lat], [lon, lat], lat), lim = p.cls === 'city' ? 15000 : p.cls === 'town' ? 6000 : 3000;
+      if (!['city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood', 'hamlet'].includes(p.cls) || dd > lim) continue;
+      const score = dd / lim; if (score < bs) { bs = score; best = p.name; }
+    }
+    return best;
+  };
+  START_NAME = D.startName || nameNear(0);
+  END_NAME = D.endName || nameNear(L);
+}
+// Shows this frame's names on the map (only touching the map when something changes).
+let shownRoad = null, shownPlace = null;
+function applyNames(t, c) {
+  const road = ROAD_EVENTS.find(e => t >= e.s && t < e.s + ROAD_SECS) || null;
+  if (road !== shownRoad) { shownRoad = road; map.getSource('roadname').setData(road ? { type: 'Feature', geometry: { type: 'Point', coordinates: [road.lon, road.lat] }, properties: { label: road.text, rot: road.rot } } : EMPTY); }
+  const ra = road ? smooth((t - road.s) / .5) * (1 - smooth((t - road.s - ROAD_SECS + .6) / .6)) * (1 - c.o) : 0;
+  map.setPaintProperty('roadname', 'text-opacity', ra * .92);
+  const place = PLACE_SHOWS.find(e => t >= e.a && t < e.b) || null;
+  if (place !== shownPlace) { shownPlace = place; map.getSource('placename').setData(place ? { type: 'Feature', geometry: { type: 'Point', coordinates: [place.lon, place.lat] }, properties: { label: place.name } } : EMPTY); }
+  let pa = 0;
+  if (place) {
+    pa = smooth((t - place.a) / .45) * (1 - smooth((t - place.b + .45) / .45)) * (1 - c.o);
+    // Fade a name that sits at the edge of the picture.
+    const q = map.project([place.lon, place.lat]);
+    pa *= clamp(Math.min(q.x - 60, W - 60 - q.x, q.y - 200, H - 120 - q.y) / 80);
+  }
+  map.setPaintProperty('placename', 'text-opacity', pa);
+}
+const EMPTY = { type: 'FeatureCollection', features: [] };
+// A small card with where the drive starts, and where it ends beside the total.
+function placeCard(name, a, y, end) {
+  if (!name || a <= 0) return null;
+  fx.font = `500 30px ${SANS}`; fx.letterSpacing = '0px'; const w = fx.measureText(name).width + 96, b = box((W - w) / 2, y, w, 66);
+  fx.save(); fx.globalAlpha = a; fx.fillStyle = 'rgba(10,12,16,.55)'; fx.strokeStyle = 'rgba(255,255,255,.14)'; fx.lineWidth = 1.5;
+  fx.beginPath(); fx.roundRect(b.x, b.y, b.w, b.h, 33); fx.fill(); fx.stroke();
+  fx.beginPath(); fx.arc(b.x + 38, b.y + 33, 8, 0, 7);
+  if (end) { fx.fillStyle = '#ff7a26'; fx.fill(); } else { fx.strokeStyle = '#ffffff'; fx.lineWidth = 3.5; fx.stroke(); }
+  fx.fillStyle = '#ffffff'; fx.textAlign = 'left'; fx.textBaseline = 'middle'; fx.fillText(name, b.x + 64, b.y + 34);
+  fx.restore(); return b;
+}
+
 // ---------------- labels that never overlap ----------------
 function box(x, y, w, h) { return { x, y, w, h }; }
 function hits(a, b, pad = 10) { return a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad; }
@@ -384,7 +561,6 @@ function drawLabel({ it, b }) {
 // ---------------- where a highlight happened: the road and the nearest place ----------------
 // Read from the map tiles already loaded for the close-up, so nothing extra is fetched.
 const WHERE = new Map();
-function latinName(p) { return p['name:en'] || p.name_en || p['name:latin'] || p.name || ''; }
 function whereOf(h) {
   if (WHERE.has(h)) return WHERE.get(h);
   const kx = 111320 * Math.cos(toRad(h.lat)), ky = 110540;
@@ -399,7 +575,7 @@ function whereOf(h) {
     const g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
     for (const line of lines) for (let i = 1; i < line.length; i++) {
       const d = segDist(line[i - 1], line[i]);
-      if (d < best) { best = d; const p = f.properties, n = latinName(p); road = p.ref && n && n.length > 26 ? p.ref : n || p.ref || null; }
+      if (d < best) { const k = roadText(f.properties); if (k) { best = d; road = k; } }
     }
   }
   let place = null, near = 9000;
@@ -434,8 +610,8 @@ function highlights(t, c, arrowAt) {
     const since = t - timeAt(h.d), pop = clamp(since / .35);
     if (q.x > -50 && q.x < W + 50 && q.y > 0 && q.y < H + 50 && !dots.some(o => Math.hypot(o.x - q.x, o.y - q.y) < 22)) dots.push({ x: q.x, y: q.y, a: Math.max(pop, end), r: 8 + (1 - pop) * 10 });
     if (end > 0) { if (q.x > -50 && q.x < W + 50 && q.y > 0 && q.y < H + 50) items.push({ x: q.x, y: q.y, a: end, key: h.key.toUpperCase(), value: h.value }); continue; }
-    const a = clamp((since + .2) / .25) * (1 - clamp((since - 2.0) / .4)) * (1 - clamp(c.o * 2));
-    if (a > .005 && since > -.2 && since < 2.4) live.push({ h, q, a });
+    const a = clamp((since + .2) / .25) * (1 - clamp((since - 2.5) / .4)) * (1 - clamp(c.o * 2));
+    if (a > .005 && since > -.2 && since < 2.9) live.push({ h, q, a });
   }
   for (const d of dots) { fx.save(); fx.globalAlpha = d.a; fx.fillStyle = '#ffffff'; fx.strokeStyle = '#ff7a26'; fx.lineWidth = 4; fx.shadowColor = 'rgba(0,0,0,.5)'; fx.shadowBlur = 8; fx.beginPath(); fx.arc(d.x, d.y, d.r, 0, 7); fx.fill(); fx.stroke(); fx.restore(); }
   const obstacles = [box(LOGO.x, LOGO.y, LOGO.w, LOGO.h)];
@@ -450,7 +626,7 @@ function highlights(t, c, arrowAt) {
     }
     drawLabel({ it: { ...pin.it, x: pin.b.x, y: pin.b.y, a }, b: pin.b });
   }
-  if (end > 0) { obstacles.push(box(W / 2 - 330, H - 320, 660, 300), ...dots.map(d => box(d.x - 12, d.y - 12, 24, 24))); layout(items, obstacles).forEach(drawLabel); }
+  if (end > 0) { obstacles.push(box(W / 2 - 330, H - 410, 660, 390), ...dots.map(d => box(d.x - 12, d.y - 12, 24, 24))); layout(items, obstacles).forEach(drawLabel); }
 }
 
 // ---------------- one frame ----------------
@@ -458,8 +634,7 @@ async function frame(t, warm) {
   const c = camera(t), p = c.p, wx = weather(p.t), k = look(p, wx);
   map.jumpTo({ center: c.center, zoom: c.zoom, pitch: c.pitch, bearing: c.bearing, padding: { top: c.pad, bottom: 0, left: 0, right: 0 } });
   if (!warm) {
-    applyLook(k, p); map.getSource('done').setData(lineFC(c.d));
-    // Names would crowd the far horizon when the camera is tilted: fade them there.
+    applyLook(k, p); map.getSource('done').setData(lineFC(c.d)); applyNames(t, c);
   }
   await waitMap();
   if (!warm) { draw(t, c, p, k); compose(t); }
@@ -508,7 +683,9 @@ function draw(t, c, p, k) {
   const arrowAlpha = 1 - smooth((t - (T - OUTRO + 1.1)) / .9);
   const arrowAt = c.o < 1 && arrowAlpha > 0 ? arrow(t, c, arrowAlpha) : null;
   logo(clamp((t - .2) / .6));
-  totalBox(clamp((t - (T - OUTRO + 1.3)) / .7));
+  const endA = clamp((t - (T - OUTRO + 1.3)) / .7);
+  totalBox(endA); placeCard(END_NAME, endA, H - 392, true);
+  placeCard(START_NAME, clamp((t - .6) / .5) * (1 - clamp((t - (INTRO + 2.8)) / .5)), H - 250, false);
   highlights(t, c, arrowAt);
   if (t > T - 2.4) { fx.save(); fx.globalAlpha = clamp((t - (T - 2.4)) / .8) * .55; fx.font = `400 17px ${SANS}`; fx.fillStyle = '#ffffff'; fx.textAlign = 'center'; fx.fillText(D.credit, W / 2, H - 44); fx.restore(); }
   const fi = clamp(t / .5); if (fi < 1) { fx.fillStyle = `rgba(0,0,0,${1 - fi})`; fx.fillRect(0, 0, W, H); }
@@ -516,7 +693,7 @@ function draw(t, c, p, k) {
 
 function arrow(t, c, alpha) {
   const p = c.p, q = map.project([p.lon, p.lat]), mpp = 156543 * Math.cos(toRad(p.lat)) / Math.pow(2, c.zoom), dd = clamp(mpp * 45, 25, 2500);
-  const a = smoothPt(c.d - dd, dd / 2), b = smoothPt(c.d + dd, dd / 2), qa = map.project([unX(a[0]), unY(a[1])]), qb = map.project([unX(b[0]), unY(b[1])]);
+  const a = smAt(c.d - dd), b = smAt(c.d + dd), qa = map.project([unX(a[0]), unY(a[1])]), qb = map.project([unX(b[0]), unY(b[1])]);
   const ang = Math.atan2(qb.y - qa.y, qb.x - qa.x) + Math.PI / 2;
   fx.save(); fx.globalAlpha = alpha * clamp((t - .3) / .5); fx.translate(q.x, q.y);
   const g = fx.createRadialGradient(0, 0, 0, 0, 0, 80); g.addColorStop(0, 'rgba(255,170,100,.5)'); g.addColorStop(1, 'rgba(255,170,100,0)');
@@ -575,10 +752,12 @@ async function run() {
     const ov = map.cameraForBounds([[w, s], [e, n]], { padding: { top: 260, bottom: 500, left: 130, right: 130 }, bearing: 0 });
     OV = { center: [ov.center.lng, ov.center.lat], zoom: Math.min(ov.zoom, 15), pitch: 0, bearing: 0 };
     buildCamera();
-    if (D.stills) { for (const t of (D.stills === 'highlights' ? D.highlights.map(h => timeAt(h.d) + .3) : D.stills)) { await frame(t, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
     const frames = Math.min(Math.round(T * FPS), D.limitFrames || Infinity);   // limitFrames: tests only
-    // Fetch the map along the way first, so drawing never waits mid-shot.
-    for (let f = 0; f < frames; f += 6) { await frame(f / FPS, true); report(.2 * f / frames, 'map'); }
+    // Fetch the map along the way first, so drawing never waits mid-shot, and read the names on it.
+    const step = D.stills ? 12 : 6;
+    for (let f = 0; f < frames; f += step) { const t = f / FPS; await frame(t, true); if (t <= travelEnd()) collect(t); report(.2 * f / frames, 'map'); }
+    planNames();
+    if (D.stills) { for (const t of (D.stills === 'highlights' ? D.highlights.map(h => timeAt(h.d) + .3) : D.stills)) { await frame(t, false); await window.__shot(t); } Android.done('stills', T); return; }   // tests only
     const muxer = new Mp4Muxer.Muxer({
       target: new Mp4Muxer.StreamTarget({ onData: (data, position) => Android.chunk(toBase64(data), position), chunked: true, chunkSize: 2 ** 20 }),
       video: { codec: codec.kind, width: W, height: H, frameRate: FPS }, fastStart: false, firstTimestampBehavior: 'offset',
@@ -598,7 +777,7 @@ async function run() {
       }
       const vf = new VideoFrame(out, { timestamp: Math.round(f * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
       enc.encode(vf, { keyFrame: f % (FPS * 2) === 0 }); vf.close();
-      while (enc.encodeQueueSize > 2) await sleep(4);
+      while (enc.encodeQueueSize > 2) await new Promise(r => { const go = () => { enc.removeEventListener('dequeue', go); r(); }; enc.addEventListener('dequeue', go); setTimeout(go, 40); });
       report(.2 + .8 * (f + 1) / frames, 'video');
     }
     await enc.flush(); if (failed) throw failed;

@@ -570,6 +570,14 @@
     <string name="replay_sunrise">Sunrise</string>
     <string name="replay_sunset">Sunset</string>
     <string name="replay_total">Total</string>
+    <string name="replay_whole_trip">Whole trip</string>
+    <string name="replay_choose_hint">Drag the two markers to replay part of the trip, or pick one below.</string>
+    <string name="replay_length_note">Videos are up to a minute: long stretches are flown over gently, highlights up close.</string>
+    <string name="replay_make">Make video</string>
     <string name="replay_near">near</string>
     <string name="replay_credit">Map © OpenStreetMap · OpenFreeMap · Terrain: Mapzen (AWS Open Data) · Weather: Open-Meteo</string>
+    <plurals name="replay_highlights">
+        <item quantity="one">%d highlight</item>
+        <item quantity="other">%d highlights</item>
+    </plurals>
 </resources>

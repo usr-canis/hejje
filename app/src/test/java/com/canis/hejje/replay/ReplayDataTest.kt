@@ -25,7 +25,8 @@ class ReplayDataTest {
         val sim = DriveSim(t = System.currentTimeMillis() - 3_600_000, lat = 12.95, lon = 77.6).apply { heading = 20.0 }
         sim.drive(300, 14f).drive(200, 30f, climbPerSec = .6f).drive(120, 6f).drive(20, 0f, accel = 1.5f)
         val id = app.container.trips.insertTrip("r1", listOf(sim.segment()), "", null, null, emptyList())
-        val prepared = ReplayData.build(app, app.container, id, weatherOf = { null })!!
+        val trip = ReplayData.load(app, app.container, id)!!
+        val prepared = ReplayData.build(app, app.container, trip, weatherOf = { null })
         val json = prepared.json
         assertTrue(prepared.outline.size >= 4 && prepared.outline.all { it in 0f..1f })
         val root = Json.parseToJsonElement(json).jsonObject
@@ -40,5 +41,26 @@ class ReplayDataTest {
         val kinds = root["highlights"]!!.jsonArray.map { it.jsonObject["kind"]!!.jsonPrimitive.content }
         assertTrue("top speed always shows: $kinds", "TOP" in kinds)
         assertTrue(root["highlights"]!!.jsonArray.all { it.jsonObject["value"]!!.jsonPrimitive.content.isNotBlank() })
+        // The whole trip comes first among the suggested parts, then one around each highlight.
+        assertEquals(trip.highlights.size + 1, trip.suggestions.size)
+        assertEquals(0.0, trip.suggestions[0].from, 0.0)
+        assertEquals(trip.lengthM, trip.suggestions[0].to, 0.0)
+    }
+
+    @Test fun build_aPartStartsAtZeroAndCountsOnlyItsOwnDistance() = runBlocking {
+        val app: HejjeApp = ApplicationProvider.getApplicationContext()
+        val sim = DriveSim(t = System.currentTimeMillis() - 3_600_000, lat = 12.95, lon = 77.6).apply { heading = 20.0 }
+        sim.drive(600, 20f)
+        val id = app.container.trips.insertTrip("r2", listOf(sim.segment()), "", null, null, emptyList())
+        val trip = ReplayData.load(app, app.container, id)!!
+        val from = trip.lengthM * .25
+        val to = trip.lengthM * .75
+        val root = Json.parseToJsonElement(ReplayData.build(app, app.container, trip, from, to, weatherOf = { null }).json).jsonObject
+        val route = root["route"]!!.jsonArray
+        assertEquals(0.0, route.first().jsonArray[2].jsonPrimitive.content.toDouble(), 0.0)
+        val partLength = route.last().jsonArray[2].jsonPrimitive.content.toDouble()
+        assertTrue("part $partLength of ${trip.lengthM}", partLength in (to - from) * .95..(to - from) * 1.01)
+        // A part in the middle doesn't claim the trip's start or end place.
+        assertTrue("startName" !in root && "endName" !in root)
     }
 }
