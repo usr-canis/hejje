@@ -81,6 +81,12 @@ function buildTiming() {
   const goal = clamp(12 + 7 * Math.log2(1 + L / 5000), 12, MAX_T) - INTRO - OUTRO;
   let zc = Z_NAV;
   if (totalTime(Z_NAV) > goal) { let lo = Z_MIN, hi = Z_NAV; for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (totalTime(mid) > goal) hi = mid; else lo = mid; } zc = lo; }
+  // Still over a minute (a very long trip with many moments): the moments themselves get a little shorter.
+  for (let k = 0; k < 8 && totalTime(zc) > MAX_T - INTRO - OUTRO; k++) {
+    const over = totalTime(zc) - (MAX_T - INTRO - OUTRO), soft = MOMENTS.filter(m => !m.shape && m.secs > 1.6);
+    if (!soft.length) break;
+    for (const m of soft) m.secs = Math.max(1.6, m.secs - over / soft.length);
+  }
   PLAN = buildPlan(zc);
   T = INTRO + PLAN.end + OUTRO;
 }
