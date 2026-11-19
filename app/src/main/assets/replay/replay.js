@@ -212,14 +212,15 @@ function style() {
   const w = (z0, w0, z1, w1) => ['interpolate', ['exponential', 1.7], ['zoom'], z0, w0, z1, w1];
   const major = cls('motorway', 'trunk', 'primary', 'secondary');
   return {
-    version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    // Changes show in the very frame they are made (no fading over wall-clock time), so every frame is exact.
+    version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', transition: { duration: 0, delay: 0 },
     sources: {
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
       dem: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
       shade: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
       world: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
       all: { type: 'geojson', data: lineFC(null) },
-      done: { type: 'geojson', data: lineFC(0) },
+      done: { type: 'geojson', data: doneLine(), lineMetrics: true },
       roadname: { type: 'geojson', data: EMPTY },
       placename: { type: 'geojson', data: EMPTY },
     },
@@ -252,8 +253,8 @@ function style() {
       { id: 'buildings', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14,
         paint: { 'fill-extrusion-color': SURF.b1, 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6], 'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0], 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': true } },
       { id: 'route-all', type: 'line', source: 'all', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-opacity': .4, 'line-width': w(9, 2, 17, 9) } },
-      { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff8a3d', 'line-opacity': .42, 'line-blur': 8, 'line-width': w(9, 9, 17, 30) } },
-      { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff7a26', 'line-width': w(9, 3.5, 17, 10) } },
+      { id: 'route-glow', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': doneGradient(0, GLOW), 'line-opacity': .42, 'line-blur': 8, 'line-width': w(9, 9, 17, 30) } },
+      { id: 'route', type: 'line', source: 'done', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-gradient': doneGradient(0, ROUTE), 'line-width': w(9, 3.5, 17, 10) } },
       // The road's name painted on the road ahead, facing the driver.
       { id: 'roadname', type: 'symbol', source: 'roadname', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 48, 'text-letter-spacing': .1, 'text-max-width': 30,
         'text-rotate': ['get', 'rot'], 'text-rotation-alignment': 'map', 'text-pitch-alignment': 'map', 'text-allow-overlap': true, 'text-ignore-placement': true },
@@ -283,6 +284,33 @@ function textures() {
     for (let i = 0; i < 260; i++) { const x = rnd() * s, y = rnd() * s; g.fillStyle = rnd() < .5 ? `rgba(40,70,20,${.08 + rnd() * .1})` : `rgba(255,250,210,${.06 + rnd() * .08})`; g.fillRect(x, y, 1 + rnd() * 2, 1 + rnd() * 2); }
   });
   map.addImage('canopy', canopy); map.addImage('speckle', speckle);
+}
+// The driven part of the route: the whole route is one line, laid out once; each frame only moves
+// where its colour stops (and keeps the gaps where a private place was cut out empty).
+const ROUTE = '#ff7a26', GLOW = '#ff8a3d', NONE = 'rgba(255,122,38,0)';
+let DONE;
+function doneLine() {
+  const M = [0];
+  for (let i = 1; i < route.length; i++) M.push(M[i - 1] + Math.hypot(mercX(route[i].lon) - mercX(route[i - 1].lon), mercY(route[i].lat) - mercY(route[i - 1].lat)));
+  const tot = M[M.length - 1] || 1, gaps = [];
+  for (let i = 1; i < route.length; i++) if (route[i].piece !== route[i - 1].piece) gaps.push([M[i - 1] / tot, M[i] / tot]);
+  DONE = { M, tot, gaps };
+  return { type: 'Feature', geometry: { type: 'LineString', coordinates: route.map(r => [r.lon, r.lat]) }, properties: {} };
+}
+// How far along the line (as the map measures it) the drive has got at d metres.
+function doneAt(d) {
+  let lo = 0, hi = route.length - 1; d = clamp(d, 0, L);
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (route[m].d <= d) lo = m; else hi = m; }
+  const f = route[hi].d > route[lo].d ? (d - route[lo].d) / (route[hi].d - route[lo].d) : 0;
+  return (DONE.M[lo] + f * (DONE.M[hi] - DONE.M[lo])) / DONE.tot;
+}
+function doneGradient(d, color) {
+  const p = doneAt(d), out = ['step', ['line-progress'], p > 0 ? color : NONE];
+  const add = (x, c) => { if (x <= (out.length > 3 ? out[out.length - 2] : 0)) out[out.length - 1] = c; else out.push(x, c); };
+  for (const [a, b] of DONE.gaps) { if (a >= p) break; add(a, NONE); if (b >= p) break; add(b, color); }
+  if (out[out.length - 1] !== NONE) add(Math.min(1, Math.max(p, 1e-9)), NONE);
+  if (out.length < 5) out.push(1, NONE);
+  return out;
 }
 function lineFC(upto) {
   const lines = []; let cur = [], piece = route[0].piece;
@@ -631,7 +659,7 @@ async function frame(t, warm) {
   const c = camera(t), p = c.p, wx = weather(p.t), k = look(p, wx);
   map.jumpTo({ center: c.center, zoom: c.zoom, pitch: c.pitch, bearing: c.bearing, padding: { top: c.pad, bottom: 0, left: 0, right: 0 } });
   if (!warm) {
-    applyLook(k, p); map.getSource('done').setData(lineFC(c.d)); applyNames(t, c);
+    applyLook(k, p); map.setPaintProperty('route', 'line-gradient', doneGradient(c.d, ROUTE)); map.setPaintProperty('route-glow', 'line-gradient', doneGradient(c.d, GLOW)); applyNames(t, c);
   }
   await waitMap();
   if (!warm) { draw(t, c, p, k); compose(t); }
