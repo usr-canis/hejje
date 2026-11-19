@@ -379,11 +379,11 @@ function logo(a) {
 // and every frame agrees. Inside a city only the road is named; high up only towns are.
 const latinName = p => p['name:en'] || p.name_en || p['name:latin'] || p.name || '';
 // The road's number when it has one ("NH 48"), otherwise its name.
-function roadText(p) {
+function roadText(p, refOnly) {
   const refs = String(p.ref || '').split(';').map(s => s.trim()).filter(Boolean);
   const ref = refs.find(r => /^(NH|SH|MDR)/i.test(r)) || refs[0];
   if (ref) return ref.replace(/^([A-Za-z]+)[\s-]*(\d)/, '$1 $2');
-  return latinName(p) || null;
+  return refOnly ? null : latinName(p) || null;
 }
 // Distance in metres from (lon, lat) to a polyline [[lon, lat], ...].
 function nearLine(lon, lat, line) {
@@ -399,11 +399,11 @@ const metres = (a, b, lat) => Math.hypot((a[0] - b[0]) * 111320 * Math.cos(toRad
 const SEEN = { roads: [], places: new Map() };
 // One look at the map around the arrow (while fetching): which road it is on, which places are near.
 function collect(t) {
-  const pl = planAt(t), [lon, lat] = smLonLat(pl.d), tol = clamp(mppAt(pl.z) * 6, 15, 60);
+  const pl = planAt(t), [lon, lat] = smLonLat(pl.d), high = pl.z < 13, tol = clamp(mppAt(pl.z) * 3, 15, 400);
   let key = null, best = tol;
   for (const f of map.querySourceFeatures('omt', { sourceLayer: 'transportation_name' })) {
     const g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
-    for (const line of lines) { const dd = nearLine(lon, lat, line); if (dd < best) { const k = roadText(f.properties); if (k) { best = dd; key = k; } } }
+    for (const line of lines) { const dd = nearLine(lon, lat, line); if (dd < best) { const k = roadText(f.properties, high); if (k) { best = dd; key = k; } } }
   }
   let city = false;
   for (const f of map.querySourceFeatures('omt', { sourceLayer: 'place' })) {
@@ -420,11 +420,11 @@ const HL_WINDOWS = () => D.highlights.map(h => [timeAt(h.d) - .3, timeAt(h.d) + 
 const ROAD_SECS = 3, PLACE_PRE = 2.2, PLACE_POST = .5;
 function planNames() {
   const hl = HL_WINDOWS(), busy = (a, b) => hl.some(([x, y]) => a < y && b > x);
-  // Roads: a change counts once the new road holds for a while; nothing while the camera is high.
+  // Roads: a change counts once the new road holds for a while (high up, only numbered roads are read).
   let cur = null, cand = null, cT = 0, cD = 0, n = 0;
   const changes = [];
   for (const s of SEEN.roads) {
-    if (!s.key || s.z < 14) continue;
+    if (!s.key) continue;
     if (s.key === cur) { cand = null; continue; }
     if (s.key !== cand) { cand = s.key; cT = s.t; cD = s.d; n = 1; } else n++;
     if (n >= 4 && s.d - cD >= 100) { cur = cand; changes.push({ t: Math.max(cT, INTRO + .8), text: cur }); cand = null; }
@@ -435,9 +435,9 @@ function planNames() {
     if (last && s < last.s + ROAD_SECS + .3) s = last.s + ROAD_SECS + .3;
     for (const [x, y] of hl) if (s < y && s + ROAD_SECS > x) s = y + .2;
     if (s - e.t > 5 || s + ROAD_SECS > travelEnd() - .5) continue;      // too late to be about this road
-    if (planAt(s).z < 14) continue;
     if (last && last.text === e.text) continue;
-    const d = planAt(s).d + mppAt(planAt(s).z) * 560, [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
+    // Painted far enough ahead that the arrow doesn't reach it while it shows.
+    const pl = planAt(s), pace = (planAt(s + .1).d - pl.d) / .1 / mppAt(pl.z), d = pl.d + mppAt(pl.z) * clamp(pace * 3.8, 480, 1000), [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
     ROAD_EVENTS.push({ s, text: e.text, lon, lat, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
   }
   // Places: where the route passes closest to each one, and how close.
