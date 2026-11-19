@@ -297,7 +297,7 @@ function noiseCanvas(w, h) {
 // going when the screen isn't refreshing (the app in the background).
 const nap = () => document.hidden ? new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); }) : sleep(8);
 async function waitMap() {
-  const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded()) && !map._placementDirty;
+  const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded());
   const t0 = performance.now();
   map.redraw();
   while (!done() && performance.now() - t0 < 20000) { await nap(); map.redraw(); }
