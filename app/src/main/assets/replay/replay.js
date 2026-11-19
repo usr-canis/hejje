@@ -202,7 +202,24 @@ function camera(t) {
 // ---------------- the land, built from map data ----------------
 // Heights from terrain tiles (real hills), shaded by the real sun; fields, woods, water, towns and
 // roads from OpenStreetMap; 3D buildings with sun-cast shadows in towns.
-const DEM = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+const DEM = 'hejje://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+// Each map piece is downloaded once per video, however often the map asks for it: the hills and the
+// 3D ground read the same heights, and zooming out and back in asks for the same pieces again.
+const NET = new Map(), NET_MAX = 48e6; let netBytes = 0;
+maplibregl.addProtocol('hejje', params => {
+  const url = 'https://' + params.url.slice('hejje://'.length);
+  let e = NET.get(url);
+  if (e) { NET.delete(url); NET.set(url, e); }      // most recently used last
+  else {
+    e = { size: 0, data: fetch(url).then(r => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.arrayBuffer(); }) };
+    e.data.then(b => { e.size = b.byteLength; netBytes += b.byteLength;
+      for (const [k, v] of NET) { if (netBytes <= NET_MAX) break; if (v.size) { NET.delete(k); netBytes -= v.size; } } }, () => NET.delete(url));
+    NET.set(url, e);
+  }
+  // A copy each time: the map hands the bytes it gets over to its workers.
+  return e.data.then(b => ({ data: b.slice(0) }));
+});
+let TILES = null;   // the vector tiles' address, read once before the map starts
 // Daylight colours. Night, dawn and dusk are mixed from these.
 const SURF = { land: '#a8c27c', farm: '#b9cd86', grass: '#99c46a', wood: '#5b974b', park: '#88c264', urban: '#e1dacb', water: '#3d95d4',
   sand: '#e6d7a6', curb: '#ece8de', road: '#5e646b', minor: '#8b9096', b1: '#efe6d5', b2: '#d9a98b', b3: '#f3f0ea' };
@@ -215,7 +232,7 @@ function style() {
     // Changes show in the very frame they are made (no fading over wall-clock time), so every frame is exact.
     version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', transition: { duration: 0, delay: 0 },
     sources: {
-      omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+      omt: { type: 'vector', tiles: TILES.tiles.map(u => u.replace(/^https:\/\//, 'hejje://')), minzoom: TILES.minzoom || 0, maxzoom: TILES.maxzoom || 14 },
       dem: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
       shade: { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14 },
       world: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
@@ -335,11 +352,12 @@ function noiseCanvas(w, h) {
 // going when the screen isn't refreshing (the app in the background).
 // A drawing made when everything was already in is the finished one, so most frames draw once.
 const nap = () => document.hidden ? new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); }) : sleep(16);
-async function waitMap() {
+async function waitMap(warm) {
   const done = () => map.loaded() && map.areTilesLoaded() && (!map.terrain || map.terrain.sourceCache.sourceCache.loaded());
   const t0 = performance.now();
   map.redraw();
-  while (!done() && performance.now() - t0 < 20000) { await nap(); map.redraw(); }
+  // While fetching ahead nothing is filmed, so the map is drawn less often while pieces arrive.
+  while (!done() && performance.now() - t0 < 20000) { await (warm ? sleep(60) : nap()); map.redraw(); }
 }
 
 // ---------------- light of that hour and that weather ----------------
@@ -661,7 +679,7 @@ async function frame(t, warm) {
   if (!warm) {
     applyLook(k, p); map.setPaintProperty('route', 'line-gradient', doneGradient(c.d, ROUTE)); map.setPaintProperty('route-glow', 'line-gradient', doneGradient(c.d, GLOW)); applyNames(t, c);
   }
-  await waitMap();
+  await waitMap(warm);
   if (!warm) { draw(t, c, p, k); compose(t); }
   return c;
 }
@@ -769,6 +787,7 @@ async function run() {
     for (let i = 0; i < 280; i++) rain.push([rnd() * W, rnd() * H, rnd() * .6 + .7, rnd()]);
     CLOUD = noiseCanvas(512, 192);
     buildTiming();
+    TILES = await (await fetch('https://tiles.openfreemap.org/planet')).json();
     map = new maplibregl.Map({ container: 'map', style: style(), center: [route[0].lon, route[0].lat], zoom: Z_NAV - 2.6, pitch: 40, maxPitch: 80, interactive: false, attributionControl: false,
       preserveDrawingBuffer: true, fadeDuration: 0, pixelRatio: 1, maxTileCacheSize: 1500 });
     await new Promise((res, rej) => { map.on('load', res); map.on('error', e => { if (!map.loaded()) rej(e.error || new Error('map')); }); });
