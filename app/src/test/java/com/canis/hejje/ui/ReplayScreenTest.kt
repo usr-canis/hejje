@@ -9,6 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.canis.hejje.HejjeApp
 import com.canis.hejje.replay.ReplayJobs
@@ -79,6 +81,20 @@ class ReplayScreenTest {
         rule.onNodeWithText("Whole trip").assertExists()
         val dir = File("build/screens").apply { mkdirs() }
         File(dir, "replay-choose.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun pip_showsProgressInTheSmallWindow() {
+        val now = System.currentTimeMillis()
+        app.container.replays.show(ReplayJobs.Job(3, 7, ReplayJobs.Phase.VIDEO, progress = .62f, outline = outline, title = "x", json = "{}", startedAt = now, videoStartedAt = now))
+        rule.setContent {
+            HejjeTheme(2) {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(180.dp, 320.dp)) { com.canis.hejje.ui.replay.ReplayPip(app.container.replays) }
+            }
+        }
+        rule.mainClock.advanceTimeBy(1_500)
+        rule.onNodeWithText("Filming", substring = true).assertExists()
+        val dir = File("build/screens").apply { mkdirs() }
+        File(dir, "replay-pip.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun ready_offersWatchAndShare() {

@@ -88,6 +88,7 @@ import com.canis.hejje.domain.NamedPlace
 import com.canis.hejje.ui.components.HejjeIcons
 import com.canis.hejje.ui.components.LocalContainer
 import com.canis.hejje.ui.replay.ReplayHost
+import com.canis.hejje.ui.replay.ReplayPip
 import com.canis.hejje.ui.replay.ReplayScreen
 import com.canis.hejje.ui.components.LocalUndo
 import com.canis.hejje.ui.components.UndoHost
@@ -208,9 +209,10 @@ object Routes {
 
 /**
  * @param openTripId a trip to open straight away (from the summary notification)
+ * @param pip the app is in its small floating window (picture-in-picture) while a replay is made
  */
 @Composable
-fun HejjeRoot(container: AppContainer, openTripId: Long?, openReplay: Boolean = false, onTripOpened: () -> Unit) {
+fun HejjeRoot(container: AppContainer, openTripId: Long?, openReplay: Boolean = false, pip: Boolean = false, onTripOpened: () -> Unit) {
     val settings by container.settings.data.collectAsStateWithLifecycle()
     HejjeTheme(settings.theme) {
         CompositionLocalProvider(LocalContainer provides container) {
@@ -218,6 +220,8 @@ fun HejjeRoot(container: AppContainer, openTripId: Long?, openReplay: Boolean = 
                 Box {
                     if (settings.onboardingDone) MainScaffold(container, openTripId, openReplay, onTripOpened) else OnboardingScreen()
                     BrandSplash()
+                    // In the small floating window only the replay's progress shows; the app stays underneath.
+                    if (pip) ReplayPip(container.replays)
                 }
             }
         }

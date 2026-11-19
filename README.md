@@ -50,8 +50,10 @@
 
 **Replay video**
 - Turn any trip into a short vertical video, made on your phone: a close, 3D view of your route over real hills, fields, lakes and towns, with the real sky of that hour (night, sunrise, sunset) and the real weather.
-- One continuous shot from just behind the arrow, like a navigation view: calm through each highlight, dawn or dusk (the camera looks up at the sky) and the start of rain, a smooth hyperlapse in between. A short hop takes about ten seconds, a long road trip up to 45.
-- Share it or save it to your gallery. Private places are cut out, as in share cards.
+- One continuous shot from just behind the arrow, like a navigation view: calm through each highlight, dawn or dusk (the camera looks up at the sky) and the start of rain, never more than twice that pace in between. On long trips the camera rises gently between highlights and comes back down for each. A short hop takes about 20 seconds, a long road trip up to a minute.
+- The road you're on is painted on the road when it changes (its number, like NH 48, when it has one), and the nearest village or town is named as you pass; a drive inside a city names only the roads.
+- Replay the whole trip or just a part: drag two markers on the route or pick a suggested stretch.
+- Switch apps while it's being made and it carries on in a small floating window, then saves itself to your gallery. Private places are cut out, as in share cards.
 
 **Home-screen widget**
 - This week's kilometres on a little odometer, right on your home screen.

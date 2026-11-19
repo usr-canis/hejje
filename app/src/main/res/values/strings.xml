@@ -545,7 +545,7 @@
     <string name="replay_left_soon">Working out the time left…</string>
     <string name="replay_left_less">Less than a minute left</string>
     <string name="replay_left_min">About %d min left</string>
-    <string name="replay_background_note">You can leave this screen. Hejje keeps making the video while the app is open, then saves it to your gallery.</string>
+    <string name="replay_background_note">You can leave this screen. If you switch to another app, Hejje keeps going in a small window, then saves the video to your gallery.</string>
     <string name="replay_keep_using">Keep using Hejje</string>
     <string name="replay_cancel">Cancel</string>
     <string name="replay_watch">Watch</string>
@@ -560,6 +560,7 @@
     <string name="replay_empty">This trip has no route to replay.</string>
     <string name="replay_unsupported">This phone can’t make replay videos yet. Updating Android System WebView from Google Play may help.</string>
     <string name="replay_failed">Couldn’t make the video. Check the internet connection and try again.</string>
+    <string name="replay_failed_short">Couldn’t make the video</string>
     <string name="replay_retry">Try again</string>
     <string name="replay_share">Share</string>
     <string name="replay_saved">Saved to Movies/Hejje</string>

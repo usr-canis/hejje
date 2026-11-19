@@ -34,6 +34,8 @@ GitHub release), and the privacy policy is published.
 > REPLAY YOUR DRIVE
 > • Turn any trip into a short vertical video over a 3D landscape with real hills, the real sky of that hour
 >   (night, sunrise, sunset) and the real weather, with your highlights
+> • Road names painted on the road, nearby villages and towns named as you pass
+> • Replay the whole trip or just a part of it
 > • Made on your phone; share it or save it to your gallery
 >
 > ON ANDROID AUTO

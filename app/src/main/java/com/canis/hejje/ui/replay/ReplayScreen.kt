@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -243,6 +244,46 @@ private fun ColumnScope.Making(job: ReplayJobs.Job, onLeave: () -> Unit, onCance
     Spacer(Modifier.height(14.dp))
     Button(onClick = onLeave, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.replay_keep_using)) }
     TextButton(onClick = onCancel) { Text(stringResource(R.string.replay_cancel)) }
+}
+
+/**
+ * The small floating window (picture-in-picture) shown while a video is being made and the person
+ * has switched to another app: the route drawing itself, the percentage and what is happening.
+ */
+@Composable
+fun ReplayPip(jobs: ReplayJobs) {
+    val job by jobs.job.collectAsStateWithLifecycle()
+    val j = job
+    val target = when {
+        j == null -> 0f
+        j.phase == Phase.PREPARING -> .01f
+        j.running -> j.progress
+        else -> 1f
+    }
+    val shown by animateFloatAsState(target, tween(900, easing = LinearEasing), label = "pip")
+    Column(
+        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B2030), Color(0xFF0D0F14)))).padding(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        RouteDrawing(j?.outline, shown, Modifier.weight(1f, fill = false).aspectRatio(1f), dark = true)
+        Text(
+            if (j?.phase == Phase.DONE) "✓" else "${(shown * 100).roundToInt()}%",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light, fontFeatureSettings = "tnum"), color = Color.White,
+        )
+        Text(
+            stringResource(
+                when (j?.phase) {
+                    Phase.DONE -> R.string.replay_saved
+                    Phase.FAILED, Phase.UNSUPPORTED, Phase.EMPTY, null -> R.string.replay_failed_short
+                    Phase.PREPARING -> R.string.replay_stage_preparing
+                    Phase.MAP -> R.string.replay_stage_map
+                    Phase.VIDEO -> R.string.replay_stage_video
+                    Phase.SAVING -> R.string.replay_stage_saving
+                },
+            ),
+            style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .7f), textAlign = TextAlign.Center, maxLines = 2,
+        )
+    }
 }
 
 /** The dark card the progress and the finished replay sit on, in the video's own colours. */
