@@ -239,7 +239,6 @@ function style() {
       all: { type: 'geojson', data: lineFC(null) },
       done: { type: 'geojson', data: doneLine(), lineMetrics: true },
       roadname: { type: 'geojson', data: EMPTY },
-      placename: { type: 'geojson', data: EMPTY },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#cfd6dc' } },
@@ -280,8 +279,6 @@ function style() {
       { id: 'roadname-high', type: 'symbol', source: 'roadname', filter: ['get', 'high'], layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 34, 'text-letter-spacing': .1,
         'text-anchor': 'left', 'text-offset': [.9, 0], 'text-allow-overlap': true, 'text-ignore-placement': true },
         paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.5)', 'text-halo-width': 2, 'text-halo-blur': 1 } },
-      { id: 'placename', type: 'symbol', source: 'placename', layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 34, 'text-letter-spacing': .06, 'text-max-width': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
-        paint: { 'text-color': '#ffffff', 'text-opacity': 0, 'text-halo-color': 'rgba(0,0,0,.45)', 'text-halo-width': 1.8, 'text-halo-blur': 1.2 } },
     ],
   };
 }
@@ -461,19 +458,16 @@ function collect(t) {
     const g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
     for (const line of lines) { const dd = nearLine(lon, lat, line); if (dd < best) { const k = roadText(f.properties, high); if (k) { best = dd; key = k; } } }
   }
-  let city = false;
   for (const f of map.querySourceFeatures('omt', { sourceLayer: 'place' })) {
     const p = f.properties, n = latinName(p); if (!n || f.geometry.type !== 'Point') continue;
     const xy = f.geometry.coordinates, id = n + '|' + xy[0].toFixed(3) + '|' + xy[1].toFixed(3);
     if (!SEEN.places.has(id)) SEEN.places.set(id, { name: n, cls: p.class, lon: xy[0], lat: xy[1] });
-    const dd = metres(xy, [lon, lat], lat);
-    if ((p.class === 'city' && dd < 8000) || (['suburb', 'quarter', 'neighbourhood'].includes(p.class) && dd < 1200)) city = true;
   }
-  SEEN.roads.push({ t, d: pl.d, z: pl.z, key, city });
+  SEEN.roads.push({ t, d: pl.d, z: pl.z, key });
 }
-let ROAD_EVENTS = [], PLACE_SHOWS = [], START_NAME = null, END_NAME = null;
+let ROAD_EVENTS = [], START_NAME = null, END_NAME = null;
 const HL_WINDOWS = () => D.highlights.map(h => [timeAt(h.d) - .3, timeAt(h.d) + 2.9]);
-const ROAD_SECS = 3, PLACE_PRE = 2.2, PLACE_POST = .5;
+const ROAD_SECS = 3;
 function planNames() {
   const hl = HL_WINDOWS(), busy = (a, b) => hl.some(([x, y]) => a < y && b > x);
   // Roads: a change counts once the new road holds for a while (high up, only numbered roads are read).
@@ -497,27 +491,6 @@ function planNames() {
     const d = pl.d + mppAt(pl.z) * (high ? clamp(pace * 2.4, 260, 640) : clamp(pace * 3.8, 480, 1000)), [lon, lat] = smLonLat(d), a = smAt(d - 30), b = smAt(d + 30);
     ROAD_EVENTS.push({ s, text: e.text, lon, lat, high, rot: toDeg(Math.atan2(b[0] - a[0], b[1] - a[1])) });
   }
-  // Places: where the route passes closest to each one, and how close.
-  const cityAt = d => { let k = null; for (const s of SEEN.roads) if (!k || Math.abs(s.d - d) < Math.abs(k.d - d)) k = s; return k ? k.city : false; };
-  const cands = [];
-  for (const p of SEEN.places.values()) {
-    if (!['village', 'town', 'city'].includes(p.cls)) continue;
-    const px = mercX(p.lon), py = mercY(p.lat), k = Math.cos(toRad(p.lat));
-    let best = Infinity, bi = 0;
-    for (let i = 0; i < SM.n; i += 4) { const dd = Math.hypot(SM.x[i] - px, SM.y[i] - py); if (dd < best) { best = dd; bi = i; } }
-    const d = bi * SM.step, near = best * k, z = planAt(timeAt(d)).z, high = z < 14;
-    if (high ? p.cls === 'village' || near > Math.max(2500, 70 * mppAt(z)) : p.cls === 'city' || near > 2000) continue;
-    if (!high && cityAt(d)) continue;
-    cands.push({ ...p, d, near, t: timeAt(d), rank: (p.cls === 'village' ? 1 : 0) + near / 5000 });
-  }
-  cands.sort((a, b) => a.rank - b.rank);
-  const taken = [[-1, INTRO + 3.4], [travelEnd() - .6, T + 1], ...hl, ...ROAD_EVENTS.map(e => [e.s - .2, e.s + ROAD_SECS])];
-  PLACE_SHOWS = [];
-  for (const c of cands) {
-    const a = c.t - PLACE_PRE, b = c.t + PLACE_POST;
-    if (taken.some(([x, y]) => a < y + .3 && b > x - .3)) continue;
-    taken.push([a, b]); PLACE_SHOWS.push({ ...c, a, b });
-  }
   // Start and end: the names the app knows, else the most precise nearby name from the map.
   const nameNear = d => {
     const [lon, lat] = smLonLat(d); let best = null, bs = Infinity;
@@ -530,26 +503,177 @@ function planNames() {
   };
   START_NAME = D.startName || nameNear(0);
   END_NAME = D.endName || nameNear(L);
+  planPlaceNames();
 }
 // Shows this frame's names on the map (only touching the map when something changes).
-let shownRoad = null, shownPlace = null;
+let shownRoad = null;
 function applyNames(t, c) {
   const road = ROAD_EVENTS.find(e => t >= e.s && t < e.s + ROAD_SECS) || null;
   if (road !== shownRoad) { shownRoad = road; map.getSource('roadname').setData(road ? { type: 'Feature', geometry: { type: 'Point', coordinates: [road.lon, road.lat] }, properties: { label: road.text, rot: road.rot, high: road.high } } : EMPTY); }
   const ra = road ? smooth((t - road.s) / .5) * (1 - smooth((t - road.s - ROAD_SECS + .6) / .6)) * (1 - c.o) : 0;
   map.setPaintProperty('roadname', 'text-opacity', ra * .92); map.setPaintProperty('roadname-high', 'text-opacity', ra);
-  const place = PLACE_SHOWS.find(e => t >= e.a && t < e.b) || null;
-  if (place !== shownPlace) { shownPlace = place; map.getSource('placename').setData(place ? { type: 'Feature', geometry: { type: 'Point', coordinates: [place.lon, place.lat] }, properties: { label: place.name } } : EMPTY); }
-  let pa = 0;
-  if (place) {
-    pa = smooth((t - place.a) / .45) * (1 - smooth((t - place.b + .45) / .45)) * (1 - c.o);
-    // Fade a name that sits at the edge of the picture.
-    const q = map.project([place.lon, place.lat]);
-    pa *= clamp(Math.min(q.x - 60, W - 60 - q.x, q.y - 200, H - 120 - q.y) / 80);
-  }
-  map.setPaintProperty('placename', 'text-opacity', pa);
 }
 const EMPTY = { type: 'FeatureCollection', features: [] };
+
+// ---------------- place names: always at least four in the picture ----------------
+// Worked out for the whole video before filming (every 0.1 s), so every frame agrees: the nearest,
+// biggest places in view are named where they are; a name stays while it fits and fades out when it
+// leaves; when fewer than four places are in view, the nearest ones just outside are named at the
+// edge of the picture, pointing towards them.
+const NAME_MIN = 4, NAME_STEP = .1, NAME_FADE = .4, NAME_HOLD = 2.5;
+const RANK = { city: 0, town: 1, village: 2, suburb: 2, quarter: 3, neighbourhood: 3, hamlet: 4 };
+const RANK_WEIGHT = [.35, .6, 1, 1.3, 1.6];
+let NAMES = [], NAME_BOXES = [], NAME_STATS = null;
+const nameFont = p => `500 ${p.cls === 'city' ? 38 : p.cls === 'town' ? 34 : 30}px ${SANS}`;
+const NAME_W = new Map();
+function nameWidth(p) {
+  const k = p.cls + '|' + p.name;
+  if (!NAME_W.has(k)) { fx.font = nameFont(p); fx.letterSpacing = '0.5px'; NAME_W.set(k, fx.measureText(p.name).width); fx.letterSpacing = '0px'; }
+  return NAME_W.get(k);
+}
+// Places seen on the map, one per name (the biggest kind wins when a name repeats nearby).
+function namePool() {
+  const byName = new Map();
+  for (const p of SEEN.places.values()) {
+    if (!(p.cls in RANK)) continue;
+    const same = (byName.get(p.name) || []).find(o => metres([o.lon, o.lat], [p.lon, p.lat], p.lat) < 3000);
+    if (!same) { byName.set(p.name, [...(byName.get(p.name) || []), { ...p, rank: RANK[p.cls], key: p.name + '|' + p.lon.toFixed(3) }]); continue; }
+    if (RANK[p.cls] < same.rank) Object.assign(same, { cls: p.cls, rank: RANK[p.cls], lon: p.lon, lat: p.lat });
+  }
+  const pool = [].concat(...byName.values()), grid = new Map(), cell = .1;
+  for (const p of pool) { const k = Math.floor(p.lon / cell) + ',' + Math.floor(p.lat / cell); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(p); }
+  return { pool, near(lon, lat, r) {
+    const out = [], dLat = r / 110540, dLon = r / (111320 * Math.cos(toRad(lat)));
+    for (let x = Math.floor((lon - dLon) / cell); x <= Math.floor((lon + dLon) / cell); x++)
+      for (let y = Math.floor((lat - dLat) / cell); y <= Math.floor((lat + dLat) / cell); y++) for (const p of grid.get(x + ',' + y) || []) out.push(p);
+    return out;
+  } };
+}
+// The camera of time t, as the frame will have it (without drawing).
+function aim(t) {
+  const c = camera(t);
+  map.jumpTo({ center: c.center, zoom: c.zoom, pitch: c.pitch, bearing: c.bearing, padding: { top: c.pad, bottom: 0, left: 0, right: 0 } });
+  try { if (map.terrain) map.transform.elevation = map.terrain.getElevationForLngLatZoom(map.transform.center, map.transform.tileZoom); } catch (e) { /* drawn without */ }
+  return c;
+}
+function horizonY() { try { return clamp(H / 2 - map.transform.getHorizon(), 0, H); } catch (e) { return 0; } }
+// What names must keep clear of at time t: the logo, the arrow, the road paint, highlight labels, the cards.
+function nameObstacles(t, c) {
+  const o = [box(20, 30, Math.max(LOGO.w, 260) + 30, 120)], q = map.project([c.p.lon, c.p.lat]);
+  if (c.o < 1) o.push(box(q.x - 80, q.y - 80, 160, 160));
+  if (t < INTRO + 3.4) o.push(box(W / 2 - 320, H - 280, 640, 120));
+  if (t > T - OUTRO + .9) o.push(box(W / 2 - 360, H - 430, 720, 430));
+  const road = ROAD_EVENTS.find(e => t >= e.s - .2 && t < e.s + ROAD_SECS + .2);
+  if (road) {
+    const r = map.project([road.lon, road.lat]); fx.font = `700 ${road.high ? 34 : 48}px ${SANS}`; const w = fx.measureText(road.text).width * 1.15;
+    o.push(road.high ? box(r.x, r.y - 30, w + 40, 60) : box(r.x - w / 2 - 30, r.y - 50, w + 60, 100));
+  }
+  for (const h of D.highlights) {
+    const th = timeAt(h.d), end = t > T - OUTRO + 1;
+    if (!end && (t < th - .4 || t > th + 3)) continue;
+    const r = map.project([h.lon, h.lat]);
+    o.push(end ? box(r.x - 300, r.y - 120, 600, 240) : box(r.x - 440, r.y - 210, 880, 420));
+  }
+  return o;
+}
+const fits = (b, list) => !list.some(o => hits(b, o, 14));
+function mapBox(p, top) {
+  const q = map.project([p.lon, p.lat]), w = nameWidth(p) + 16;
+  if (!isFinite(q.x) || !isFinite(q.y)) return null;
+  const b = box(q.x - w / 2, q.y - 24, w, 48);
+  return b.x >= 24 && b.x + b.w <= W - 24 && b.y >= top && b.y + b.h <= H - 110 ? b : null;
+}
+// Where a place outside the picture is named: on the edge, in its direction from the arrow.
+function edgeAt(p, c, top) {
+  const a = map.project([c.p.lon, c.p.lat]), kx = Math.cos(toRad(c.p.lat));
+  let rel = toRad(toDeg(Math.atan2((p.lon - c.p.lon) * kx, p.lat - c.p.lat)) - c.bearing);
+  // Behind the camera: shown low on the side it is on.
+  let dx = Math.sin(rel), dy = -Math.cos(rel);
+  if (dy > .35) { dx = Math.sign(dx || 1); dy = .35; }
+  const x0 = 40, x1 = W - 40, y0 = top + 10, y1 = H - 300;
+  let s = Infinity;
+  if (dx > 1e-6) s = Math.min(s, (x1 - a.x) / dx); if (dx < -1e-6) s = Math.min(s, (x0 - a.x) / dx);
+  if (dy > 1e-6) s = Math.min(s, (y1 - a.y) / dy); if (dy < -1e-6) s = Math.min(s, (y0 - a.y) / dy);
+  if (!isFinite(s) || s < 0) return null;
+  const ex = clamp(a.x + dx * s, x0, x1), ey = clamp(a.y + dy * s, y0, y1), w = nameWidth(p) + 50;
+  const side = ex <= x0 + 1 ? 'left' : ex >= x1 - 1 ? 'right' : 'top';
+  const bx = side === 'left' ? x0 : side === 'right' ? x1 - w : clamp(ex - w / 2, x0, x1 - w);
+  return { side, b: box(bx, clamp(ey - 24, y0, y1 - 48), w, 48), dx, dy };
+}
+function planPlaceNames() {
+  const P = namePool(), open = new Map(); NAMES = [];
+  let low = Infinity, short = 0;
+  const close = (k, t) => { const s = open.get(k); NAMES.push({ p: s.p, edge: s.edge, a: s.a, b: t }); open.delete(k); };
+  for (let i = 0; i * NAME_STEP <= T + 1e-6; i++) {
+    const t = i * NAME_STEP, c = aim(t), z = c.zoom, top = Math.max(horizonY() + 40, 150), obs = nameObstacles(t, c), boxes = [];
+    const from = [c.p.lon, c.p.lat], dist = p => metres([p.lon, p.lat], from, c.p.lat);
+    const maxRank = z >= 14.5 ? 4 : z >= 13 ? 3 : z >= 11.5 ? 2 : 1;
+    const near = P.near(c.p.lon, c.p.lat, clamp(mppAt(z) * 4000, 5000, 400000));
+    // Keep the names already up while they still fit.
+    for (const [k, s] of [...open].sort((a, b) => a[1].a - b[1].a)) {
+      const onMap = mapBox(s.p, top), b = s.edge ? (onMap ? null : edgeAt(s.p, c, top)?.b) : onMap;
+      if (b && fits(b, obs) && fits(b, boxes)) { boxes.push(b); s.box = b; } else close(k, t);
+    }
+    const count = () => [...open.values()].filter(s => !s.edge).length;
+    // Then the best places in view, nearest and biggest first (smaller places when close).
+    const visible = [], look = (lo, hi, k) => { for (const p of near) if (!open.has(p.key) && p.rank >= lo && p.rank <= hi) { const b = mapBox(p, top); if (b && fits(b, obs)) visible.push({ p, b, score: dist(p) * RANK_WEIGHT[p.rank] * k }); } };
+    look(0, maxRank, 1);
+    if (visible.length + count() < NAME_MIN + 2) look(maxRank + 1, 4, 3);
+    visible.sort((a, b) => a.score - b.score);
+    for (const v of visible) {
+      if (count() >= NAME_MIN) {
+        // A much better place may take over from the weakest name once that has been up a while.
+        const weak = [...open].filter(([, s]) => !s.edge && t - s.a >= NAME_HOLD).map(([k, s]) => ({ k, s, score: dist(s.p) * RANK_WEIGHT[s.p.rank] })).sort((a, b) => b.score - a.score)[0];
+        if (!weak || v.score > weak.score * .45) break;
+        close(weak.k, t); const at = boxes.indexOf(weak.s.box); if (at >= 0) boxes.splice(at, 1);
+      }
+      if (!fits(v.b, boxes)) continue;
+      boxes.push(v.b); open.set(v.p.key, { p: v.p, edge: false, a: t, box: v.b });
+    }
+    // With four names in view, the edge names step aside; with fewer, the nearest places outside are named at the edge.
+    if (count() >= NAME_MIN) for (const [k, s] of [...open]) { if (s.edge) close(k, t); }
+    else {
+      const outside = P.near(c.p.lon, c.p.lat, clamp(mppAt(z) * 12000, 20000, 600000))
+        .filter(p => !open.has(p.key) && p.rank <= Math.max(maxRank, 2) && !mapBox(p, top)).sort((a, b) => dist(a) * RANK_WEIGHT[a.rank] - dist(b) * RANK_WEIGHT[b.rank]);
+      for (const p of outside) {
+        if (open.size >= NAME_MIN) break;
+        const e = edgeAt(p, c, top);
+        if (!e || !fits(e.b, obs) || !fits(e.b, boxes)) continue;
+        boxes.push(e.b); open.set(p.key, { p, edge: true, a: t, box: e.b });
+      }
+    }
+    low = Math.min(low, open.size); if (open.size < NAME_MIN) short++;
+  }
+  for (const k of [...open.keys()]) close(k, T + 1);
+  NAME_STATS = { names: NAMES.length, fewest: low, samplesUnder4: short };
+}
+// Draws this frame's place names (and keeps their boxes for the highlight labels to avoid).
+function drawNames(t, c) {
+  NAME_BOXES = [];
+  const top = Math.max(horizonY() + 40, 150);
+  for (const n of NAMES) {
+    if (t < n.a - NAME_FADE || t > n.b + NAME_FADE) continue;
+    const a = smooth((t - n.a + NAME_FADE / 2) / NAME_FADE) * (1 - smooth((t - n.b + NAME_FADE / 2) / NAME_FADE));
+    if (a < .01) continue;
+    fx.save(); fx.globalAlpha = a * .95; fx.font = nameFont(n.p); fx.letterSpacing = '0.5px'; fx.fillStyle = '#ffffff';
+    fx.shadowColor = 'rgba(0,0,0,.55)'; fx.shadowBlur = 10; fx.shadowOffsetY = 1; fx.textBaseline = 'middle';
+    if (!n.edge) {
+      const q = map.project([n.p.lon, n.p.lat]); fx.textAlign = 'center'; fx.fillText(n.p.name, q.x, q.y);
+      const w = nameWidth(n.p) + 16; NAME_BOXES.push(box(q.x - w / 2, q.y - 24, w, 48));
+    } else {
+      const e = edgeAt(n.p, c, top);
+      if (e) {
+        const { b, side } = e, cy = b.y + 24, tri = (x, y, ang) => { fx.save(); fx.translate(x, y); fx.rotate(ang); fx.beginPath(); fx.moveTo(8, 0); fx.lineTo(-6, -7); fx.lineTo(-6, 7); fx.closePath(); fx.fill(); fx.restore(); };
+        fx.textAlign = 'left';
+        if (side === 'left') { tri(b.x + 10, cy, Math.PI); fx.fillText(n.p.name, b.x + 30, cy); }
+        else if (side === 'right') { fx.fillText(n.p.name, b.x + 4, cy); tri(b.x + b.w - 10, cy, 0); }
+        else { tri(b.x + 10, cy, Math.atan2(e.dy, e.dx)); fx.fillText(n.p.name, b.x + 30, cy); }
+        NAME_BOXES.push(b);
+      }
+    }
+    fx.restore();
+  }
+}
 // A small card with where the drive starts, and where it ends beside the total.
 function placeCard(name, a, y, end) {
   if (!name || a <= 0) return null;
@@ -657,7 +781,7 @@ function highlights(t, c, arrowAt) {
     if (a > .005 && since > -.2 && since < 2.9) live.push({ h, q, a });
   }
   for (const d of dots) { fx.save(); fx.globalAlpha = d.a; fx.fillStyle = '#ffffff'; fx.strokeStyle = '#ff7a26'; fx.lineWidth = 4; fx.shadowColor = 'rgba(0,0,0,.5)'; fx.shadowBlur = 8; fx.beginPath(); fx.arc(d.x, d.y, d.r, 0, 7); fx.fill(); fx.stroke(); fx.restore(); }
-  const obstacles = [box(LOGO.x, LOGO.y, LOGO.w, LOGO.h)];
+  const obstacles = [box(LOGO.x, LOGO.y, LOGO.w, LOGO.h), ...NAME_BOXES];
   if (arrowAt) obstacles.push(box(arrowAt.x - 50, arrowAt.y - 50, 100, 100));
   for (const { h, q, a } of live) {
     let pin = PINNED.get(h);
@@ -729,6 +853,7 @@ function draw(t, c, p, k) {
   const endA = clamp((t - (T - OUTRO + 1.3)) / .7);
   totalBox(endA); placeCard(END_NAME, endA, H - 392, true);
   placeCard(START_NAME, clamp((t - .6) / .5) * (1 - clamp((t - (INTRO + 2.8)) / .5)), H - 250, false);
+  drawNames(t, c);
   highlights(t, c, arrowAt);
   if (t > T - 2.4) { fx.save(); fx.globalAlpha = clamp((t - (T - 2.4)) / .8) * .55; fx.font = `400 17px ${SANS}`; fx.fillStyle = '#ffffff'; fx.textAlign = 'center'; fx.fillText(D.credit, W / 2, H - 44); fx.restore(); }
   const fi = clamp(t / .5); if (fi < 1) { fx.fillStyle = `rgba(0,0,0,${1 - fi})`; fx.fillRect(0, 0, W, H); }
