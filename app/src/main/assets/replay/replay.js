@@ -584,60 +584,77 @@ function mapBox(p, top) {
   return b.x >= 24 && b.x + b.w <= W - 24 && b.y >= top && b.y + b.h <= H - 110 ? b : null;
 }
 // Where a place outside the picture is named: on the edge, in its direction from the arrow.
-function edgeAt(p, c, top) {
-  const a = map.project([c.p.lon, c.p.lat]), kx = Math.cos(toRad(c.p.lat));
-  let rel = toRad(toDeg(Math.atan2((p.lon - c.p.lon) * kx, p.lat - c.p.lat)) - c.bearing);
-  // Behind the camera: shown low on the side it is on.
+// cam: the arrow's place and point on screen, and the camera's heading.
+function edgeAt(p, cam, top) {
+  const kx = Math.cos(toRad(cam.lat)), rel = toRad(toDeg(Math.atan2((p.lon - cam.lon) * kx, p.lat - cam.lat)) - cam.bearing);
   let dx = Math.sin(rel), dy = -Math.cos(rel);
-  if (dy > .35) { dx = Math.sign(dx || 1); dy = .35; }
+  if (dy > .35) { dx = Math.sign(dx || 1); dy = .35; }       // behind the camera: low on its side
   const x0 = 40, x1 = W - 40, y0 = top + 10, y1 = H - 300;
   let s = Infinity;
-  if (dx > 1e-6) s = Math.min(s, (x1 - a.x) / dx); if (dx < -1e-6) s = Math.min(s, (x0 - a.x) / dx);
-  if (dy > 1e-6) s = Math.min(s, (y1 - a.y) / dy); if (dy < -1e-6) s = Math.min(s, (y0 - a.y) / dy);
+  if (dx > 1e-6) s = Math.min(s, (x1 - cam.ax) / dx); if (dx < -1e-6) s = Math.min(s, (x0 - cam.ax) / dx);
+  if (dy > 1e-6) s = Math.min(s, (y1 - cam.ay) / dy); if (dy < -1e-6) s = Math.min(s, (y0 - cam.ay) / dy);
   if (!isFinite(s) || s < 0) return null;
-  const ex = clamp(a.x + dx * s, x0, x1), ey = clamp(a.y + dy * s, y0, y1), w = nameWidth(p) + 50;
+  const ex = clamp(cam.ax + dx * s, x0, x1), ey = clamp(cam.ay + dy * s, y0, y1), w = nameWidth(p) + 50;
   const side = ex <= x0 + 1 ? 'left' : ex >= x1 - 1 ? 'right' : 'top';
   const bx = side === 'left' ? x0 : side === 'right' ? x1 - w : clamp(ex - w / 2, x0, x1 - w);
   return { side, b: box(bx, clamp(ey - 24, y0, y1 - 48), w, 48), dx, dy };
 }
+const camOf = c => { const a = map.project([c.p.lon, c.p.lat]); return { lon: c.p.lon, lat: c.p.lat, bearing: c.bearing, ax: a.x, ay: a.y }; };
 function planPlaceNames() {
-  const P = namePool(), open = new Map(); NAMES = [];
-  let low = Infinity, short = 0;
-  const close = (k, t) => { const s = open.get(k); NAMES.push({ p: s.p, edge: s.edge, a: s.a, b: t }); open.delete(k); };
+  const P = namePool(), S = [];
+  // First where every place is at each moment (and whether it is clear of everything else on screen).
   for (let i = 0; i * NAME_STEP <= T + 1e-6; i++) {
-    const t = i * NAME_STEP, c = aim(t), z = c.zoom, top = Math.max(horizonY() + 40, 150), obs = nameObstacles(t, c), boxes = [];
-    const from = [c.p.lon, c.p.lat], dist = p => metres([p.lon, p.lat], from, c.p.lat);
-    const maxRank = z >= 14.5 ? 4 : z >= 13 ? 3 : z >= 11.5 ? 2 : 1;
-    const near = P.near(c.p.lon, c.p.lat, clamp(mppAt(z) * 4000, 5000, 400000));
-    // Keep the names already up while they still fit.
-    for (const [k, s] of [...open].sort((a, b) => a[1].a - b[1].a)) {
-      const onMap = mapBox(s.p, top), b = s.edge ? (onMap ? null : edgeAt(s.p, c, top)?.b) : onMap;
-      if (b && fits(b, obs) && fits(b, boxes)) { boxes.push(b); s.box = b; } else close(k, t);
+    const t = i * NAME_STEP, c = aim(t), z = c.zoom, top = Math.max(horizonY() + 40, 150), obs = nameObstacles(t, c), cam = camOf(c);
+    const maxRank = z >= 14.5 ? 4 : z >= 13 ? 3 : z >= 11.5 ? 2 : 1, from = [c.p.lon, c.p.lat];
+    const view = new Map(), onScreen = new Set();
+    const look = (r, lo, hi, k) => { for (const p of P.near(c.p.lon, c.p.lat, r)) if (p.rank >= lo && p.rank <= hi && !onScreen.has(p.key)) {
+      const b = mapBox(p, top); if (!b) continue; onScreen.add(p.key);
+      if (fits(b, obs)) view.set(p.key, { p, b, score: metres([p.lon, p.lat], from, c.p.lat) * RANK_WEIGHT[p.rank] * k });
+    } };
+    look(clamp(mppAt(z) * 4000, 5000, 400000), 0, maxRank, 1);
+    look(clamp(mppAt(z) * 1200, 3000, 60000), maxRank + 1, 4, 3);       // smaller places, only nearby
+    S.push({ t, cam, top, obs, view, onScreen, maxRank, z });
+  }
+  // How long each place stays clear from each moment on, so a name only comes up if it can stay a while.
+  for (let i = S.length - 1; i >= 0; i--) { S[i].run = new Map(); for (const k of S[i].view.keys()) S[i].run.set(k, 1 + (i + 1 < S.length ? S[i + 1].run.get(k) || 0 : 0)); }
+  // Then the choice, moment by moment.
+  const open = new Map(); NAMES = [];
+  let low = Infinity, short = 0;
+  const close = (k, t) => { const o = open.get(k); NAMES.push({ p: o.p, edge: o.edge, a: o.a, b: t }); open.delete(k); };
+  const longEnough = Math.round(1.5 / NAME_STEP);
+  for (const st of S) {
+    const { t, cam, top, obs, view, onScreen } = st, boxes = [];
+    for (const [k, o] of [...open].sort((a, b) => a[1].a - b[1].a)) {
+      const b = o.edge ? (onScreen.has(k) ? null : edgeAt(o.p, cam, top)?.b) : view.get(k)?.b;
+      if (b && fits(b, obs) && fits(b, boxes)) { boxes.push(b); o.box = b; } else close(k, t);
     }
-    const count = () => [...open.values()].filter(s => !s.edge).length;
-    // Then the best places in view, nearest and biggest first (smaller places when close).
-    const visible = [], look = (lo, hi, k) => { for (const p of near) if (!open.has(p.key) && p.rank >= lo && p.rank <= hi) { const b = mapBox(p, top); if (b && fits(b, obs)) visible.push({ p, b, score: dist(p) * RANK_WEIGHT[p.rank] * k }); } };
-    look(0, maxRank, 1);
-    if (visible.length + count() < NAME_MIN + 2) look(maxRank + 1, 4, 3);
-    visible.sort((a, b) => a.score - b.score);
-    for (const v of visible) {
-      if (count() >= NAME_MIN) {
-        // A much better place may take over from the weakest name once that has been up a while.
-        const weak = [...open].filter(([, s]) => !s.edge && t - s.a >= NAME_HOLD).map(([k, s]) => ({ k, s, score: dist(s.p) * RANK_WEIGHT[s.p.rank] })).sort((a, b) => b.score - a.score)[0];
-        if (!weak || v.score > weak.score * .45) break;
-        close(weak.k, t); const at = boxes.indexOf(weak.s.box); if (at >= 0) boxes.splice(at, 1);
+    const count = () => [...open.values()].filter(o => !o.edge).length;
+    const cands = [...view.values()].filter(v => !open.has(v.p.key)).map(v => ({ ...v, run: st.run.get(v.p.key) }));
+    // Places that can stay at least 1.5 s first, then shorter ones only if four still aren't up.
+    for (const pass of [longEnough, 5, 1]) {
+      for (const v of cands.filter(v => v.run >= pass).sort((a, b) => a.score - b.score)) {
+        if (open.has(v.p.key) || !fits(v.b, boxes)) continue;
+        if (count() >= NAME_MIN) {
+          if (pass < longEnough) break;
+          // A much better place may take over from the weakest name once that has been up a while.
+          const weak = [...open].filter(([k, o]) => !o.edge && t - o.a >= NAME_HOLD && view.has(k)).map(([k, o]) => ({ k, o, score: view.get(k).score })).sort((a, b) => b.score - a.score)[0];
+          if (!weak || v.score > weak.score * .45) break;
+          close(weak.k, t); const at = boxes.indexOf(weak.o.box); if (at >= 0) boxes.splice(at, 1);
+          if (!fits(v.b, boxes)) continue;
+        }
+        boxes.push(v.b); open.set(v.p.key, { p: v.p, edge: false, a: t, box: v.b });
       }
-      if (!fits(v.b, boxes)) continue;
-      boxes.push(v.b); open.set(v.p.key, { p: v.p, edge: false, a: t, box: v.b });
+      if (count() >= NAME_MIN) break;
     }
-    // With four names in view, the edge names step aside; with fewer, the nearest places outside are named at the edge.
-    if (count() >= NAME_MIN) for (const [k, s] of [...open]) { if (s.edge) close(k, t); }
+    // Four names in view: the edge names step aside. Fewer: the nearest places outside are named at the edge.
+    if (count() >= NAME_MIN) { for (const [k, o] of [...open]) if (o.edge) close(k, t); }
     else {
-      const outside = P.near(c.p.lon, c.p.lat, clamp(mppAt(z) * 12000, 20000, 600000))
-        .filter(p => !open.has(p.key) && p.rank <= Math.max(maxRank, 2) && !mapBox(p, top)).sort((a, b) => dist(a) * RANK_WEIGHT[a.rank] - dist(b) * RANK_WEIGHT[b.rank]);
-      for (const p of outside) {
+      const from = [cam.lon, cam.lat], outside = P.near(cam.lon, cam.lat, clamp(mppAt(st.z) * 12000, 20000, 600000))
+        .filter(p => !open.has(p.key) && !onScreen.has(p.key) && p.rank <= Math.max(st.maxRank, 2))
+        .map(p => ({ p, score: metres([p.lon, p.lat], from, cam.lat) * RANK_WEIGHT[p.rank] })).sort((a, b) => a.score - b.score);
+      for (const { p } of outside) {
         if (open.size >= NAME_MIN) break;
-        const e = edgeAt(p, c, top);
+        const e = edgeAt(p, cam, top);
         if (!e || !fits(e.b, obs) || !fits(e.b, boxes)) continue;
         boxes.push(e.b); open.set(p.key, { p, edge: true, a: t, box: e.b });
       }
@@ -645,7 +662,8 @@ function planPlaceNames() {
     low = Math.min(low, open.size); if (open.size < NAME_MIN) short++;
   }
   for (const k of [...open.keys()]) close(k, T + 1);
-  NAME_STATS = { names: NAMES.length, fewest: low, samplesUnder4: short };
+  const life = NAMES.map(n => n.b - n.a).sort((a, b) => a - b);
+  NAME_STATS = { names: NAMES.length, fewest: low, samplesUnder4: short, shortest: life.slice(0, 5).map(x => +x.toFixed(1)), under1s: life.filter(x => x < 1).length };
 }
 // Draws this frame's place names (and keeps their boxes for the highlight labels to avoid).
 function drawNames(t, c) {
@@ -661,7 +679,7 @@ function drawNames(t, c) {
       const q = map.project([n.p.lon, n.p.lat]); fx.textAlign = 'center'; fx.fillText(n.p.name, q.x, q.y);
       const w = nameWidth(n.p) + 16; NAME_BOXES.push(box(q.x - w / 2, q.y - 24, w, 48));
     } else {
-      const e = edgeAt(n.p, c, top);
+      const e = edgeAt(n.p, camOf(c), top);
       if (e) {
         const { b, side } = e, cy = b.y + 24, tri = (x, y, ang) => { fx.save(); fx.translate(x, y); fx.rotate(ang); fx.beginPath(); fx.moveTo(8, 0); fx.lineTo(-6, -7); fx.lineTo(-6, 7); fx.closePath(); fx.fill(); fx.restore(); };
         fx.textAlign = 'left';
