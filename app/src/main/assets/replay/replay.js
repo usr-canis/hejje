@@ -612,14 +612,15 @@ function planPlaceNames() {
       if (fits(b, obs)) view.set(p.key, { p, b, score: metres([p.lon, p.lat], from, c.p.lat) * RANK_WEIGHT[p.rank] * k });
     } };
     look(clamp(mppAt(z) * 4000, 5000, 400000), 0, maxRank, 1);
-    look(clamp(mppAt(z) * 1200, 3000, 60000), maxRank + 1, 4, 3);       // smaller places, only nearby
+    look(clamp(mppAt(z) * 2000, 4000, 200000), maxRank + 1, maxRank + 1, 3);   // one size smaller: keeps names up while climbing
+    look(clamp(mppAt(z) * 1200, 3000, 60000), maxRank + 2, 4, 5);              // smaller still, only nearby
     S.push({ t, cam, top, obs, view, onScreen, maxRank, z });
   }
   // How long each place stays clear from each moment on, so a name only comes up if it can stay a while.
   for (let i = S.length - 1; i >= 0; i--) { S[i].run = new Map(); for (const k of S[i].view.keys()) S[i].run.set(k, 1 + (i + 1 < S.length ? S[i + 1].run.get(k) || 0 : 0)); }
   // Then the choice, moment by moment.
   const open = new Map(); NAMES = [];
-  let low = Infinity, short = 0;
+  let low = Infinity, short = 0; const under = [];
   const close = (k, t) => { const o = open.get(k); NAMES.push({ p: o.p, edge: o.edge, a: o.a, b: t }); open.delete(k); };
   const longEnough = Math.round(1.5 / NAME_STEP);
   for (const st of S) {
@@ -630,8 +631,7 @@ function planPlaceNames() {
     }
     const count = () => [...open.values()].filter(o => !o.edge).length;
     const cands = [...view.values()].filter(v => !open.has(v.p.key)).map(v => ({ ...v, run: st.run.get(v.p.key) }));
-    // Places that can stay at least 1.5 s first, then shorter ones only if four still aren't up.
-    for (const pass of [longEnough, 5, 1]) {
+    const addMap = pass => {
       for (const v of cands.filter(v => v.run >= pass).sort((a, b) => a.score - b.score)) {
         if (open.has(v.p.key) || !fits(v.b, boxes)) continue;
         if (count() >= NAME_MIN) {
@@ -642,13 +642,11 @@ function planPlaceNames() {
           close(weak.k, t); const at = boxes.indexOf(weak.o.box); if (at >= 0) boxes.splice(at, 1);
           if (!fits(v.b, boxes)) continue;
         }
+        if (pass < longEnough && open.size >= NAME_MIN) break;
         boxes.push(v.b); open.set(v.p.key, { p: v.p, edge: false, a: t, box: v.b });
       }
-      if (count() >= NAME_MIN) break;
-    }
-    // Four names in view: the edge names step aside. Fewer: the nearest places outside are named at the edge.
-    if (count() >= NAME_MIN) { for (const [k, o] of [...open]) if (o.edge) close(k, t); }
-    else {
+    };
+    const addEdge = () => {
       const from = [cam.lon, cam.lat], outside = P.near(cam.lon, cam.lat, clamp(mppAt(st.z) * 12000, 20000, 600000))
         .filter(p => !open.has(p.key) && !onScreen.has(p.key) && p.rank <= Math.max(st.maxRank, 2))
         .map(p => ({ p, score: metres([p.lon, p.lat], from, cam.lat) * RANK_WEIGHT[p.rank] })).sort((a, b) => a.score - b.score);
@@ -658,12 +656,20 @@ function planPlaceNames() {
         if (!e || !fits(e.b, obs) || !fits(e.b, boxes)) continue;
         boxes.push(e.b); open.set(p.key, { p, edge: true, a: t, box: e.b });
       }
-    }
+    };
+    // Places that can stay at least 1.5 s first; four in view: the edge names step aside.
+    addMap(longEnough);
+    if (count() >= NAME_MIN) { for (const [k, o] of [...open]) if (o.edge) close(k, t); }
+    // Fewer: the nearest places outside are named at the edge, and only then shorter-lived places in view.
+    if (open.size < NAME_MIN) addEdge();
+    if (open.size < NAME_MIN) addMap(5);
+    if (open.size < NAME_MIN) addMap(1);
+    if (open.size < NAME_MIN) under.push(+t.toFixed(1));
     low = Math.min(low, open.size); if (open.size < NAME_MIN) short++;
   }
   for (const k of [...open.keys()]) close(k, T + 1);
-  const life = NAMES.map(n => n.b - n.a).sort((a, b) => a - b);
-  NAME_STATS = { names: NAMES.length, fewest: low, samplesUnder4: short, shortest: life.slice(0, 5).map(x => +x.toFixed(1)), under1s: life.filter(x => x < 1).length };
+  const brief = NAMES.filter(n => n.b - n.a < 1);
+  NAME_STATS = { names: NAMES.length, fewest: low, samplesUnder4: short, under, under1s: brief.length, briefEdge: brief.filter(n => n.edge).length, briefAt: brief.slice(0, 30).map(n => +n.a.toFixed(1)) };
 }
 // Draws this frame's place names (and keeps their boxes for the highlight labels to avoid).
 function drawNames(t, c) {
