@@ -599,7 +599,12 @@ function edgeAt(p, cam, top) {
   const bx = side === 'left' ? x0 : side === 'right' ? x1 - w : clamp(ex - w / 2, x0, x1 - w);
   return { side, b: box(bx, clamp(ey - 24, y0, y1 - 48), w, 48), dx, dy };
 }
-const camOf = c => { const a = map.project([c.p.lon, c.p.lat]); return { lon: c.p.lon, lat: c.p.lat, bearing: c.bearing, ax: a.x, ay: a.y }; };
+// Edge names point from the arrow; when the arrow is out of the picture (the closing swing), from its middle.
+const camOf = c => {
+  const a = map.project([c.p.lon, c.p.lat]);
+  if (a.x > 0 && a.x < W && a.y > 0 && a.y < H) return { lon: c.p.lon, lat: c.p.lat, bearing: c.bearing, ax: a.x, ay: a.y };
+  return { lon: c.center[0], lat: c.center[1], bearing: c.bearing, ax: W / 2, ay: H / 2 + c.pad / 2 };
+};
 function planPlaceNames() {
   const P = namePool(), S = [];
   // First where every place is at each moment (and whether it is clear of everything else on screen).
@@ -626,7 +631,8 @@ function planPlaceNames() {
   for (const st of S) {
     const { t, cam, top, obs, view, onScreen } = st, boxes = [];
     for (const [k, o] of [...open].sort((a, b) => a[1].a - b[1].a)) {
-      const b = o.edge ? (onScreen.has(k) ? null : edgeAt(o.p, cam, top)?.b) : view.get(k)?.b;
+      const steady = view.has(k) && st.run.get(k) >= longEnough;
+      const b = o.edge ? (steady ? null : edgeAt(o.p, cam, top)?.b) : view.get(k)?.b;
       if (b && fits(b, obs) && fits(b, boxes)) { boxes.push(b); o.box = b; } else close(k, t);
     }
     const count = () => [...open.values()].filter(o => !o.edge).length;
@@ -659,7 +665,7 @@ function planPlaceNames() {
     };
     // Places that can stay at least 1.5 s first; four in view: the edge names step aside.
     addMap(longEnough);
-    if (count() >= NAME_MIN) { for (const [k, o] of [...open]) if (o.edge) close(k, t); }
+    if (count() >= NAME_MIN) { for (const [k, o] of [...open]) if (o.edge && t - o.a >= 1.5) close(k, t); }
     // Fewer: the nearest places outside are named at the edge, and only then shorter-lived places in view.
     if (open.size < NAME_MIN) addEdge();
     if (open.size < NAME_MIN) addMap(5);
