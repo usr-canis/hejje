@@ -612,7 +612,9 @@ function planPlaceNames() {
     const t = i * NAME_STEP, c = aim(t), z = c.zoom, top = Math.max(horizonY() + 40, 150), obs = nameObstacles(t, c), cam = camOf(c);
     const maxRank = z >= 14.5 ? 4 : z >= 13 ? 3 : z >= 11.5 ? 2 : 1, from = [c.p.lon, c.p.lat];
     const view = new Map(), onScreen = new Set();
-    const look = (r, lo, hi, k) => { for (const p of P.near(c.p.lon, c.p.lat, r)) if (p.rank >= lo && p.rank <= hi && !onScreen.has(p.key)) {
+    // The start and end cards already name where the drive starts and ends.
+    const carded = n => (t < INTRO + 3.4 && n === START_NAME) || (t > T - OUTRO + .9 && n === END_NAME);
+    const look = (r, lo, hi, k) => { for (const p of P.near(c.p.lon, c.p.lat, r)) if (p.rank >= lo && p.rank <= hi && !onScreen.has(p.key) && !carded(p.name)) {
       const b = mapBox(p, top); if (!b) continue; onScreen.add(p.key);
       if (fits(b, obs)) view.set(p.key, { p, b, score: metres([p.lon, p.lat], from, c.p.lat) * RANK_WEIGHT[p.rank] * k });
     } };
@@ -654,7 +656,7 @@ function planPlaceNames() {
     };
     const addEdge = () => {
       const from = [cam.lon, cam.lat], outside = P.near(cam.lon, cam.lat, clamp(mppAt(st.z) * 12000, 20000, 600000))
-        .filter(p => !open.has(p.key) && !onScreen.has(p.key) && p.rank <= Math.max(st.maxRank, 2))
+        .filter(p => !open.has(p.key) && !onScreen.has(p.key) && p.rank <= Math.max(st.maxRank, 2) && !((t < INTRO + 3.4 && p.name === START_NAME) || (t > T - OUTRO + .9 && p.name === END_NAME)))
         .map(p => ({ p, score: metres([p.lon, p.lat], from, cam.lat) * RANK_WEIGHT[p.rank] })).sort((a, b) => a.score - b.score);
       for (const { p } of outside) {
         if (open.size >= NAME_MIN) break;
